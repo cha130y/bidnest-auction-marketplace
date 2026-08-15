@@ -10,7 +10,7 @@
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx}": [
-      "pnpm --dir apps/web exec eslint --fix"
+      "pnpm --dir apps/web exec eslint --fix --max-warnings=0"
     ],
     "apps/api/**/*.ts": [
       "pnpm --dir apps/api exec eslint --fix"
