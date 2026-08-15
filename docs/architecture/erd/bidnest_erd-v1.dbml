@@ -1,0 +1,723 @@
+
+enum user_role {
+  USER
+  ADMIN
+}
+
+enum user_status {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum auth_provider {
+  GOOGLE
+  LINE
+}
+
+enum auction_status {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  SOLD
+  UNSOLD
+  CANCELLED
+}
+
+enum participant_status {
+  JOINED
+  LEFT
+}
+
+enum notification_type {
+  OUTBID
+  AUCTION_WON
+  AUCTION_ENDED
+  AUCTION_CANCELLED
+  ORDER_PLACED // — NOT-005
+  SHIPMENT_UPDATE // — NOT-006
+  DELIVERED // — NOT-007
+  NEW_MESSAGE // — NOT-008 (Optional)
+}
+
+enum auction_event_type {
+  CREATED
+  PUBLISHED
+  STARTED
+  BID_PLACED
+  EXTENDED
+  ENDED
+  CANCELLED
+}
+
+enum admin_action_type {
+  SUSPEND_USER
+  REACTIVATE_USER
+  CREATE_CATEGORY
+  UPDATE_CATEGORY
+  ACTIVATE_CATEGORY
+  DEACTIVATE_CATEGORY
+  CANCEL_AUCTION
+  DEACTIVATE_PRODUCT // — ADM-005
+  REACTIVATE_PRODUCT // New
+}
+
+// -- Additional --
+
+enum product_condition {
+  NEW
+  USED
+}
+
+enum product_status {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+  REMOVED
+}
+
+enum offer_decision {
+  ACCEPTED
+  COUNTERED
+  REJECTED
+}
+
+enum order_status {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum payment_status {
+  SUCCEEDED
+  FAILED
+}
+
+enum shipment_status {
+  PROCESSING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum ai_request_type {
+  PRICE_ESTIMATE
+  NEGOTIATION
+}
+
+enum chat_role {
+  USER
+  ASSISTANT
+}
+
+// ============ IDENTITY ============
+
+Table users {
+  id uuid [pk]
+  email varchar [unique, not null]
+  password_hash varchar [note: 'nullable — OAuth-only account ไม่มีรหัสผ่าน']
+  role user_role [not null, default: 'USER']
+  status user_status [not null, default: 'ACTIVE']
+  email_verified_at timestamp [note: 'nullable — ประทับเวลาตอน Google/Line ยืนยันอีเมลมาให้ ไม่ได้ทำ verification flow เอง']
+  last_login_at timestamp
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (role, status)
+  }
+
+  Note: 'AUTH-001, ADM-002'
+}
+
+Table user_profiles {
+  user_id uuid [pk]
+  first_name varchar [not null]
+  last_name varchar
+  display_name varchar [not null]
+  avatar_url varchar
+  bio varchar
+  phone varchar
+  location varchar [note: '— ข้อความอิสระ 1 ช่อง']
+  default_shipping_address text [note: 'ใหม่ — prefill ตอน checkout, USR-001']
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (display_name)
+  }
+
+  Note: 'USR-001 — user_id เป็นทั้ง PK/FK; มี default_shipping_address เพิ่มจุดเดียว'
+}
+
+Table auth_accounts {
+  id uuid [pk]
+  user_id uuid [not null]
+  provider auth_provider [not null]
+  provider_account_id varchar [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (provider, provider_account_id) [unique]
+    (user_id, provider) [unique]
+  }
+
+  Note: 'AUTH-003 Google, AUTH-006 Line'
+}
+
+Table user_sessions {
+  id uuid [pk]
+  user_id uuid [not null]
+  refresh_token_hash varchar [unique, not null]
+  expires_at timestamp [not null]
+  revoked_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (user_id, expires_at)
+    (expires_at)
+  }
+
+  Note: 'AUTH-004'
+}
+
+Table two_factor_codes {
+  id uuid [pk]
+  user_id uuid [not null]
+  code_hash varchar [not null]
+  expires_at timestamp [not null]
+  used boolean [not null, default: false]
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'ใหม่ — AUTH-007'
+}
+
+Table password_reset_tokens {
+  id uuid [pk]
+  user_id uuid [not null]
+  token_hash varchar [not null]
+  expires_at timestamp [not null]
+  used boolean [not null, default: false]
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'ใหม่ — AUTH-005'
+}
+
+// ============ SHARED ============
+
+Table categories {
+  id uuid [pk]
+  parent_id uuid [note: 'ใช้ในฝั่ง auction เรื่อง subcategory ไม่ใช้ก็ปล่อยว่างได้']
+  name varchar [not null]
+  slug varchar [unique, not null]
+  description varchar
+  is_active boolean [not null, default: true]
+  created_by_admin_id uuid
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (parent_id, is_active)
+    (is_active)
+  }
+
+  Note: 'ADM-003 — ใช้ร่วมกันทั้ง Auction/E-commerce'
+}
+
+// ============ AUCTION ============
+
+Table auctions {
+  id uuid [pk]
+  seller_id uuid [not null]
+  category_id uuid [not null]
+  title varchar [not null]
+  description varchar [not null]
+  condition product_condition [not null, note: 'ใหม่ — AUC-001 (สภาพสินค้ามีผลต่อราคาประมูลของจริง/ของสะสม)']
+  status auction_status [not null, default: 'DRAFT']
+  currency char [not null, default: 'USD', note: '— ปรับ default เป็น THB ได้ทีหลังถ้าต้องการ']
+  starting_price decimal [not null]
+  reserve_price decimal [note: 'PRIVATE — ห้ามส่งกลับ API ฝั่งผู้ซื้อเด็ดขาด (AUC-003)']
+  min_bid_increment decimal [not null]
+  current_price decimal [not null]
+  bid_count integer [not null, default: 0]
+  scheduled_start_at timestamp
+  original_end_at timestamp
+  current_end_at timestamp
+  published_at timestamp [note: 'ตอน publish (AUC-004)']
+  started_at timestamp [note: 'ตอนเข้าสถานะ ACTIVE จริง (AUC-005)']
+  ended_at timestamp
+  extension_count integer [not null, default: 0, note: 'BID-004 เช็คแคป 5 ครั้ง']
+  winner_user_id uuid
+  winning_bid_id uuid [unique, note: 'AUC-007 บันทึกทั้งผู้ชนะและบิดที่ชนะ']
+  sold_price decimal
+  cancellation_reason varchar [note: 'ADM-001']
+  row_version integer [not null, default: 1, note: 'optimistic concurrency (§6)']
+  deleted_at timestamp
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (status, scheduled_start_at)
+    (status, current_end_at)
+    (category_id, status)
+    (seller_id, status)
+    (status, bid_count) // AUC-008 Hot Auctions
+  }
+
+  Note: 'AUC-001..008'
+}
+
+Table auction_images {
+  id uuid [pk]
+  auction_id uuid [not null]
+  storage_key varchar [unique, not null]
+  url varchar [not null]
+  alt_text varchar
+  position integer [not null, default: 0]
+  is_primary boolean [not null, default: false]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (auction_id, position) [unique]
+  }
+}
+
+Table bids {
+  id uuid [pk]
+  auction_id uuid [not null]
+  bidder_id uuid [not null]
+  amount decimal [not null]
+  sequence_no integer [not null]
+  client_request_id uuid [unique, not null]
+  placed_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (auction_id, sequence_no) [unique]
+    (auction_id, amount)
+    (bidder_id, placed_at)
+  }
+
+  Note: 'BID-001..002 — เฉพาะ accepted bid เท่านั้นที่ persist'
+}
+
+Table auction_extensions {
+  id uuid [pk]
+  auction_id uuid [not null]
+  triggered_by_bid_id uuid [unique, not null]
+  extension_number integer [not null]
+  previous_end_at timestamp [not null]
+  new_end_at timestamp [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (auction_id, extension_number) [unique]
+  }
+
+  Note: 'BID-004 anti-sniping — unique ต่อ bid กัน trigger ซ้ำถ้า connection หลุดแล้ว retry'
+}
+
+Table auction_events {
+  id integer [pk, increment]
+  auction_id uuid [not null]
+  actor_user_id uuid [note: 'nullable — event ที่ระบบสร้างเอง']
+  bid_id uuid [note: 'nullable — เฉพาะ event ที่เกี่ยวกับ bid']
+  event_type auction_event_type [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (auction_id, id)
+    (event_type, created_at)
+  }
+
+}
+
+// ============ E-COMMERCE ============
+
+Table products {
+  id uuid [pk]
+  seller_id uuid [not null]
+  category_id uuid [not null]
+  title varchar [not null]
+  description varchar [not null]
+  price decimal [not null]
+  stock_qty integer [not null]
+  condition product_condition [not null]
+  negotiation_floor decimal [note: 'PRIVATE, optional — PROD-006']
+  quantity_discount_min_qty integer [note: 'optional — PROD-007']
+  quantity_discount_percent decimal [note: 'optional — PROD-007']
+  status product_status [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (status, category_id)
+    (seller_id, status)
+  }
+
+  Note: 'PROD-001..007'
+}
+
+Table product_images {
+  id uuid [pk]
+  product_id uuid [not null]
+  storage_key varchar [unique, not null]
+  url varchar [not null]
+  alt_text varchar
+  position integer [not null, default: 0]
+  is_primary boolean [not null, default: false]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (product_id, position) [unique]
+  }
+}
+
+Table carts {
+  id uuid [pk]
+  user_id uuid [unique, not null]
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'CART-001 — ตะกร้าถาวรต่อผู้ใช้ 1 ใบ'
+}
+
+Table cart_items {
+  id uuid [pk]
+  cart_id uuid [not null]
+  product_id uuid [not null]
+  quantity integer [not null]
+
+  indexes {
+    (cart_id, product_id) [unique]
+  }
+}
+
+Table offers {
+  id uuid [pk]
+  buyer_id uuid [not null]
+  product_id uuid [not null]
+  quantity integer [not null]
+  offer_amount decimal [not null]
+  decision offer_decision [not null]
+  counter_amount decimal
+  expires_at timestamp [note: 'ACCEPT/COUNTER-accepted เท่านั้น — 15 นาที']
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (buyer_id, product_id, created_at)
+  }
+
+  Note: 'AI-003 (Optional) — cooldown 5 นาที, cap 3 ครั้ง/(buyer,product)/24ชม.'
+}
+
+Table orders {
+  id uuid [pk]
+  checkout_session_id uuid [not null]
+  seller_id uuid [not null]
+  buyer_id uuid [not null]
+  payment_transaction_id uuid [not null]
+  subtotal decimal [not null]
+  status order_status [not null, default: 'PENDING']
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (checkout_session_id, seller_id) [unique]
+    (buyer_id, status)
+    (seller_id, status)
+  }
+
+  Note: 'CART-003 — 1 order ต่อ 1 ผู้ขายต่อ checkout session'
+}
+
+Table order_addresses {
+  id uuid [pk]
+  order_id uuid [unique, not null]
+  recipient_name varchar [not null]
+  line1 varchar [not null]
+  line2 varchar
+  city varchar [not null]
+  postal_code varchar [not null]
+  phone varchar [not null]
+
+  Note: 'Snapshot ที่อยู่ ณ ตอน checkout — แก้ไขไม่ได้อีกหลังชำระเงินสำเร็จ'
+}
+
+Table order_items {
+  id uuid [pk]
+  order_id uuid [not null]
+  product_id uuid [not null]
+  quantity integer [not null]
+  unit_price decimal [not null, note: 'ราคาปกติ หรือ negotiated price ถ้า offer accept แล้ว']
+}
+
+Table payment_transactions {
+  id uuid [pk]
+  checkout_session_id uuid [unique, not null]
+  status payment_status [not null]
+  method varchar [not null, note: 'Card / Bank Transfer / e-Wallet — UI only']
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'CART-004 — 1 payment ต่อ 1 checkout_session_id ไม่ใช่ต่อ order'
+}
+
+Table conversations {
+  id uuid [pk]
+  product_id uuid [not null]
+  buyer_id uuid [not null]
+  seller_id uuid [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (product_id, buyer_id, seller_id) [unique]
+  }
+
+  Note: 'CHAT-001 (Optional) — เปิดซ้ำกับคู่เดิมกลับไป thread เดิมเสมอ'
+}
+
+Table messages {
+  id uuid [pk]
+  conversation_id uuid [not null]
+  sender_id uuid [not null]
+  body varchar [not null]
+  created_at timestamp [not null, default: `now()`]
+  read_at timestamp
+
+  indexes {
+    (conversation_id, created_at)
+  }
+
+  Note: 'CHAT-002 (Optional) — ข้อความตัวอักษรเท่านั้นใน V1'
+}
+
+Table shipments {
+  id uuid [pk]
+  order_id uuid [unique, not null]
+  tracking_number varchar [note: 'สร้างอัตโนมัติตอนเข้าสถานะ SHIPPED']
+  carrier varchar [note: 'ชื่อขนส่งจำลอง']
+  status shipment_status [not null, default: 'PROCESSING']
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'SHIP-001 — สถานะย้อนกลับไม่ได้'
+}
+
+Table shipment_events {
+  id integer [pk, increment, note: 'รูปแบบเดียวกับ auction_events']
+  shipment_id uuid [not null]
+  actor_user_id uuid [note: 'nullable — event ที่ระบบสร้างเอง']
+  event_type shipment_status [not null, note: 'reuse type เดียวกับ shipments.status — ค่าตรงกันทุกตัว ไม่ต้องแยก enum']
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (shipment_id, id)
+  }
+
+  Note: 'Append-only log รูปแบบเดียวกับ auction_events — SHIP-001/002'
+}
+
+// ============ ENGAGEMENT ============
+
+Table watchlists {
+  user_id uuid [not null]
+  auction_id uuid [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (user_id, auction_id) [pk]
+    (auction_id, created_at)
+  }
+
+  Note: 'WAT-001/002'
+}
+
+Table auction_participants {
+  user_id uuid [not null]
+  auction_id uuid [not null]
+  status participant_status [not null, default: 'JOINED']
+  joined_at timestamp [not null, default: `now()`]
+  last_seen_at timestamp
+
+  indexes {
+    (auction_id, user_id) [pk]
+    (auction_id, status)
+  }
+
+  Note: 'LIV-001'
+}
+
+Table notifications {
+  id uuid [pk]
+  user_id uuid [not null]
+  auction_id uuid [note: 'CHANGED — nullable เพราะบาง type ไม่เกี่ยวกับ auction']
+  bid_id uuid
+  order_id uuid [note: 'ใหม่ — NOT-005..007']
+  conversation_id uuid [note: 'ใหม่ — NOT-008 (Optional)']
+  type notification_type [not null]
+  title varchar [not null]
+  message varchar [not null]
+  read_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (user_id, read_at, created_at)
+  }
+
+  Note: 'NOT-001..008 — title/message (ไม่ใช่ JSON payload, เป็น text ธรรมดา); เพิ่ม order_id/conversation_id ให้ client รู้ว่า refetch อะไร (§5.2)'
+}
+
+Table admin_actions {
+  id uuid [pk]
+  admin_user_id uuid [not null]
+  target_user_id uuid
+  auction_id uuid
+  category_id uuid
+  product_id uuid [note: 'ใหม่ — ADM-005, เพิ่มตาม pattern nullable-FK']
+  action_type admin_action_type [not null]
+  note varchar
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (admin_user_id, created_at)
+    (action_type, created_at)
+  }
+
+  Note: 'ADM-001, ADM-004, ADM-005'
+}
+
+Table ai_requests {
+  id uuid [pk]
+  user_id uuid [not null]
+  type ai_request_type [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'ใหม่ — AI-002/AI-003 (Optional), log-level เท่านั้น ใช้ rate-limit'
+}
+
+Table support_chat_sessions {
+  id uuid [pk]
+  user_id uuid [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  Note: 'ใหม่ — AI-001 (บังคับ), session-scoped'
+}
+
+Table support_chat_messages {
+  id uuid [pk]
+  session_id uuid [not null]
+  role chat_role [not null]
+  body varchar [not null]
+  created_at timestamp [not null, default: `now()`]
+}
+
+// ============ RELATIONSHIPS ============
+
+Ref: user_profiles.user_id > users.id
+Ref: auth_accounts.user_id > users.id
+Ref: user_sessions.user_id > users.id
+Ref: two_factor_codes.user_id > users.id
+Ref: password_reset_tokens.user_id > users.id
+
+Ref: categories.parent_id > categories.id
+Ref: categories.created_by_admin_id > users.id
+
+Ref: auctions.seller_id > users.id
+Ref: auctions.winner_user_id > users.id
+Ref: auctions.category_id > categories.id
+Ref: auctions.winning_bid_id > bids.id
+Ref: auction_images.auction_id > auctions.id
+Ref: bids.auction_id > auctions.id
+Ref: bids.bidder_id > users.id
+Ref: auction_extensions.auction_id > auctions.id
+Ref: auction_extensions.triggered_by_bid_id > bids.id
+Ref: auction_events.auction_id > auctions.id
+Ref: auction_events.actor_user_id > users.id
+Ref: auction_events.bid_id > bids.id
+
+Ref: products.seller_id > users.id
+Ref: products.category_id > categories.id
+Ref: product_images.product_id > products.id
+Ref: carts.user_id > users.id
+Ref: cart_items.cart_id > carts.id
+Ref: cart_items.product_id > products.id
+Ref: offers.buyer_id > users.id
+Ref: offers.product_id > products.id
+Ref: orders.seller_id > users.id
+Ref: orders.buyer_id > users.id
+Ref: orders.payment_transaction_id > payment_transactions.id
+Ref: order_addresses.order_id > orders.id
+Ref: order_items.order_id > orders.id
+Ref: order_items.product_id > products.id
+Ref: conversations.product_id > products.id
+Ref: conversations.buyer_id > users.id
+Ref: conversations.seller_id > users.id
+Ref: messages.conversation_id > conversations.id
+Ref: messages.sender_id > users.id
+Ref: shipments.order_id > orders.id
+Ref: shipment_events.shipment_id > shipments.id
+Ref: shipment_events.actor_user_id > users.id
+
+Ref: watchlists.user_id > users.id
+Ref: watchlists.auction_id > auctions.id
+Ref: auction_participants.auction_id > auctions.id
+Ref: auction_participants.user_id > users.id
+Ref: notifications.user_id > users.id
+Ref: notifications.auction_id > auctions.id
+Ref: notifications.bid_id > bids.id
+Ref: notifications.order_id > orders.id
+Ref: notifications.conversation_id > conversations.id
+Ref: admin_actions.admin_user_id > users.id
+Ref: admin_actions.target_user_id > users.id
+Ref: admin_actions.auction_id > auctions.id
+Ref: admin_actions.category_id > categories.id
+Ref: admin_actions.product_id > products.id
+Ref: ai_requests.user_id > users.id
+Ref: support_chat_sessions.user_id > users.id
+Ref: support_chat_messages.session_id > support_chat_sessions.id
+
+// ============ TABLE GROUPS ============
+
+TableGroup Identity {
+  users
+  user_profiles
+  auth_accounts
+  user_sessions
+  two_factor_codes
+  password_reset_tokens
+}
+
+TableGroup Shared {
+  categories
+}
+
+TableGroup Auction {
+  auctions
+  auction_images
+  bids
+  auction_extensions
+  auction_events
+}
+
+TableGroup Ecommerce {
+  products
+  product_images
+  carts
+  cart_items
+  offers
+  orders
+  order_addresses
+  order_items
+  payment_transactions
+  conversations
+  messages
+  shipments
+  shipment_events
+}
+
+TableGroup Engagement {
+  watchlists
+  auction_participants
+  notifications
+  admin_actions
+  ai_requests
+  support_chat_sessions
+  support_chat_messages
+}
