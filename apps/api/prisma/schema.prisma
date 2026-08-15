@@ -1,0 +1,743 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AuthProvider {
+  GOOGLE
+  LINE
+}
+
+enum AuctionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  SOLD
+  UNSOLD
+  CANCELLED
+}
+
+enum ParticipantStatus {
+  JOINED
+  LEFT
+}
+
+enum NotificationType {
+  OUTBID
+  AUCTION_WON
+  AUCTION_ENDED
+  AUCTION_CANCELLED
+  ORDER_PLACED
+  SHIPMENT_UPDATE
+  DELIVERED
+  NEW_MESSAGE
+}
+
+enum AuctionEventType {
+  CREATED
+  PUBLISHED
+  STARTED
+  BID_PLACED
+  EXTENDED
+  ENDED
+  CANCELLED
+}
+
+enum AdminActionType {
+  SUSPEND_USER
+  REACTIVATE_USER
+  CREATE_CATEGORY
+  UPDATE_CATEGORY
+  ACTIVATE_CATEGORY
+  DEACTIVATE_CATEGORY
+  CANCEL_AUCTION
+  DEACTIVATE_PRODUCT
+  REACTIVATE_PRODUCT
+}
+
+enum ProductCondition {
+  NEW
+  USED
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+  REMOVED
+}
+
+enum OfferDecision {
+  ACCEPTED
+  COUNTERED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum PaymentStatus {
+  SUCCEEDED
+  FAILED
+}
+
+enum ShipmentStatus {
+  PROCESSING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum AIRequestType {
+  PRICE_ESTIMATE
+  NEGOTIATION
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+// ============================================================
+// IDENTITY — AUTH-001..008, USR-001
+// ============================================================
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique @db.VarChar(320)
+  passwordHash    String?    @map("password_hash") @db.VarChar(255)
+  role            UserRole   @default(USER)
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  lastLoginAt     DateTime?  @map("last_login_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  // Identity
+  profile             UserProfile?
+  authAccounts        AuthAccount[]
+  sessions            UserSession[]
+  twoFactorCodes      TwoFactorCode[]
+  passwordResetTokens PasswordResetToken[]
+
+  // Shared
+  createdCategories Category[] @relation("CategoryCreatedByAdmin")
+
+  // Auction
+  sellingAuctions     Auction[]            @relation("AuctionSeller")
+  wonAuctions         Auction[]            @relation("AuctionWinner")
+  placedBids          Bid[]
+  watchlists          Watchlist[]
+  auctionParticipants AuctionParticipant[]
+
+  // E-commerce
+  sellingProducts     Product[]
+  cart                Cart?
+  offers              Offer[]
+  sellingOrders       Order[]        @relation("OrderSeller")
+  buyingOrders        Order[]        @relation("OrderBuyer")
+  buyerConversations  Conversation[] @relation("ConversationBuyer")
+  sellerConversations Conversation[] @relation("ConversationSeller")
+  messages            Message[]
+
+  // Engagement
+  notifications         Notification[]
+  performedAdminActions AdminAction[]        @relation("AdminActionPerformed")
+  receivedAdminActions  AdminAction[]        @relation("AdminActionReceived")
+  auctionEvents         AuctionEvent[]
+  shipmentEvents        ShipmentEvent[]
+  aiRequests            AIRequest[]
+  supportChatSessions   SupportChatSession[]
+
+  @@index([role, status])
+  @@map("users")
+}
+
+model UserProfile {
+  userId                 String   @id @map("user_id") @db.Uuid
+  firstName              String   @map("first_name") @db.VarChar(100)
+  lastName               String?  @map("last_name") @db.VarChar(100)
+  displayName            String   @map("display_name") @db.VarChar(100)
+  avatarUrl              String?  @map("avatar_url")
+  bio                    String?
+  phone                  String?  @db.VarChar(30)
+  location               String?
+  defaultShippingAddress String?  @map("default_shipping_address") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([displayName])
+  @@map("user_profiles")
+}
+
+model AuthAccount {
+  id                String       @id @default(uuid()) @db.Uuid
+  userId            String       @map("user_id") @db.Uuid
+  provider          AuthProvider
+  providerAccountId String       @map("provider_account_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@map("auth_accounts")
+}
+
+model UserSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+model TwoFactorCode {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, used])
+  @@map("two_factor_codes")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, used])
+  @@map("password_reset_tokens")
+}
+
+// ============================================================
+// SHARED — ADM-003
+// ============================================================
+
+model Category {
+  id               String   @id @default(uuid()) @db.Uuid
+  parentId         String?  @map("parent_id") @db.Uuid
+  name             String   @db.VarChar(120)
+  slug             String   @unique @db.VarChar(140)
+  description      String?
+  isActive         Boolean  @default(true) @map("is_active")
+  createdByAdminId String?  @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  parent         Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children       Category[] @relation("CategoryParent")
+  createdByAdmin User?      @relation("CategoryCreatedByAdmin", fields: [createdByAdminId], references: [id])
+
+  auctions     Auction[]
+  products     Product[]
+  adminActions AdminAction[]
+
+  @@index([parentId, isActive])
+  @@index([isActive])
+  @@map("categories")
+}
+
+// ============================================================
+// AUCTION — AUC-001..008, BID-001..005
+// ============================================================
+
+model Auction {
+  id                 String           @id @default(uuid()) @db.Uuid
+  sellerId           String           @map("seller_id") @db.Uuid
+  categoryId         String           @map("category_id") @db.Uuid
+  title              String           @db.VarChar(200)
+  description        String           @db.Text
+  condition          ProductCondition
+  status             AuctionStatus    @default(DRAFT)
+  currency           String           @default("THB") @db.Char(3)
+  startingPrice      Decimal          @map("starting_price") @db.Decimal(18, 2)
+  reservePrice       Decimal?         @map("reserve_price") @db.Decimal(18, 2) // PRIVATE — ห้ามส่งกลับ API ฝั่งผู้ซื้อ (AUC-003)
+  minBidIncrement    Decimal          @map("min_bid_increment") @db.Decimal(18, 2)
+  currentPrice       Decimal          @default(0) @map("current_price") @db.Decimal(18, 2)
+  bidCount           Int              @default(0) @map("bid_count")
+  scheduledStartAt   DateTime?        @map("scheduled_start_at")
+  originalEndAt      DateTime?        @map("original_end_at")
+  currentEndAt       DateTime?        @map("current_end_at")
+  publishedAt        DateTime?        @map("published_at")
+  startedAt          DateTime?        @map("started_at")
+  endedAt            DateTime?        @map("ended_at")
+  extensionCount     Int              @default(0) @map("extension_count")
+  winnerUserId       String?          @map("winner_user_id") @db.Uuid
+  winningBidId       String?          @unique @map("winning_bid_id") @db.Uuid
+  soldPrice          Decimal?         @map("sold_price") @db.Decimal(18, 2)
+  cancellationReason String?          @map("cancellation_reason")
+  rowVersion         Int              @default(1) @map("row_version") // optimistic concurrency (§6)
+  deletedAt          DateTime?        @map("deleted_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  seller     User     @relation("AuctionSeller", fields: [sellerId], references: [id])
+  winner     User?    @relation("AuctionWinner", fields: [winnerUserId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+  winningBid Bid?     @relation("AuctionWinningBid", fields: [winningBidId], references: [id])
+
+  images        AuctionImage[]
+  bids          Bid[]                @relation("AuctionBids")
+  extensions    AuctionExtension[]
+  events        AuctionEvent[]
+  watchlists    Watchlist[]
+  participants  AuctionParticipant[]
+  notifications Notification[]
+  adminActions  AdminAction[]
+
+  @@index([status, scheduledStartAt])
+  @@index([status, currentEndAt])
+  @@index([categoryId, status])
+  @@index([sellerId, status])
+  @@index([status, bidCount]) // AUC-008 Hot Auctions
+  @@map("auctions")
+}
+
+model AuctionImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  auctionId  String   @map("auction_id") @db.Uuid
+  storageKey String   @unique @map("storage_key")
+  url        String
+  altText    String?  @map("alt_text")
+  position   Int      @default(0)
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, position])
+  @@map("auction_images")
+}
+
+model Bid {
+  id              String   @id @default(uuid()) @db.Uuid
+  auctionId       String   @map("auction_id") @db.Uuid
+  bidderId        String   @map("bidder_id") @db.Uuid
+  amount          Decimal  @db.Decimal(18, 2)
+  sequenceNo      Int      @map("sequence_no")
+  clientRequestId String   @unique @map("client_request_id") @db.Uuid
+  placedAt        DateTime @default(now()) @map("placed_at")
+
+  auction            Auction           @relation("AuctionBids", fields: [auctionId], references: [id])
+  bidder             User              @relation(fields: [bidderId], references: [id])
+  wonAuction         Auction?          @relation("AuctionWinningBid")
+  triggeredExtension AuctionExtension? @relation("ExtensionTriggerBid")
+  events             AuctionEvent[]
+
+  @@unique([auctionId, sequenceNo])
+  @@index([auctionId, amount])
+  @@index([bidderId, placedAt])
+  @@map("bids")
+}
+
+model AuctionExtension {
+  id               String   @id @default(uuid()) @db.Uuid
+  auctionId        String   @map("auction_id") @db.Uuid
+  triggeredByBidId String   @unique @map("triggered_by_bid_id") @db.Uuid
+  extensionNumber  Int      @map("extension_number")
+  previousEndAt    DateTime @map("previous_end_at")
+  newEndAt         DateTime @map("new_end_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  auction        Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  triggeredByBid Bid     @relation("ExtensionTriggerBid", fields: [triggeredByBidId], references: [id])
+
+  @@unique([auctionId, extensionNumber])
+  @@map("auction_extensions")
+}
+
+model AuctionEvent {
+  id          Int              @id @default(autoincrement())
+  auctionId   String           @map("auction_id") @db.Uuid
+  actorUserId String?          @map("actor_user_id") @db.Uuid
+  bidId       String?          @map("bid_id") @db.Uuid
+  eventType   AuctionEventType @map("event_type")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  auction   Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  actorUser User?   @relation(fields: [actorUserId], references: [id])
+  bid       Bid?    @relation(fields: [bidId], references: [id])
+
+  @@index([auctionId, id])
+  @@index([eventType, createdAt])
+  @@map("auction_events")
+}
+
+// ============================================================
+// E-COMMERCE — PROD-001..007, CART-001..005, SHIP-001..003,
+//              CHAT-001..003 (Optional), AI-002/AI-003 (Optional)
+// ============================================================
+
+model Product {
+  id                      String           @id @default(uuid()) @db.Uuid
+  sellerId                String           @map("seller_id") @db.Uuid
+  categoryId              String           @map("category_id") @db.Uuid
+  title                   String           @db.VarChar(200)
+  description             String           @db.Text
+  price                   Decimal          @db.Decimal(18, 2)
+  stockQty                Int              @map("stock_qty")
+  condition               ProductCondition
+  negotiationFloor        Decimal?         @map("negotiation_floor") @db.Decimal(18, 2) // PRIVATE, optional — PROD-006
+  quantityDiscountMinQty  Int?             @map("quantity_discount_min_qty") // optional — PROD-007
+  quantityDiscountPercent Decimal?         @map("quantity_discount_percent") @db.Decimal(5, 2) // optional — PROD-007
+  status                  ProductStatus    @default(ACTIVE)
+  createdAt               DateTime         @default(now()) @map("created_at")
+  updatedAt               DateTime         @updatedAt @map("updated_at")
+
+  seller   User     @relation(fields: [sellerId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  images        ProductImage[]
+  cartItems     CartItem[]
+  offers        Offer[]
+  orderItems    OrderItem[]
+  conversations Conversation[]
+  adminActions  AdminAction[]
+
+  @@index([status, categoryId])
+  @@index([sellerId, status])
+  @@map("products")
+}
+
+model ProductImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  storageKey String   @unique @map("storage_key")
+  url        String
+  altText    String?  @map("alt_text")
+  position   Int      @default(0)
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, position])
+  @@map("product_images")
+}
+
+model Cart {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String @id @default(uuid()) @db.Uuid
+  cartId    String @map("cart_id") @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  quantity  Int
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+model Offer {
+  id            String        @id @default(uuid()) @db.Uuid
+  buyerId       String        @map("buyer_id") @db.Uuid
+  productId     String        @map("product_id") @db.Uuid
+  quantity      Int
+  offerAmount   Decimal       @map("offer_amount") @db.Decimal(18, 2)
+  decision      OfferDecision
+  counterAmount Decimal?      @map("counter_amount") @db.Decimal(18, 2)
+  expiresAt     DateTime?     @map("expires_at") // ACCEPT/COUNTER-accepted เท่านั้น — 15 นาที
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  buyer   User    @relation(fields: [buyerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([buyerId, productId, createdAt]) // AI-003 (Optional) — cooldown/cap check
+  @@map("offers")
+}
+
+model Order {
+  id                   String      @id @default(uuid()) @db.Uuid
+  checkoutSessionId    String      @map("checkout_session_id") @db.Uuid
+  sellerId             String      @map("seller_id") @db.Uuid
+  buyerId              String      @map("buyer_id") @db.Uuid
+  paymentTransactionId String      @map("payment_transaction_id") @db.Uuid
+  subtotal             Decimal     @db.Decimal(18, 2)
+  status               OrderStatus @default(PENDING)
+  createdAt            DateTime    @default(now()) @map("created_at")
+
+  seller             User               @relation("OrderSeller", fields: [sellerId], references: [id])
+  buyer              User               @relation("OrderBuyer", fields: [buyerId], references: [id])
+  paymentTransaction PaymentTransaction @relation(fields: [paymentTransactionId], references: [id])
+
+  address       OrderAddress?
+  items         OrderItem[]
+  shipment      Shipment?
+  notifications Notification[]
+
+  @@unique([checkoutSessionId, sellerId])
+  @@index([buyerId, status])
+  @@index([sellerId, status])
+  @@map("orders")
+}
+
+model OrderAddress {
+  id            String  @id @default(uuid()) @db.Uuid
+  orderId       String  @unique @map("order_id") @db.Uuid
+  recipientName String  @map("recipient_name") @db.VarChar(150)
+  line1         String  @db.VarChar(200)
+  line2         String? @db.VarChar(200)
+  city          String  @db.VarChar(100)
+  postalCode    String  @map("postal_code") @db.VarChar(20)
+  phone         String  @db.VarChar(30)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_addresses")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  orderId   String  @map("order_id") @db.Uuid
+  productId String  @map("product_id") @db.Uuid
+  quantity  Int
+  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // ราคาปกติ หรือ negotiated price ถ้า offer accept แล้ว
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model PaymentTransaction {
+  id                String        @id @default(uuid()) @db.Uuid
+  checkoutSessionId String        @unique @map("checkout_session_id") @db.Uuid
+  status            PaymentStatus
+  method            String        @db.VarChar(30) // Card / Bank Transfer / e-Wallet — UI only
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  orders Order[]
+
+  @@map("payment_transactions")
+}
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  buyerId   String   @map("buyer_id") @db.Uuid
+  sellerId  String   @map("seller_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+  buyer   User    @relation("ConversationBuyer", fields: [buyerId], references: [id])
+  seller  User    @relation("ConversationSeller", fields: [sellerId], references: [id])
+
+  messages      Message[]
+  notifications Notification[]
+
+  @@unique([productId, buyerId, sellerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  senderId       String    @map("sender_id") @db.Uuid
+  body           String    @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  readAt         DateTime? @map("read_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Shipment {
+  id             String         @id @default(uuid()) @db.Uuid
+  orderId        String         @unique @map("order_id") @db.Uuid
+  trackingNumber String?        @map("tracking_number") // สร้างอัตโนมัติตอนเข้าสถานะ SHIPPED
+  carrier        String? // ชื่อขนส่งจำลอง
+  status         ShipmentStatus @default(PROCESSING)
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events ShipmentEvent[]
+
+  @@map("shipments")
+}
+
+model ShipmentEvent {
+  id          Int            @id @default(autoincrement())
+  shipmentId  String         @map("shipment_id") @db.Uuid
+  actorUserId String?        @map("actor_user_id") @db.Uuid
+  eventType   ShipmentStatus @map("event_type") // reuse ShipmentStatus — ค่าตรงกันทุกตัวกับ shipments.status
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  shipment  Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  actorUser User?    @relation(fields: [actorUserId], references: [id])
+
+  @@index([shipmentId, id])
+  @@map("shipment_events")
+}
+
+// ============================================================
+// ENGAGEMENT — WAT-001/002, LIV-001, NOT-001..008, ADM-001/004/005,
+//              AI-001 (บังคับ), AI-002/AI-003 (Optional)
+// ============================================================
+
+model Watchlist {
+  userId    String   @map("user_id") @db.Uuid
+  auctionId String   @map("auction_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, auctionId])
+  @@index([auctionId, createdAt])
+  @@map("watchlists")
+}
+
+model AuctionParticipant {
+  userId     String            @map("user_id") @db.Uuid
+  auctionId  String            @map("auction_id") @db.Uuid
+  status     ParticipantStatus @default(JOINED)
+  joinedAt   DateTime          @default(now()) @map("joined_at")
+  lastSeenAt DateTime?         @map("last_seen_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  @@id([auctionId, userId])
+  @@index([auctionId, status])
+  @@map("auction_participants")
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  auctionId      String?          @map("auction_id") @db.Uuid // nullable — บาง type ไม่เกี่ยวกับ auction
+  bidId          String?          @map("bid_id") @db.Uuid
+  orderId        String?          @map("order_id") @db.Uuid // NOT-005..007
+  conversationId String?          @map("conversation_id") @db.Uuid // NOT-008 (Optional)
+  type           NotificationType
+  title          String           @db.VarChar(180)
+  message        String           @db.VarChar(800)
+  readAt         DateTime?        @map("read_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auction      Auction?      @relation(fields: [auctionId], references: [id])
+  order        Order?        @relation(fields: [orderId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model AdminAction {
+  id           String          @id @default(uuid()) @db.Uuid
+  adminUserId  String          @map("admin_user_id") @db.Uuid
+  targetUserId String?         @map("target_user_id") @db.Uuid
+  auctionId    String?         @map("auction_id") @db.Uuid
+  categoryId   String?         @map("category_id") @db.Uuid
+  productId    String?         @map("product_id") @db.Uuid // ADM-005
+  actionType   AdminActionType @map("action_type")
+  note         String?
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  admin    User      @relation("AdminActionPerformed", fields: [adminUserId], references: [id])
+  target   User?     @relation("AdminActionReceived", fields: [targetUserId], references: [id])
+  auction  Auction?  @relation(fields: [auctionId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
+  product  Product?  @relation(fields: [productId], references: [id])
+
+  @@index([adminUserId, createdAt])
+  @@index([actionType, createdAt])
+  @@map("admin_actions")
+}
+
+model AIRequest {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  type      AIRequestType
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_requests")
+}
+
+model SupportChatSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportChatMessage[]
+
+  @@map("support_chat_sessions")
+}
+
+model SupportChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  role      ChatRole
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session SupportChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("support_chat_messages")
+}
