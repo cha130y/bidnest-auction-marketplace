@@ -6,7 +6,9 @@
   "scripts": {
     "dev:web": "pnpm --dir apps/web dev",
     "dev:api": "pnpm --dir apps/api start:dev",
-    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:api\""
+    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:api\"",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test"
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx}": [

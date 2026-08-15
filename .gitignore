@@ -4,3 +4,10 @@ node_modules/
 dist/
 .next/
 coverage/
+output/
+
+# AI agent tool skills/config (e.g. Prisma agent skills), not project source
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
