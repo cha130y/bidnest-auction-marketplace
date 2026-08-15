@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: bidnest_db
+      POSTGRES_USER: bidnest
+      POSTGRES_PASSWORD: dev_password
+
+    ports:
+      - '127.0.0.1:5433:5432'
+
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bidnest']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  maildev:
+    image: maildev/maildev
+    ports:
+      - '127.0.0.1:1080:1080'
+      - '127.0.0.1:1025:1025'
+
+volumes:
+  pg_data:
