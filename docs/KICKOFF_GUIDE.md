@@ -36,7 +36,7 @@ git commit -m "chore: initial commit"
 git push origin main
 
 # สร้าง dev branch
-git checkout -b dev
+git switch -c dev
 git push origin dev
 ```
 
@@ -48,12 +48,12 @@ git push origin dev
 **สร้าง feature branch ให้แต่ละคน:**
 
 ```bash
-git checkout dev
-git checkout -b feat/auth-dev2      && git push origin feat/auth-dev2
-git checkout dev && git checkout -b feat/frontend-dev1  && git push origin feat/frontend-dev1
-git checkout dev && git checkout -b feat/ecommerce-dev3 && git push origin feat/ecommerce-dev3
-git checkout dev && git checkout -b feat/auction-dev4   && git push origin feat/auction-dev4
-git checkout dev && git checkout -b feat/ai-dev5        && git push origin feat/ai-dev5
+git switch dev
+git switch -c feat/auth-dev2      && git push origin feat/auth-dev2
+git switch dev && git switch -c feat/frontend-dev1  && git push origin feat/frontend-dev1
+git switch dev && git switch -c feat/ecommerce-dev3 && git push origin feat/ecommerce-dev3
+git switch dev && git switch -c feat/auction-dev4   && git push origin feat/auction-dev4
+git switch dev && git switch -c feat/ai-dev5        && git push origin feat/ai-dev5
 ```
 
 **✅ เสร็จเมื่อ:** ทุกคน clone repo ได้ และมี branch ของตัวเองพร้อมใช้งาน
@@ -65,7 +65,7 @@ git checkout dev && git checkout -b feat/ai-dev5        && git push origin feat/
 **ผู้รับผิดชอบ: Dev 2**
 
 ```bash
-git checkout dev
+git switch dev
 npm install -g pnpm   # ถ้ายังไม่มี
 
 mkdir -p apps packages
@@ -286,10 +286,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -314,23 +314,23 @@ git push origin dev
 
 ```bash
 # Dev 2 — เริ่ม auth พื้นฐานก่อนใคร (critical path)
-git checkout feat/auth-dev2
+git switch feat/auth-dev2
 # เริ่มทำ: AUTH-001 (local registration) → AUTH-002 (local login) → AUTH-004 (refresh session)
 
 # Dev 1 — เริ่มคู่ขนานได้เลย ไม่ต้องรอ auth
-git checkout feat/frontend-dev1
+git switch feat/frontend-dev1
 # เริ่มทำ: Design System (Shadcn-UI setup, layout, shared components)
 
 # Dev 3 — scaffold โครงสร้างโมดูล E-commerce (mock auth ไปก่อน)
-git checkout feat/ecommerce-dev3
+git switch feat/ecommerce-dev3
 # เริ่มทำ: routes/DTO เปล่าสำหรับ PROD-001..007, CART-001..005
 
 # Dev 4 — scaffold โครงสร้างโมดูล Auction (mock auth ไปก่อน)
-git checkout feat/auction-dev4
+git switch feat/auction-dev4
 # เริ่มทำ: routes/DTO เปล่าสำหรับ AUC-001..008
 
 # Dev 5 — scaffold AI-001 Customer Service Chatbot (feature บังคับ ทำก่อน AI-002/003)
-git checkout feat/ai-dev5
+git switch feat/ai-dev5
 # เริ่มทำ: endpoint /support/chat เปล่า + โครง Admin Dashboard
 ```
 
@@ -353,9 +353,9 @@ git checkout feat/ai-dev5
 git clone https://github.com/<org>/bidnest-auction-marketplace.git
 cd bidnest-auction-marketplace
 
-# 2. Checkout branch ของตัวเอง แล้วดึงงานล่าสุดจาก dev เข้ามาก่อนเริ่ม
-git checkout dev && git pull
-git checkout feat/auth-dev2          # เปลี่ยนเป็น branch ของตัวเอง
+# 2. switch branch ของตัวเอง แล้วดึงงานล่าสุดจาก dev เข้ามาก่อนเริ่ม
+git switch dev && git pull
+git switch feat/auth-dev2          # เปลี่ยนเป็น branch ของตัวเอง
 git merge dev
 
 # 3. ติดตั้ง dependency (ต้องรันใหม่ทุกครั้งที่ pnpm-lock.yaml เปลี่ยน เช่นมีคนเพิ่ม package)
@@ -363,6 +363,7 @@ pnpm install
 
 # 4. ตั้งค่า environment variables — ทำครั้งแรกครั้งเดียว (ข้ามได้ถ้ามี .env อยู่แล้ว)
 cp .env.example .env
+cp apps/api/.env.example apps/api/.env   # apps/api โหลด .env จาก cwd ของตัวเอง (apps/api/) เท่านั้น ไม่อ่าน .env ที่ root
 
 # 5. เปิด Docker (Postgres + Maildev) แล้ว sync โครงสร้างตารางล่าสุดเข้าเครื่องตัวเอง
 docker compose -f infra/docker/compose.dev.yml up -d   # มี restart: unless-stopped แล้ว ปกติจะรันอยู่แล้ว คำสั่งนี้ไม่มีผลถ้า container ทำงานอยู่
