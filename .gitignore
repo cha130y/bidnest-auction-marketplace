@@ -8,6 +8,7 @@ output/
 
 # AI agent tool skills/config (e.g. Prisma agent skills), not project source
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
 .windsurf/
 skills-lock.json
