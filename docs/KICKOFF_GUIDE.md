@@ -146,23 +146,24 @@ mkdir -p infra/docker
 services:
   postgres:
     image: postgres:17
-
+    restart: unless-stopped
     environment:
       POSTGRES_DB: bidnest_db
       POSTGRES_USER: bidnest
       POSTGRES_PASSWORD: dev_password
-
     ports:
       - '127.0.0.1:5433:5432'
-
     volumes:
       - pg_data:/var/lib/postgresql/data
-
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U bidnest']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   maildev:
     image: maildev/maildev
+    restart: unless-stopped
     ports:
       - '127.0.0.1:1080:1080'
       - '127.0.0.1:1025:1025'
@@ -170,6 +171,8 @@ services:
 volumes:
   pg_data:
 ```
+
+**`restart: unless-stopped`** — container ทั้งสองตัวจะฟื้นเองอัตโนมัติทุกครั้งที่เปิด Docker Desktop หลัง restart เครื่องจริง (ไม่ใช่แค่ sleep) ไม่ต้องรัน `docker compose up -d` ซ้ำเอง ยกเว้นสั่ง `docker compose stop`/`docker stop` ไว้ก่อน restart เครื่อง (กรณีนั้นจะจำไว้ว่าตั้งใจปิด ไม่ auto-resume ให้)
 
 สร้างไฟล์ `.env.example` ที่ root:
 
@@ -338,3 +341,78 @@ git checkout feat/ai-dev5
 - [ ] พอ Dev 2 ทำ auth พื้นฐานเสร็จ (AUTH-001/002/004) ให้แจ้งทีมทันทีเพื่อให้ Dev 3/4/5 เริ่มเชื่อมต่อ auth จริงแทน mock
 
 **✅ เสร็จเมื่อ:** ทุกคนมี branch ของตัวเอง เริ่มโค้ดจริงได้ และรู้ชัดว่าอะไรคือ blocker ที่ต้องรอ (auth พื้นฐานจาก Dev 2)
+
+---
+
+## Workflow ประจำวัน (หลัง Kickoff ครั้งแรกแล้ว)
+
+**ใช้ได้ทั้งคนที่ join ทีมทีหลัง (ครั้งแรก) และทุกคนตอนกลับมาทำงานต่อในแต่ละวัน**
+
+```bash
+# 1. Clone — ทำครั้งแรกครั้งเดียวเท่านั้น (ข้ามได้ถ้า clone ไว้แล้ว)
+git clone https://github.com/<org>/bidnest-auction-marketplace.git
+cd bidnest-auction-marketplace
+
+# 2. Checkout branch ของตัวเอง แล้วดึงงานล่าสุดจาก dev เข้ามาก่อนเริ่ม
+git checkout dev && git pull
+git checkout feat/auth-dev2          # เปลี่ยนเป็น branch ของตัวเอง
+git merge dev
+
+# 3. ติดตั้ง dependency (ต้องรันใหม่ทุกครั้งที่ pnpm-lock.yaml เปลี่ยน เช่นมีคนเพิ่ม package)
+pnpm install
+
+# 4. ตั้งค่า environment variables — ทำครั้งแรกครั้งเดียว (ข้ามได้ถ้ามี .env อยู่แล้ว)
+cp .env.example .env
+
+# 5. เปิด Docker (Postgres + Maildev) แล้ว sync โครงสร้างตารางล่าสุดเข้าเครื่องตัวเอง
+docker compose -f infra/docker/compose.dev.yml up -d   # มี restart: unless-stopped แล้ว ปกติจะรันอยู่แล้ว คำสั่งนี้ไม่มีผลถ้า container ทำงานอยู่
+pnpm --dir apps/api exec prisma migrate deploy
+
+# 6. เริ่มพัฒนา
+pnpm dev
+```
+
+**ทำไมต้อง merge `dev` เข้ามาทุกครั้ง (ขั้นตอน 2):** branch ของแต่ละคนแตกไว้ตั้งแต่วัน Kickoff — ถ้าคนอื่น push งานเข้า `dev` ไปแล้วหลังจากนั้น (เช่น Dev 2 ทำ auth เสร็จ) แต่ไม่ merge เข้ามา จะยังทำงานอยู่กับโค้ดเก่า เชื่อมต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+
+**ทำไมต้อง `prisma migrate deploy` (ขั้นตอน 5):** `docker compose up -d` เปิด Postgres มาเฉยๆ ไม่ได้สร้างตารางให้เอง ต้องสั่ง apply migration ให้ตรงกับ `schema.prisma` ก่อน — **ไม่ต้องรันทุกครั้ง** ถ้า container ยังรันต่อเนื่องอยู่ (มี `restart: unless-stopped` แล้ว ข้อมูลอยู่ใน volume ไม่หายไปไหน) รันใหม่แค่ตอน **ครั้งแรกสุด** หรือ **มี migration ใหม่จากคนอื่นเข้ามาหลัง `git merge dev`** เท่านั้น
+
+**✅ เสร็จเมื่อ:** `pnpm dev` รันได้ทั้ง web และ api โดยไม่ error และเชื่อมต่อ database ที่มีตารางครบตาม schema ล่าสุด
+
+---
+
+## Commit Message Convention
+
+รูปแบบ:
+
+```
+<type>(<requirement-id>): <คำอธิบายสั้นๆ ภาษาอังกฤษ>
+```
+
+**`<type>`:**
+
+| type       | ใช้ตอนไหน                                                    |
+| ---------- | ------------------------------------------------------------ |
+| `feat`     | ทำ requirement ใหม่ (ผูกกับ AUTH-xxx, PROD-xxx, AUC-xxx ฯลฯ) |
+| `fix`      | แก้บั๊ก                                                      |
+| `refactor` | จัดโครงสร้างโค้ดใหม่ ไม่เพิ่ม feature ไม่แก้บั๊ก             |
+| `test`     | เพิ่ม/แก้ test                                               |
+| `docs`     | แก้เอกสาร (SRS, README ฯลฯ) ไม่แตะโค้ด                       |
+| `chore`    | งาน setup/tooling/dependency ที่ไม่ใช่ feature โดยตรง        |
+| `ci`       | แก้ workflow ของ CI/CD                                       |
+
+**`<requirement-id>` (scope):** ใส่เมื่อ commit นั้นตรงกับ requirement ใน SRS โดยตรง ถ้าเป็นงาน infra ทั่วไปที่ไม่ผูกกับ requirement ไหน ข้ามได้เลย
+
+**ตัวอย่างจริงตาม requirement ของ BidNest:**
+
+```bash
+feat(AUTH-001): add local registration endpoint
+feat(BID-004): implement anti-sniping extension logic
+fix(PROD-005): prevent stock going negative on concurrent checkout
+docs(PROD-006): clarify negotiation floor visibility rule
+chore: scaffold monorepo structure
+ci: add lint and test workflow
+```
+
+**ทำไมใส่ requirement ID ให้เป็นประโยชน์จริง ไม่ใช่แค่ format สวยๆ:** พิมพ์ `git log --grep="AUTH-001"` จะเห็นทุก commit ที่เกี่ยวกับ requirement นั้นทันที — เวลา review หรือ debug ย้อนหลังว่า "AUTH-001 เริ่มทำตอนไหน แก้กี่รอบ" ไม่ต้องไล่อ่านทีละ commit เอง เป็นการเชื่อม git log กับ SRS เข้าด้วยกันโดยตรง
+
+**เรื่องภาษา:** commit message เป็นภาษาอังกฤษเสมอ เหมือน PR title/description — ต่างจากตอนคุยกับ Claude Code ที่เป็นภาษาไทยตาม CLAUDE.md เพราะ commit message ติดอยู่ใน git history ถาวร คนนอกทีมที่เปิด repo ดูก็ควรอ่านเข้าใจได้
