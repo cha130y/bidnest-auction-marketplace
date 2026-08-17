@@ -364,7 +364,7 @@ pnpm install
 # 4. ตั้งค่า environment variables — ทำครั้งแรกครั้งเดียว (ข้ามได้ถ้ามี .env อยู่แล้ว)
 cp .env.example .env
 cp apps/api/.env.example apps/api/.env   # apps/api โหลด .env จาก cwd ของตัวเอง (apps/api/) เท่านั้น ไม่อ่าน .env ที่ root
-cp apps/web/.env.example apps/web/.env.local   # Next.js อ่านเฉพาะ .env.local (convention ของ Next.js) ไม่ใช่ .env
+cp apps/web/.env.example apps/web/.env.local   # apps/web (Next.js) โหลด .env.local จาก cwd ของตัวเอง (apps/web/) เท่านั้น ไม่ใช่ .env
 
 # 5. เปิด Docker (Postgres + Maildev) แล้ว sync โครงสร้างตารางล่าสุดเข้าเครื่องตัวเอง
 docker compose -f infra/docker/compose.dev.yml up -d   # มี restart: unless-stopped แล้ว ปกติจะรันอยู่แล้ว คำสั่งนี้ไม่มีผลถ้า container ทำงานอยู่
