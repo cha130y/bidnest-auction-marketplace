@@ -174,21 +174,11 @@ volumes:
 
 **`restart: unless-stopped`** — container ทั้งสองตัวจะฟื้นเองอัตโนมัติทุกครั้งที่เปิด Docker Desktop หลัง restart เครื่องจริง (ไม่ใช่แค่ sleep) ไม่ต้องรัน `docker compose up -d` ซ้ำเอง ยกเว้นสั่ง `docker compose stop`/`docker stop` ไว้ก่อน restart เครื่อง (กรณีนั้นจะจำไว้ว่าตั้งใจปิด ไม่ auto-resume ให้)
 
-สร้างไฟล์ `.env.example` ที่ root:
-
-```
-DATABASE_URL="postgresql://bidnest:dev_password@localhost:5433/bidnest_db"
-MAIL_HOST=localhost
-MAIL_PORT=1025
-AUTH_SECRET="dev-only-change-in-production"
-```
-
 ```bash
-cp .env.example .env
 docker compose -f infra/docker/compose.dev.yml up -d
 docker compose -f infra/docker/compose.dev.yml ps   # เช็คว่า healthy ทั้ง 2 service
 
-git add infra/docker/compose.dev.yml .env.example
+git add infra/docker/compose.dev.yml
 git commit -m "chore: add docker compose for postgres + maildev"
 git push origin dev
 ```
@@ -361,9 +351,9 @@ git merge dev
 # 3. ติดตั้ง dependency (ต้องรันใหม่ทุกครั้งที่ pnpm-lock.yaml เปลี่ยน เช่นมีคนเพิ่ม package)
 pnpm install
 
-# 4. ตั้งค่า environment variables — ทำครั้งแรกครั้งเดียว (ข้ามได้ถ้ามี .env อยู่แล้ว)
-cp .env.example .env
-cp apps/api/.env.example apps/api/.env   # apps/api โหลด .env จาก cwd ของตัวเอง (apps/api/) เท่านั้น ไม่อ่าน .env ที่ root
+# 4. ตั้งค่า environment variables — ทำครั้งแรกครั้งเดียว (ข้ามได้ถ้ามีไฟล์ .env อยู่แล้ว)
+cp apps/api/.env.example apps/api/.env   # apps/api โหลด .env จาก cwd ของตัวเอง (apps/api/) เท่านั้น
+cp apps/web/.env.example apps/web/.env.local   # apps/web (Next.js) โหลด .env.local จาก cwd ของตัวเอง (apps/web/) เท่านั้น
 
 # 5. เปิด Docker (Postgres + Maildev) แล้ว sync โครงสร้างตารางล่าสุดเข้าเครื่องตัวเอง
 docker compose -f infra/docker/compose.dev.yml up -d   # มี restart: unless-stopped แล้ว ปกติจะรันอยู่แล้ว คำสั่งนี้ไม่มีผลถ้า container ทำงานอยู่
