@@ -6,6 +6,9 @@
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
+  // NestJS builds to CommonJS — without this the generated ESM client
+  // throws "exports is not defined in ES module scope" at runtime.
+  moduleFormat = "cjs"
 }
 
 datasource db {

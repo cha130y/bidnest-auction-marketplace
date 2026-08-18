@@ -3,5 +3,7 @@ packages:
   - 'packages/*'
 allowBuilds:
   '@prisma/engines': true
+  # telemetry-only install script pulled in by nodemailer — keep it off
+  '@scarf/scarf': false
   prisma: true
   unrs-resolver: true
