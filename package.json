@@ -8,7 +8,8 @@
     "dev:api": "pnpm --dir apps/api start:dev",
     "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:api\"",
     "lint": "pnpm -r --if-present lint",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "check": "pnpm --dir apps/api exec tsc --noEmit && pnpm --dir apps/web exec tsc --noEmit && pnpm test && pnpm lint"
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx}": [
