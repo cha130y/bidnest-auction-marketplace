@@ -347,6 +347,7 @@ cd bidnest-auction-marketplace
 git switch dev && git pull
 git switch feat/auth-dev2          # เปลี่ยนเป็น branch ของตัวเอง
 git merge dev
+pnpm check   # merge ไม่มี conflict ไม่ได้แปลว่าโค้ดไม่พัง เช็ค typecheck + test + lint ให้ชัวร์ก่อนทำงานต่อ
 
 # 3. ติดตั้ง dependency (ต้องรันใหม่ทุกครั้งที่ pnpm-lock.yaml เปลี่ยน เช่นมีคนเพิ่ม package)
 pnpm install
@@ -364,6 +365,8 @@ pnpm dev
 ```
 
 **ทำไมต้อง merge `dev` เข้ามาทุกครั้ง (ขั้นตอน 2):** branch ของแต่ละคนแตกไว้ตั้งแต่วัน Kickoff — ถ้าคนอื่น push งานเข้า `dev` ไปแล้วหลังจากนั้น (เช่น Dev 2 ทำ auth เสร็จ) แต่ไม่ merge เข้ามา จะยังทำงานอยู่กับโค้ดเก่า เชื่อมต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+
+**ทำไมต้องรัน `pnpm check` หลัง merge (ขั้นตอน 2):** `git merge` สำเร็จแค่บอกว่าไม่มี conflict ระดับบรรทัด ไม่ได้การันตีว่าโค้ดยังทำงานถูก (เช่นมีคน rename ฟังก์ชันที่อีกไฟล์หนึ่งยังเรียกชื่อเดิมอยู่ merge ผ่านสนิทแต่พังตอนรัน) และ merge แบบ local นี้ CI ไม่รันให้ (CI รันเฉพาะตอนเปิด PR) — `pnpm check` รวม typecheck ของ apps/api + apps/web, `pnpm test`, และ `pnpm lint` ไว้คำสั่งเดียว ให้รู้ทันทีว่ามีอะไรพังก่อนจะเขียนโค้ดทับต่อ
 
 **ทำไมต้อง `prisma migrate deploy` (ขั้นตอน 5):** `docker compose up -d` เปิด Postgres มาเฉยๆ ไม่ได้สร้างตารางให้เอง ต้องสั่ง apply migration ให้ตรงกับ `schema.prisma` ก่อน — **ไม่ต้องรันทุกครั้ง** ถ้า container ยังรันต่อเนื่องอยู่ (มี `restart: unless-stopped` แล้ว ข้อมูลอยู่ใน volume ไม่หายไปไหน) รันใหม่แค่ตอน **ครั้งแรกสุด** หรือ **มี migration ใหม่จากคนอื่นเข้ามาหลัง `git merge dev`** เท่านั้น
 
