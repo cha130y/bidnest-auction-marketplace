@@ -9,7 +9,7 @@
     "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:api\"",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --if-present test",
-    "check": "pnpm --dir apps/api exec tsc --noEmit && pnpm --dir apps/web exec tsc --noEmit && pnpm test && pnpm lint"
+    "check": "pnpm --dir apps/api exec tsc --noEmit && pnpm --dir apps/web exec next typegen && pnpm --dir apps/web exec tsc --noEmit && pnpm test && pnpm lint"
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx}": [
