@@ -7,11 +7,19 @@ import { Injectable, NotImplementedException } from '@nestjs/common';
  * การอัปเดต `products.status` (ADM-004) ด้วย AdminActionType
  * DEACTIVATE_PRODUCT / REACTIVATE_PRODUCT + productId + note
  *
- * ตอน reactivate ต้องคืนสถานะให้ถูก: ถ้า stockQty = 0 ให้เป็น OUT_OF_STOCK
- * ไม่ใช่ ACTIVE (PROD-005)
+ * - ปิด → `SUSPENDED` (ไม่ใช่ INACTIVE) เพราะ INACTIVE เป็นสถานะที่ผู้ขายเปิด
+ *   กลับเองได้ตาม PROD-002 ซึ่งจะทำให้ ADM-005 ไม่มีผลบังคับ — ดู ADR-0002
+ * - เปิดกลับ → `stockQty > 0 ? ACTIVE : OUT_OF_STOCK` (PROD-005)
  *
  * ห้ามแตะ orders ที่สถานะ PAID เด็ดขาด — ADM-005 ระบุว่าการปิดการขายปิดกั้น
  * เฉพาะคำสั่งซื้อใหม่
+ *
+ * ⚠️ งานที่ผูกกันอยู่ในโมดูล e-commerce ของ Dev 3 เอง (ADR-0002):
+ *   - PROD-002 ผู้ขายเปลี่ยนสถานะ/แก้ข้อมูล → ถ้าปัจจุบันเป็น SUSPENDED ต้อง 403
+ *     (รวมถึงห้าม soft-delete ไป REMOVED ไม่งั้นเลี่ยงการบล็อกได้)
+ *   - PROD-005 auto-flip ตอน stock เปลี่ยน → ต้องข้ามสินค้าที่ SUSPENDED
+ *     ไม่งั้นการเติม stock จะปลดการระงับเองเงียบๆ
+ *   - CART/checkout → สินค้า SUSPENDED เพิ่มลงตะกร้าและ checkout ไม่ได้
  */
 @Injectable()
 export class AdminProductsService {

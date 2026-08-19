@@ -6,9 +6,9 @@ import { AdminProductsService } from './products.service';
  *
  * การปิดการขายจะปิดกั้นคำสั่งซื้อใหม่ แต่ **ไม่ยกเลิกคำสั่งซื้อที่จ่ายเงินแล้ว (PAID)**
  *
- * ⚠️ ประเด็นค้าง: ADM-005 ทับซ้อนกับ PROD-002 ที่ให้ผู้ขายแก้สถานะสินค้าของ
- * ตัวเองระหว่าง ACTIVE/INACTIVE ได้ ทำให้ผู้ขายกด ACTIVE กลับเองได้หลัง admin
- * สั่งปิด ต้องตกลงกันในทีมก่อนลงมือ — ดูหัวข้อ "ประเด็นค้าง" ใน ADR-0001
+ * admin สั่งปิด → `ProductStatus.SUSPENDED` ซึ่งเป็นสถานะที่ **ผู้ขายย้ายออกเองไม่ได้**
+ * (ต่างจาก INACTIVE ที่ผู้ขายปิดเองและเปิดกลับเองได้ตาม PROD-002)
+ * state machine เต็มและกฎที่ต้อง implement ทุกข้อดูที่ ADR-0002
  *
  * TODO(Dev 3): เมื่อ AUTH-008 พร้อม ใส่ guard ที่ระดับ class
  *   `@UseGuards(AccessTokenGuard, RolesGuard)` + `@Roles(UserRole.ADMIN)`
@@ -23,7 +23,7 @@ export class AdminProductsController {
     return this.adminProductsService.listProducts();
   }
 
-  /** body: { reason: string } → products.status = INACTIVE */
+  /** body: { reason: string } → products.status = SUSPENDED */
   @Patch(':productId/deactivate')
   deactivateProduct(@Param('productId') productId: string) {
     return this.adminProductsService.setProductActivation(productId, false);
