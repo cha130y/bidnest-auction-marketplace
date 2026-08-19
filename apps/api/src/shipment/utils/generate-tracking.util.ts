@@ -8,7 +8,7 @@ import { randomInt } from 'node:crypto';
 const CARRIERS = [
   'BidNest Express',
   'Nest Logistics',
-  'Simulated Post',
+  'Simulated Post'
 ] as const;
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 — misread easily
@@ -30,6 +30,6 @@ export function generateTracking(now = new Date()): SimulatedTracking {
 
   return {
     trackingNumber: `BN${yy}${mm}${dd}${suffix}`,
-    carrier: CARRIERS[randomInt(CARRIERS.length)],
+    carrier: CARRIERS[randomInt(CARRIERS.length)]
   };
 }

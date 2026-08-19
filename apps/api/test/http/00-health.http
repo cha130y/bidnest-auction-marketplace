@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:4000/api
+@baseUrl = http://localhost:4000
 
-### health — public route, no auth header needed. expect 200 "BidNest API is running"
-GET {{baseUrl}}
+### health — public route, no auth header needed. expect 200 { "status": "ok" }
+GET {{baseUrl}}/health

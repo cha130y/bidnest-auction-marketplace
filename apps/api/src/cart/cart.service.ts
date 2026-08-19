@@ -2,10 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { calculateLineTotal } from './utils/calculate-line-total.util';
 
 const cartItemInclude = {
@@ -20,15 +20,15 @@ const cartItemInclude = {
       quantityDiscountMinQty: true,
       quantityDiscountPercent: true,
       seller: {
-        select: { id: true, profile: { select: { displayName: true } } },
+        select: { id: true, profile: { select: { displayName: true } } }
       },
       images: {
         select: { url: true },
         where: { isPrimary: true },
-        take: 1,
-      },
-    },
-  },
+        take: 1
+      }
+    }
+  }
 } satisfies Prisma.CartItemInclude;
 
 type CartItemRow = Prisma.CartItemGetPayload<{
@@ -50,7 +50,7 @@ export class CartService {
 
     const existing = await this.prisma.cartItem.findUnique({
       where: { cartId_productId: { cartId: cart.id, productId } },
-      select: { quantity: true },
+      select: { quantity: true }
     });
 
     const nextQuantity = (existing?.quantity ?? 0) + quantity;
@@ -59,7 +59,7 @@ export class CartService {
     await this.prisma.cartItem.upsert({
       where: { cartId_productId: { cartId: cart.id, productId } },
       create: { cartId: cart.id, productId, quantity: nextQuantity },
-      update: { quantity: nextQuantity },
+      update: { quantity: nextQuantity }
     });
 
     return this.buildCartView(cart.id);
@@ -73,7 +73,7 @@ export class CartService {
 
     await this.prisma.cartItem.update({
       where: { id: itemId },
-      data: { quantity },
+      data: { quantity }
     });
 
     return this.buildCartView(cart.id);
@@ -93,14 +93,14 @@ export class CartService {
       where: { userId },
       create: { userId },
       update: {},
-      select: { id: true },
+      select: { id: true }
     });
   }
 
   private async findOwnedCartItem(cartId: string, itemId: string) {
     const item = await this.prisma.cartItem.findUnique({
       where: { id: itemId },
-      include: cartItemInclude,
+      include: cartItemInclude
     });
 
     if (!item || item.cartId !== cartId) {
@@ -118,8 +118,8 @@ export class CartService {
         title: true,
         sellerId: true,
         status: true,
-        stockQty: true,
-      },
+        stockQty: true
+      }
     });
 
     if (!product || product.status === 'REMOVED') {
@@ -129,13 +129,13 @@ export class CartService {
     // CART-001 — a seller cannot buy their own listing
     if (product.sellerId === buyerId) {
       throw new ForbiddenException(
-        'You cannot add your own product to the cart',
+        'You cannot add your own product to the cart'
       );
     }
 
     if (product.status !== 'ACTIVE') {
       throw new BadRequestException(
-        `"${product.title}" is not available for purchase`,
+        `"${product.title}" is not available for purchase`
       );
     }
 
@@ -147,7 +147,7 @@ export class CartService {
     // the real decrement happens at checkout (PROD-005).
     if (quantity > stockQty) {
       throw new BadRequestException(
-        `Only ${stockQty} unit(s) of "${title}" are in stock`,
+        `Only ${stockQty} unit(s) of "${title}" are in stock`
       );
     }
   }
@@ -160,18 +160,18 @@ export class CartService {
     const items = await this.prisma.cartItem.findMany({
       where: { cartId },
       include: cartItemInclude,
-      orderBy: { id: 'asc' },
+      orderBy: { id: 'asc' }
     });
 
     const lines = items.map((item) => this.buildLine(item));
 
     const total = lines.reduce(
       (sum, line) => sum.plus(line.subtotal),
-      new Prisma.Decimal(0),
+      new Prisma.Decimal(0)
     );
     const discountTotal = lines.reduce(
       (sum, line) => sum.plus(line.discountAmount),
-      new Prisma.Decimal(0),
+      new Prisma.Decimal(0)
     );
 
     return {
@@ -181,8 +181,8 @@ export class CartService {
       summary: {
         itemCount: lines.reduce((sum, line) => sum + line.quantity, 0),
         discountTotal: discountTotal.toFixed(2),
-        total: total.toFixed(2),
-      },
+        total: total.toFixed(2)
+      }
     };
   }
 
@@ -190,7 +190,7 @@ export class CartService {
     const { product } = item;
     const line = calculateLineTotal(product.price, item.quantity, {
       minQty: product.quantityDiscountMinQty,
-      percent: product.quantityDiscountPercent,
+      percent: product.quantityDiscountPercent
     });
 
     return {
@@ -201,11 +201,11 @@ export class CartService {
         title: product.title,
         status: product.status,
         stockQty: product.stockQty,
-        imageUrl: product.images[0]?.url ?? null,
+        imageUrl: product.images[0]?.url ?? null
       },
       seller: {
         id: product.seller.id,
-        displayName: product.seller.profile?.displayName ?? null,
+        displayName: product.seller.profile?.displayName ?? null
       },
       unitPrice: line.unitPrice.toFixed(2),
       effectiveUnitPrice: line.effectiveUnitPrice.toFixed(2),
@@ -213,14 +213,14 @@ export class CartService {
       discountAmount: line.discountAmount.toFixed(2),
       subtotal: line.subtotal.toFixed(2),
       // Flags a line the buyer must fix before checkout can succeed
-      issue: this.detectIssue(product.status, item.quantity, product.stockQty),
+      issue: this.detectIssue(product.status, item.quantity, product.stockQty)
     };
   }
 
   private detectIssue(
     status: string,
     quantity: number,
-    stockQty: number,
+    stockQty: number
   ): string | null {
     if (status !== 'ACTIVE') return 'PRODUCT_UNAVAILABLE';
     if (quantity > stockQty) return 'INSUFFICIENT_STOCK';

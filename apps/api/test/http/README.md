@@ -21,7 +21,7 @@ pnpm --dir apps/api exec prisma migrate dev
 pnpm --dir apps/api exec prisma db seed
 
 # 5) รัน API
-pnpm dev:api          # -> http://localhost:4000/api
+pnpm dev:api          # -> http://localhost:4000
 ```
 
 > `prisma db seed` จะพิมพ์ UUID ของผู้ใช้ทั้ง 4 คนออกมาท้ายสุด

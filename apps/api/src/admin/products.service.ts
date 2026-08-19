@@ -3,10 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  NotImplementedException,
+  NotImplementedException
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * ADM-005 — Product listing oversight (owner: Dev 3)
@@ -42,7 +42,7 @@ export class AdminProductsService {
     productId: string,
     isActive: boolean,
     adminId: string,
-    reason: string,
+    reason: string
   ) {
     return isActive
       ? this.reactivate(productId, adminId, reason)
@@ -60,7 +60,7 @@ export class AdminProductsService {
       const updated = await tx.product.update({
         where: { id: productId },
         data: { status: 'SUSPENDED' },
-        select: { id: true, title: true, status: true, stockQty: true },
+        select: { id: true, title: true, status: true, stockQty: true }
       });
 
       await this.recordAction(
@@ -68,7 +68,7 @@ export class AdminProductsService {
         adminId,
         productId,
         'DEACTIVATE_PRODUCT',
-        reason,
+        reason
       );
 
       return { ...updated, reason };
@@ -82,7 +82,7 @@ export class AdminProductsService {
     // listing stays the seller's to manage (PROD-002)
     if (product.status !== 'SUSPENDED') {
       throw new BadRequestException(
-        `Only a suspended product can be reactivated (current: ${product.status})`,
+        `Only a suspended product can be reactivated (current: ${product.status})`
       );
     }
 
@@ -91,7 +91,7 @@ export class AdminProductsService {
         where: { id: productId },
         // A sold-out listing must not come back as purchasable (PROD-005)
         data: { status: product.stockQty > 0 ? 'ACTIVE' : 'OUT_OF_STOCK' },
-        select: { id: true, title: true, status: true, stockQty: true },
+        select: { id: true, title: true, status: true, stockQty: true }
       });
 
       await this.recordAction(
@@ -99,7 +99,7 @@ export class AdminProductsService {
         adminId,
         productId,
         'REACTIVATE_PRODUCT',
-        reason,
+        reason
       );
 
       return { ...updated, reason };
@@ -109,7 +109,7 @@ export class AdminProductsService {
   private async findModerable(productId: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, status: true, stockQty: true },
+      select: { id: true, status: true, stockQty: true }
     });
 
     if (!product) throw new NotFoundException('Product not found');
@@ -117,7 +117,7 @@ export class AdminProductsService {
     // REMOVED is terminal in V1 — there is nothing left to moderate
     if (product.status === 'REMOVED') {
       throw new ForbiddenException(
-        'Product was removed by its seller and cannot be moderated',
+        'Product was removed by its seller and cannot be moderated'
       );
     }
 
@@ -130,10 +130,10 @@ export class AdminProductsService {
     adminUserId: string,
     productId: string,
     actionType: 'DEACTIVATE_PRODUCT' | 'REACTIVATE_PRODUCT',
-    note: string,
+    note: string
   ) {
     return tx.adminAction.create({
-      data: { adminUserId, productId, actionType, note },
+      data: { adminUserId, productId, actionType, note }
     });
   }
 }

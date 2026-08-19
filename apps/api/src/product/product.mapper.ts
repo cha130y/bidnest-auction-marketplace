@@ -16,17 +16,17 @@ export const productPublicSelect = {
   updatedAt: true,
   images: {
     select: { url: true, position: true, isPrimary: true },
-    orderBy: { position: 'asc' },
+    orderBy: { position: 'asc' }
   },
   category: { select: { id: true, name: true, slug: true } },
-  seller: { select: { id: true, profile: { select: { displayName: true } } } },
+  seller: { select: { id: true, profile: { select: { displayName: true } } } }
 } satisfies Prisma.ProductSelect;
 
 // PROD-006 / §6 — negotiationFloor is added on top of the public select, never
 // the other way round, so a buyer-facing path cannot leak it by omission.
 export const productOwnerSelect = {
   ...productPublicSelect,
-  negotiationFloor: true,
+  negotiationFloor: true
 } satisfies Prisma.ProductSelect;
 
 type PublicProductRow = Prisma.ProductGetPayload<{
@@ -49,27 +49,27 @@ export function toPublicProduct(product: PublicProductRow) {
       product.quantityDiscountMinQty && product.quantityDiscountPercent
         ? {
             minQty: product.quantityDiscountMinQty,
-            percent: product.quantityDiscountPercent.toString(),
+            percent: product.quantityDiscountPercent.toString()
           }
         : null,
     category: product.category,
     seller: {
       id: product.seller.id,
-      displayName: product.seller.profile?.displayName ?? null,
+      displayName: product.seller.profile?.displayName ?? null
     },
     images: product.images.map((image) => ({
       url: image.url,
       position: image.position,
-      isPrimary: image.isPrimary,
+      isPrimary: image.isPrimary
     })),
     createdAt: product.createdAt,
-    updatedAt: product.updatedAt,
+    updatedAt: product.updatedAt
   };
 }
 
 export function toOwnerProduct(product: OwnerProductRow) {
   return {
     ...toPublicProduct(product),
-    negotiationFloor: product.negotiationFloor?.toString() ?? null,
+    negotiationFloor: product.negotiationFloor?.toString() ?? null
   };
 }

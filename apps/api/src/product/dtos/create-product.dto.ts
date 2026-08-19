@@ -12,7 +12,7 @@ import {
   IsUUID,
   IsUrl,
   Max,
-  Min,
+  Min
 } from 'class-validator';
 import { ProductCondition } from '../../../generated/prisma/enums';
 import { Trim } from '../../common/decorators/trim.decorator';

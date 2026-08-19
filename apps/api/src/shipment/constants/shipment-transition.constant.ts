@@ -9,7 +9,7 @@ export const SHIPMENT_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   SHIPPED: ['IN_TRANSIT'],
   IN_TRANSIT: ['DELIVERED'],
   DELIVERED: [],
-  CANCELLED: [],
+  CANCELLED: []
 };
 
 export function nextStatuses(from: ShipmentStatus): ShipmentStatus[] {
@@ -18,7 +18,7 @@ export function nextStatuses(from: ShipmentStatus): ShipmentStatus[] {
 
 export function canTransition(
   from: ShipmentStatus,
-  to: ShipmentStatus,
+  to: ShipmentStatus
 ): boolean {
   return SHIPMENT_TRANSITIONS[from].includes(to);
 }

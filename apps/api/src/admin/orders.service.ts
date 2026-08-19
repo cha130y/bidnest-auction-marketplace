@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import type { OrderStatus } from '../../generated/prisma/enums';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -35,25 +35,25 @@ export class AdminOrdersService {
             select: {
               id: true,
               email: true,
-              profile: { select: { displayName: true } },
-            },
+              profile: { select: { displayName: true } }
+            }
           },
           seller: {
             select: {
               id: true,
               email: true,
-              profile: { select: { displayName: true } },
-            },
+              profile: { select: { displayName: true } }
+            }
           },
           shipment: { select: { status: true } },
-          _count: { select: { items: true } },
+          _count: { select: { items: true } }
         },
         // `id` breaks ties so paging stays stable for same-instant orders
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         skip: (page - 1) * limit,
-        take: limit,
+        take: limit
       }),
-      this.prisma.order.count({ where }),
+      this.prisma.order.count({ where })
     ]);
 
     return {
@@ -68,15 +68,15 @@ export class AdminOrdersService {
         buyer: {
           id: order.buyer.id,
           email: order.buyer.email,
-          displayName: order.buyer.profile?.displayName ?? null,
+          displayName: order.buyer.profile?.displayName ?? null
         },
         seller: {
           id: order.seller.id,
           email: order.seller.email,
-          displayName: order.seller.profile?.displayName ?? null,
-        },
+          displayName: order.seller.profile?.displayName ?? null
+        }
       })),
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
     };
   }
 }

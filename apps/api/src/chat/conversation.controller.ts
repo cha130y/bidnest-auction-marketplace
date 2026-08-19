@@ -5,7 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Query,
+  Query
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -28,7 +28,7 @@ export class ConversationController {
   listMessages(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
-    @Query() dto: ListMessagesDto,
+    @Query() dto: ListMessagesDto
   ) {
     return this.chatService.listMessages(id, userId, dto.page, dto.limit);
   }
@@ -37,7 +37,7 @@ export class ConversationController {
   sendMessage(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: SendMessageDto,
+    @Body() dto: SendMessageDto
   ) {
     return this.chatService.sendMessage(id, userId, dto.body);
   }

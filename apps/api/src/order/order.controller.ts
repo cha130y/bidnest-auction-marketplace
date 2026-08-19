@@ -7,7 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Query,
+  Query
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -20,7 +20,7 @@ import { OrderService } from './order.service';
 export class OrderController {
   constructor(
     private readonly orderService: OrderService,
-    private readonly checkoutService: CheckoutService,
+    private readonly checkoutService: CheckoutService
   ) {}
 
   // SRS 2 — admins cannot check out
@@ -37,7 +37,7 @@ export class OrderController {
       buyerId,
       dto.status,
       dto.page,
-      dto.limit,
+      dto.limit
     );
   }
 
@@ -47,14 +47,14 @@ export class OrderController {
       sellerId,
       dto.status,
       dto.page,
-      dto.limit,
+      dto.limit
     );
   }
 
   @Get(':id')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser('id') userId: string
   ) {
     return this.orderService.findOne(id, userId);
   }

@@ -3,7 +3,7 @@ import type { PaymentStatus } from '../../../generated/prisma/enums';
 export const PaymentMethod = {
   CARD: 'CARD',
   BANK_TRANSFER: 'BANK_TRANSFER',
-  E_WALLET: 'E_WALLET',
+  E_WALLET: 'E_WALLET'
 } as const;
 
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];

@@ -8,7 +8,7 @@
 # ids come from apps/api/prisma/seed.ts (fixed UUIDs, stable across re-seeds).
 ###############################################################################
 
-@baseUrl = http://localhost:4000/api
+@baseUrl = http://localhost:4000
 
 # --- users (sent as the x-mock-user-id header) -------------------------------
 @admin   = 00000000-0000-4000-8000-000000000001

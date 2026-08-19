@@ -13,7 +13,7 @@ export class ProductConversationController {
   @Post(':id/conversations')
   open(
     @Param('id', ParseUUIDPipe) productId: string,
-    @CurrentUser('id') buyerId: string,
+    @CurrentUser('id') buyerId: string
   ) {
     return this.chatService.openConversation(productId, buyerId);
   }

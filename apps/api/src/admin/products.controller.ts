@@ -4,7 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
-  Patch,
+  Patch
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -40,13 +40,13 @@ export class AdminProductsController {
   deactivateProduct(
     @Param('productId', ParseUUIDPipe) productId: string,
     @CurrentUser('id') adminId: string,
-    @Body() dto: ModerateProductDto,
+    @Body() dto: ModerateProductDto
   ) {
     return this.adminProductsService.setProductActivation(
       productId,
       false,
       adminId,
-      dto.reason,
+      dto.reason
     );
   }
 
@@ -55,13 +55,13 @@ export class AdminProductsController {
   reactivateProduct(
     @Param('productId', ParseUUIDPipe) productId: string,
     @CurrentUser('id') adminId: string,
-    @Body() dto: ModerateProductDto,
+    @Body() dto: ModerateProductDto
   ) {
     return this.adminProductsService.setProductActivation(
       productId,
       true,
       adminId,
-      dto.reason,
+      dto.reason
     );
   }
 }

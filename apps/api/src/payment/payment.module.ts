@@ -3,6 +3,6 @@ import { MockPaymentProvider } from './payment.service';
 
 @Module({
   providers: [MockPaymentProvider],
-  exports: [MockPaymentProvider],
+  exports: [MockPaymentProvider]
 })
 export class PaymentModule {}

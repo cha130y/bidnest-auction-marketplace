@@ -16,5 +16,9 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # apps/api/generated/prisma is gitignored, so a fresh checkout has no
+      # client. Without it the type-aware eslint rules resolve every Prisma
+      # call to `error` and lint fails.
+      - run: pnpm --filter api exec prisma generate
       - run: pnpm lint
       - run: pnpm test

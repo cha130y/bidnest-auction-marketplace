@@ -6,7 +6,7 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-  ValidateNested,
+  ValidateNested
 } from 'class-validator';
 import { Trim } from '../../common/decorators/trim.decorator';
 import { PaymentMethod } from '../../payment/types/payment-provider.type';

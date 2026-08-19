@@ -46,7 +46,7 @@ export class CategoriesService {
 
   updateCategory(categoryId: string): never {
     throw new NotImplementedException(
-      `ADM-003 updateCategory (categoryId=${categoryId})`,
+      `ADM-003 updateCategory (categoryId=${categoryId})`
     );
   }
 
@@ -57,7 +57,7 @@ export class CategoriesService {
    */
   setCategoryActivation(categoryId: string, isActive: boolean): never {
     throw new NotImplementedException(
-      `ADM-003 setCategoryActivation (categoryId=${categoryId}, isActive=${isActive})`,
+      `ADM-003 setCategoryActivation (categoryId=${categoryId}, isActive=${isActive})`
     );
   }
 }

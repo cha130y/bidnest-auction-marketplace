@@ -1,12 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
-  Injectable,
+  Injectable
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import { calculateLineTotal } from '../cart/utils/calculate-line-total.util';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { MockPaymentProvider } from '../payment/payment.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CheckoutDto } from './dtos/checkout.dto';
@@ -26,14 +26,14 @@ export class CheckoutService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly payment: MockPaymentProvider,
-    private readonly realtime: RealtimeService,
+    private readonly realtime: RealtimeService
   ) {}
 
   async checkout(buyerId: string, dto: CheckoutDto) {
     const lines = await this.priceCart(buyerId);
     const grandTotal = lines.reduce(
       (sum, line) => sum.plus(line.subtotal),
-      new Prisma.Decimal(0),
+      new Prisma.Decimal(0)
     );
 
     // CART-004 — one provider call and one payment_transactions row per
@@ -42,7 +42,7 @@ export class CheckoutService {
     const charge = this.payment.charge({
       checkoutSessionId,
       amount: grandTotal.toFixed(2),
-      method: dto.paymentMethod,
+      method: dto.paymentMethod
     });
 
     // Committed on its own, before the orders: a charge that happened must stay
@@ -52,9 +52,9 @@ export class CheckoutService {
       data: {
         checkoutSessionId,
         status: charge.status,
-        method: dto.paymentMethod,
+        method: dto.paymentMethod
       },
-      select: { id: true },
+      select: { id: true }
     });
 
     if (charge.status === 'FAILED') {
@@ -62,7 +62,7 @@ export class CheckoutService {
       throw new BadRequestException({
         message: 'Payment failed',
         checkoutSessionId,
-        reason: charge.failureReason ?? 'Unknown',
+        reason: charge.failureReason ?? 'Unknown'
       });
     }
 
@@ -73,7 +73,7 @@ export class CheckoutService {
       for (const [sellerId, sellerLines] of bySeller) {
         const subtotal = sellerLines.reduce(
           (sum, line) => sum.plus(line.subtotal),
-          new Prisma.Decimal(0),
+          new Prisma.Decimal(0)
         );
 
         const order = await tx.order.create({
@@ -88,25 +88,25 @@ export class CheckoutService {
               create: sellerLines.map((line) => ({
                 productId: line.productId,
                 quantity: line.quantity,
-                unitPrice: line.unitPrice,
-              })),
+                unitPrice: line.unitPrice
+              }))
             },
             // CART-005 — address snapshot is frozen per order at payment time
             address: { create: { ...dto.shippingAddress } },
             shipment: {
               create: {
                 status: 'PROCESSING',
-                events: { create: { eventType: 'PROCESSING' } },
-              },
-            },
+                events: { create: { eventType: 'PROCESSING' } }
+              }
+            }
           },
-          select: { id: true },
+          select: { id: true }
         });
 
         orders.push({
           id: order.id,
           sellerId,
-          subtotal: subtotal.toFixed(2),
+          subtotal: subtotal.toFixed(2)
         });
       }
 
@@ -115,13 +115,13 @@ export class CheckoutService {
       // Only the lines that were actually priced and ordered are cleared —
       // anything added to the cart mid-checkout stays put.
       await tx.cartItem.deleteMany({
-        where: { id: { in: lines.map((line) => line.cartItemId) } },
+        where: { id: { in: lines.map((line) => line.cartItemId) } }
       });
 
       const notifications = await this.createOrderPlacedNotifications(
         tx,
         buyerId,
-        orders,
+        orders
       );
 
       return { orders, notifications };
@@ -137,7 +137,7 @@ export class CheckoutService {
       paymentStatus: 'SUCCEEDED',
       paymentReference: charge.reference,
       total: grandTotal.toFixed(2),
-      orders: result.orders,
+      orders: result.orders
     };
   }
 
@@ -158,11 +158,11 @@ export class CheckoutService {
             stockQty: true,
             status: true,
             quantityDiscountMinQty: true,
-            quantityDiscountPercent: true,
-          },
-        },
+            quantityDiscountPercent: true
+          }
+        }
       },
-      orderBy: { id: 'asc' },
+      orderBy: { id: 'asc' }
     });
 
     if (items.length === 0) {
@@ -172,25 +172,25 @@ export class CheckoutService {
     return items.map(({ id: cartItemId, product, quantity }) => {
       if (product.status !== 'ACTIVE') {
         throw new BadRequestException(
-          `"${product.title}" is no longer available`,
+          `"${product.title}" is no longer available`
         );
       }
 
       if (product.sellerId === buyerId) {
         throw new BadRequestException(
-          `"${product.title}" is your own listing and cannot be purchased`,
+          `"${product.title}" is your own listing and cannot be purchased`
         );
       }
 
       if (quantity > product.stockQty) {
         throw new BadRequestException(
-          `Only ${product.stockQty} unit(s) of "${product.title}" are in stock`,
+          `Only ${product.stockQty} unit(s) of "${product.title}" are in stock`
         );
       }
 
       const line = calculateLineTotal(product.price, quantity, {
         minQty: product.quantityDiscountMinQty,
-        percent: product.quantityDiscountPercent,
+        percent: product.quantityDiscountPercent
       });
 
       return {
@@ -200,7 +200,7 @@ export class CheckoutService {
         sellerId: product.sellerId,
         quantity,
         unitPrice: line.effectiveUnitPrice,
-        subtotal: line.subtotal,
+        subtotal: line.subtotal
       };
     });
   }
@@ -225,16 +225,16 @@ export class CheckoutService {
   private async decrementStock(
     tx: Prisma.TransactionClient,
     lines: PricedLine[],
-    checkoutSessionId: string,
+    checkoutSessionId: string
   ) {
     for (const line of lines) {
       const { count } = await tx.product.updateMany({
         where: {
           id: line.productId,
           status: 'ACTIVE',
-          stockQty: { gte: line.quantity },
+          stockQty: { gte: line.quantity }
         },
-        data: { stockQty: { decrement: line.quantity } },
+        data: { stockQty: { decrement: line.quantity } }
       });
 
       if (count !== 1) {
@@ -242,7 +242,7 @@ export class CheckoutService {
         // support side needs to reconcile it.
         throw new ConflictException({
           message: `"${line.title}" ran out of stock while checking out`,
-          checkoutSessionId,
+          checkoutSessionId
         });
       }
     }
@@ -251,9 +251,9 @@ export class CheckoutService {
       where: {
         id: { in: lines.map((line) => line.productId) },
         stockQty: 0,
-        status: 'ACTIVE',
+        status: 'ACTIVE'
       },
-      data: { status: 'OUT_OF_STOCK' },
+      data: { status: 'OUT_OF_STOCK' }
     });
   }
 
@@ -261,7 +261,7 @@ export class CheckoutService {
   private async createOrderPlacedNotifications(
     tx: Prisma.TransactionClient,
     buyerId: string,
-    orders: { id: string; sellerId: string; subtotal: string }[],
+    orders: { id: string; sellerId: string; subtotal: string }[]
   ) {
     const rows = [
       ...orders.map((order) => ({
@@ -269,15 +269,15 @@ export class CheckoutService {
         orderId: order.id,
         type: 'ORDER_PLACED' as const,
         title: 'Order placed',
-        message: `Your order ${order.id} has been paid (THB ${order.subtotal}).`,
+        message: `Your order ${order.id} has been paid (THB ${order.subtotal}).`
       })),
       ...orders.map((order) => ({
         userId: order.sellerId,
         orderId: order.id,
         type: 'ORDER_PLACED' as const,
         title: 'New order received',
-        message: `You received order ${order.id} (THB ${order.subtotal}).`,
-      })),
+        message: `You received order ${order.id} (THB ${order.subtotal}).`
+      }))
     ];
 
     await tx.notification.createMany({ data: rows });

@@ -8,6 +8,6 @@ import { OrderService } from './order.service';
   imports: [PaymentModule],
   controllers: [OrderController],
   providers: [OrderService, CheckoutService],
-  exports: [OrderService],
+  exports: [OrderService]
 })
 export class OrderModule {}

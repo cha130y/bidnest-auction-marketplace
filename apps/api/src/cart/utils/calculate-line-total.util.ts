@@ -21,7 +21,7 @@ export type LineTotal = {
 export function calculateLineTotal(
   unitPrice: Prisma.Decimal,
   quantity: number,
-  rule: QuantityDiscountRule,
+  rule: QuantityDiscountRule
 ): LineTotal {
   const grossSubtotal = unitPrice.mul(quantity);
   const qualifies =
@@ -33,7 +33,7 @@ export function calculateLineTotal(
       effectiveUnitPrice: unitPrice,
       discountPercent: null,
       discountAmount: new Prisma.Decimal(0),
-      subtotal: grossSubtotal.toDecimalPlaces(2),
+      subtotal: grossSubtotal.toDecimalPlaces(2)
     };
   }
 
@@ -49,6 +49,6 @@ export function calculateLineTotal(
     effectiveUnitPrice,
     discountPercent: percent,
     discountAmount: grossSubtotal.minus(subtotal).toDecimalPlaces(2),
-    subtotal,
+    subtotal
   };
 }

@@ -6,7 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
-  Post,
+  Post
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -34,7 +34,7 @@ export class CartController {
   updateItem(
     @CurrentUser('id') userId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
-    @Body() dto: UpdateCartItemDto,
+    @Body() dto: UpdateCartItemDto
   ) {
     return this.cartService.updateItem(userId, itemId, dto.quantity);
   }
@@ -42,7 +42,7 @@ export class CartController {
   @Delete('items/:itemId')
   removeItem(
     @CurrentUser('id') userId: string,
-    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string
   ) {
     return this.cartService.removeItem(userId, itemId);
   }

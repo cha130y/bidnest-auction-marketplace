@@ -4,7 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
-  Patch,
+  Patch
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateShipmentStatusDto } from './dtos/update-shipment-status.dto';
@@ -17,7 +17,7 @@ export class ShipmentController {
   @Get(':id/shipment')
   getTimeline(
     @Param('id', ParseUUIDPipe) orderId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser('id') userId: string
   ) {
     return this.shipmentService.getTimeline(orderId, userId);
   }
@@ -26,7 +26,7 @@ export class ShipmentController {
   updateStatus(
     @Param('id', ParseUUIDPipe) orderId: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: UpdateShipmentStatusDto,
+    @Body() dto: UpdateShipmentStatusDto
   ) {
     return this.shipmentService.updateStatus(orderId, userId, dto.status);
   }

@@ -3,15 +3,15 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import type { ShipmentStatus } from '../../generated/prisma/enums';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import {
   canTransition,
-  nextStatuses,
+  nextStatuses
 } from './constants/shipment-transition.constant';
 import { generateTracking } from './utils/generate-tracking.util';
 
@@ -27,7 +27,7 @@ type OrderParties = {
 export class ShipmentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: RealtimeService,
+    private readonly realtime: RealtimeService
   ) {}
 
   /** SHIP-002 — buyer-facing timeline, read straight from shipment_events. */
@@ -39,9 +39,9 @@ export class ShipmentService {
       include: {
         events: {
           orderBy: { id: 'asc' },
-          select: { eventType: true, createdAt: true },
-        },
-      },
+          select: { eventType: true, createdAt: true }
+        }
+      }
     });
 
     if (!shipment) throw new NotFoundException('Shipment not found');
@@ -55,10 +55,10 @@ export class ShipmentService {
       isSimulated: true,
       timeline: shipment.events.map((event) => ({
         status: event.eventType,
-        at: event.createdAt,
+        at: event.createdAt
       })),
       // Lets the seller UI render controls without hardcoding the sequence
-      nextStatuses: nextStatuses(shipment.status),
+      nextStatuses: nextStatuses(shipment.status)
     };
   }
 
@@ -75,7 +75,7 @@ export class ShipmentService {
       throw new BadRequestException(
         allowed.length
           ? `Cannot move from ${order.status} to ${next}. Allowed: ${allowed.join(', ')}`
-          : `${order.status} is a final status and cannot change`,
+          : `${order.status} is a final status and cannot change`
       );
     }
 
@@ -88,13 +88,13 @@ export class ShipmentService {
         where: { id: order.shipmentId, status: order.status },
         data: {
           status: next,
-          ...(tracking ?? {}),
-        },
+          ...(tracking ?? {})
+        }
       });
 
       if (count !== 1) {
         throw new ConflictException(
-          'The shipment status changed in the meantime — reload and try again',
+          'The shipment status changed in the meantime — reload and try again'
         );
       }
 
@@ -102,7 +102,7 @@ export class ShipmentService {
       // on the SHIPPED step — later steps must still return the real number.
       const shipment = await tx.shipment.findUniqueOrThrow({
         where: { id: order.shipmentId },
-        select: { trackingNumber: true, carrier: true },
+        select: { trackingNumber: true, carrier: true }
       });
 
       // Append-only, mirroring auction_events. Existing rows are never touched.
@@ -110,8 +110,8 @@ export class ShipmentService {
         data: {
           shipmentId: order.shipmentId,
           actorUserId: userId,
-          eventType: next,
-        },
+          eventType: next
+        }
       });
 
       if (next === 'CANCELLED') {
@@ -130,7 +130,7 @@ export class ShipmentService {
       this.realtime.emitOrderStatusChanged(userIdToNotify, {
         orderId,
         status: next,
-        trackingNumber: result.shipment.trackingNumber,
+        trackingNumber: result.shipment.trackingNumber
       });
     }
 
@@ -141,7 +141,7 @@ export class ShipmentService {
       carrier: result.shipment.carrier,
       isSimulated: true,
       nextStatuses: nextStatuses(next),
-      notificationsCreated: result.notifications.length,
+      notificationsCreated: result.notifications.length
     };
   }
 
@@ -153,18 +153,18 @@ export class ShipmentService {
   private async cancelOrder(tx: Prisma.TransactionClient, orderId: string) {
     await tx.order.update({
       where: { id: orderId },
-      data: { status: 'CANCELLED' },
+      data: { status: 'CANCELLED' }
     });
 
     const items = await tx.orderItem.findMany({
       where: { orderId },
-      select: { productId: true, quantity: true },
+      select: { productId: true, quantity: true }
     });
 
     for (const item of items) {
       await tx.product.update({
         where: { id: item.productId },
-        data: { stockQty: { increment: item.quantity } },
+        data: { stockQty: { increment: item.quantity } }
       });
     }
 
@@ -174,16 +174,16 @@ export class ShipmentService {
       where: {
         id: { in: items.map((item) => item.productId) },
         status: 'OUT_OF_STOCK',
-        stockQty: { gt: 0 },
+        stockQty: { gt: 0 }
       },
-      data: { status: 'ACTIVE' },
+      data: { status: 'ACTIVE' }
     });
   }
 
   /** NOT-006 on every change, plus a distinct NOT-007 when it lands. */
   private buildNotifications(
     order: OrderParties,
-    next: ShipmentStatus,
+    next: ShipmentStatus
   ): Prisma.NotificationCreateManyInput[] {
     const rows: Prisma.NotificationCreateManyInput[] = [
       {
@@ -191,8 +191,8 @@ export class ShipmentService {
         orderId: order.orderId,
         type: 'SHIPMENT_UPDATE',
         title: 'Shipment update',
-        message: `Order ${order.orderId} is now ${next}.`,
-      },
+        message: `Order ${order.orderId} is now ${next}.`
+      }
     ];
 
     if (next === 'DELIVERED') {
@@ -201,7 +201,7 @@ export class ShipmentService {
         orderId: order.orderId,
         type: 'DELIVERED',
         title: 'Order delivered',
-        message: `Order ${order.orderId} has been delivered.`,
+        message: `Order ${order.orderId} has been delivered.`
       });
     }
 
@@ -210,7 +210,7 @@ export class ShipmentService {
 
   private async loadOrderParties(
     orderId: string,
-    userId: string,
+    userId: string
   ): Promise<OrderParties> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -218,8 +218,8 @@ export class ShipmentService {
         id: true,
         buyerId: true,
         sellerId: true,
-        shipment: { select: { id: true, status: true } },
-      },
+        shipment: { select: { id: true, status: true } }
+      }
     });
 
     // Not-found rather than forbidden: an outsider learns nothing about
@@ -237,7 +237,7 @@ export class ShipmentService {
       buyerId: order.buyerId,
       sellerId: order.sellerId,
       shipmentId: order.shipment.id,
-      status: order.shipment.status,
+      status: order.shipment.status
     };
   }
 }

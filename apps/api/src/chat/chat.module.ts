@@ -5,6 +5,6 @@ import { ProductConversationController } from './product-conversation.controller
 
 @Module({
   controllers: [ConversationController, ProductConversationController],
-  providers: [ChatService],
+  providers: [ChatService]
 })
 export class ChatModule {}

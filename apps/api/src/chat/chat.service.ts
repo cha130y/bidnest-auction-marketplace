@@ -1,9 +1,9 @@
 import {
   ForbiddenException,
   Injectable,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -12,7 +12,7 @@ const DEFAULT_PAGE_SIZE = 50;
 export class ChatService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: RealtimeService,
+    private readonly realtime: RealtimeService
   ) {}
 
   /**
@@ -22,7 +22,7 @@ export class ChatService {
   async openConversation(productId: string, buyerId: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, sellerId: true, status: true },
+      select: { id: true, sellerId: true, status: true }
     });
 
     if (!product || product.status === 'REMOVED') {
@@ -31,7 +31,7 @@ export class ChatService {
 
     if (product.sellerId === buyerId) {
       throw new ForbiddenException(
-        'You cannot start a conversation about your own listing',
+        'You cannot start a conversation about your own listing'
       );
     }
 
@@ -40,8 +40,8 @@ export class ChatService {
         productId_buyerId_sellerId: {
           productId,
           buyerId,
-          sellerId: product.sellerId,
-        },
+          sellerId: product.sellerId
+        }
       },
       create: { productId, buyerId, sellerId: product.sellerId },
       update: {},
@@ -50,8 +50,8 @@ export class ChatService {
         productId: true,
         buyerId: true,
         sellerId: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
 
     return conversation;
@@ -71,27 +71,27 @@ export class ChatService {
             images: {
               select: { url: true },
               where: { isPrimary: true },
-              take: 1,
-            },
-          },
+              take: 1
+            }
+          }
         },
         buyer: {
-          select: { id: true, profile: { select: { displayName: true } } },
+          select: { id: true, profile: { select: { displayName: true } } }
         },
         seller: {
-          select: { id: true, profile: { select: { displayName: true } } },
+          select: { id: true, profile: { select: { displayName: true } } }
         },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { body: true, senderId: true, createdAt: true },
+          select: { body: true, senderId: true, createdAt: true }
         },
         _count: {
           select: {
-            messages: { where: { senderId: { not: userId }, readAt: null } },
-          },
-        },
-      },
+            messages: { where: { senderId: { not: userId }, readAt: null } }
+          }
+        }
+      }
     });
 
     return conversations
@@ -106,21 +106,21 @@ export class ChatService {
           product: {
             id: conversation.product.id,
             title: conversation.product.title,
-            imageUrl: conversation.product.images[0]?.url ?? null,
+            imageUrl: conversation.product.images[0]?.url ?? null
           },
           counterpart: {
             id: counterpart.id,
-            displayName: counterpart.profile?.displayName ?? null,
+            displayName: counterpart.profile?.displayName ?? null
           },
           lastMessage: lastMessage
             ? {
                 body: lastMessage.body,
                 sentByMe: lastMessage.senderId === userId,
-                at: lastMessage.createdAt,
+                at: lastMessage.createdAt
               }
             : null,
           unreadCount: conversation._count.messages,
-          updatedAt: lastMessage?.createdAt ?? conversation.createdAt,
+          updatedAt: lastMessage?.createdAt ?? conversation.createdAt
         };
       })
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -131,7 +131,7 @@ export class ChatService {
     conversationId: string,
     userId: string,
     page = 1,
-    limit = DEFAULT_PAGE_SIZE,
+    limit = DEFAULT_PAGE_SIZE
   ) {
     await this.assertParticipant(conversationId, userId);
 
@@ -147,10 +147,10 @@ export class ChatService {
           senderId: true,
           body: true,
           createdAt: true,
-          readAt: true,
-        },
+          readAt: true
+        }
       }),
-      this.prisma.message.count({ where: { conversationId } }),
+      this.prisma.message.count({ where: { conversationId } })
     ]);
 
     // Only the messages on this page are receipted — fetching page 1 of a long
@@ -162,7 +162,7 @@ export class ChatService {
     if (unreadOnThisPage.length > 0) {
       await this.prisma.message.updateMany({
         where: { id: { in: unreadOnThisPage } },
-        data: { readAt: new Date() },
+        data: { readAt: new Date() }
       });
     }
 
@@ -172,9 +172,9 @@ export class ChatService {
         body: message.body,
         sentByMe: message.senderId === userId,
         createdAt: message.createdAt,
-        readAt: message.readAt,
+        readAt: message.readAt
       })),
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
     };
   }
 
@@ -189,7 +189,7 @@ export class ChatService {
     const message = await this.prisma.$transaction(async (tx) => {
       const created = await tx.message.create({
         data: { conversationId, senderId, body },
-        select: { id: true, body: true, createdAt: true },
+        select: { id: true, body: true, createdAt: true }
       });
 
       await tx.notification.create({
@@ -198,8 +198,8 @@ export class ChatService {
           conversationId,
           type: 'NEW_MESSAGE',
           title: 'New message',
-          message: body.length > 120 ? `${body.slice(0, 117)}...` : body,
-        },
+          message: body.length > 120 ? `${body.slice(0, 117)}...` : body
+        }
       });
 
       return created;
@@ -212,11 +212,11 @@ export class ChatService {
       conversationId,
       senderId,
       body: message.body,
-      createdAt: message.createdAt,
+      createdAt: message.createdAt
     });
     this.realtime.emitNotificationCreated(recipientId, {
       type: 'NEW_MESSAGE',
-      conversationId,
+      conversationId
     });
 
     return {
@@ -224,7 +224,7 @@ export class ChatService {
       body: message.body,
       sentByMe: true,
       createdAt: message.createdAt,
-      readAt: null,
+      readAt: null
     };
   }
 
@@ -235,7 +235,7 @@ export class ChatService {
   private async assertParticipant(conversationId: string, userId: string) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { id: true, buyerId: true, sellerId: true },
+      select: { id: true, buyerId: true, sellerId: true }
     });
 
     // Not-found rather than forbidden, so an outsider cannot even confirm the

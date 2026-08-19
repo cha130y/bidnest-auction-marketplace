@@ -7,7 +7,7 @@ import {
   IsString,
   IsUUID,
   Max,
-  Min,
+  Min
 } from 'class-validator';
 import { ProductSort } from '../constants/product-sort.constant';
 

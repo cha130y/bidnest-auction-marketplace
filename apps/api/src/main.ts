@@ -1,28 +1,32 @@
 import 'dotenv/config';
-import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import type { EnvVariable } from './config/env.validation';
+import { configureApp } from './app.setup';
+import { EnvVariable } from './config/env.validation';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = configureApp(await NestFactory.create(AppModule));
+  const config = app.get(ConfigService<EnvVariable, true>);
 
-  app.setGlobalPrefix('api');
-  app.enableCors();
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    }),
+  app.enableCors({
+    origin: config.get('WEB_APP_URL', { infer: true }),
+    credentials: true
+  });
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('BidNest API')
+    .setDescription('Auction & Marketplace REST API')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  SwaggerModule.setup(
+    'docs',
+    app,
+    SwaggerModule.createDocument(app, swaggerConfig)
   );
 
-  const configService = app.get(ConfigService<EnvVariable, true>);
-  await app.listen(configService.get('PORT', { infer: true }));
+  await app.listen(config.get('PORT', { infer: true }));
 }
-
-bootstrap().catch((error) => {
-  new Logger('Bootstrap').error(error);
-  process.exit(1);
-});
+void bootstrap();

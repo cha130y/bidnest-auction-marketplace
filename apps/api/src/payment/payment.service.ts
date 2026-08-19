@@ -25,12 +25,12 @@ export class MockPaymentProvider {
       ? {
           status: 'FAILED',
           reference: `mock_decline_${randomUUID()}`,
-          failureReason: 'Simulated decline',
+          failureReason: 'Simulated decline'
         }
       : { status: 'SUCCEEDED', reference: `mock_ok_${randomUUID()}` };
 
     this.logger.log(
-      `[simulated] charge ${input.amount} via ${input.method} -> ${result.status}`,
+      `[simulated] charge ${input.amount} via ${input.method} -> ${result.status}`
     );
 
     return result;
