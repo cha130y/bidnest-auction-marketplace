@@ -90,6 +90,7 @@ enum ProductStatus {
   INACTIVE
   OUT_OF_STOCK
   REMOVED
+  SUSPENDED // ADM-005 — admin สั่งปิดเท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้ (PROD-002)
 }
 
 enum OfferDecision {
