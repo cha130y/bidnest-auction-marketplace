@@ -1,4 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import { Roles } from '../common/decorators/roles.decorator';
+import { ListOrderDto } from '../order/dtos/list-order.dto';
 import { AdminOrdersService } from './orders.service';
 
 /**
@@ -10,20 +12,18 @@ import { AdminOrdersService } from './orders.service';
  *
  * ไม่มีการเขียน admin_actions ที่นี่ เพราะการอ่านอย่างเดียวไม่ใช่ "การกระทำสำคัญ"
  * ตามนิยามของ ADM-004
- *
- * TODO(Dev 3): เมื่อ AUTH-008 พร้อม ใส่ guard ที่ระดับ class
- *   `@UseGuards(AccessTokenGuard, RolesGuard)` + `@Roles(UserRole.ADMIN)`
  */
+@Roles('ADMIN')
 @Controller('admin/orders')
 export class AdminOrdersController {
   constructor(private readonly adminOrdersService: AdminOrdersService) {}
 
   /**
-   * query: cursor?, limit?, status? (OrderStatus)
+   * query: status?, page?, limit?
    * คืน buyer, seller, สถานะ, ยอดรวม แบบแบ่งหน้าตาม ADM-006
    */
   @Get()
-  listOrders() {
-    return this.adminOrdersService.listOrders();
+  listOrders(@Query() dto: ListOrderDto) {
+    return this.adminOrdersService.listOrders(dto.status, dto.page, dto.limit);
   }
 }
