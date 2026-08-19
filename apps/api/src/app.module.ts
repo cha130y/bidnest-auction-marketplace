@@ -10,6 +10,7 @@ import { MockAuthGuard } from './common/guards/mock-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { OrderModule } from './order/order.module';
 import { ProductModule } from './product/product.module';
 import { RealtimeModule } from './realtime/realtime.module';
 
@@ -20,6 +21,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     RealtimeModule,
     ProductModule,
     CartModule,
+    OrderModule,
     CategoriesModule,
     AdminModule,
   ],
