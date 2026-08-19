@@ -5,5 +5,6 @@ allowBuilds:
   '@prisma/engines': true
   # telemetry-only install script pulled in by nodemailer — keep it off
   '@scarf/scarf': false
+  esbuild: false
   prisma: true
   unrs-resolver: true

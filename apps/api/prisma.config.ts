@@ -7,6 +7,9 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    // Compiled first: the generated Prisma client imports with `.js` specifiers
+    // that only tsc resolves back to its `.ts` sources.
+    seed: 'nest build && node dist/prisma/seed.js',
   },
   datasource: {
     url: process.env['DATABASE_URL'],

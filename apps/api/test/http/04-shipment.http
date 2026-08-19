@@ -1,0 +1,122 @@
+###############################################################################
+# SHIP — ไทม์ไลน์การจัดส่ง (จำลอง 100%, isSimulated: true เสมอ)
+#
+# สถานะเดินหน้าทางเดียว: PROCESSING -> SHIPPED -> IN_TRANSIT -> DELIVERED
+# ยกเลิกได้เฉพาะตอนยังเป็น PROCESSING เท่านั้น
+# เฉพาะ "ผู้ขาย" ของออเดอร์นั้นที่เลื่อนสถานะได้ / buyer ดูได้อย่างเดียว
+#
+# ไฟล์นี้ setup ออเดอร์ใหม่ให้เองตั้งแต่ต้น จะได้ไม่ไปชนกับออเดอร์เก่า
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@buyer   = 00000000-0000-4000-8000-000000000004
+@productA1 = 00000000-0000-4000-8000-000000000201
+
+### setup 1/2 — ใส่ของผู้ขาย A ลงตะกร้า (ผู้ขายเดียว = ได้ออเดอร์ใบเดียว)
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 1 }
+
+### setup 2/2 — checkout
+# @name checkout
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "BANK_TRANSFER",
+  "shippingAddress": {
+    "recipientName": "Anan B.",
+    "line1": "123 Sukhumvit Rd",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0812345678"
+  }
+}
+
+@orderId = {{checkout.response.body.$.orders[0].id}}
+@seller   = {{checkout.response.body.$.orders[0].sellerId}}
+
+### SHIP-002 ไทม์ไลน์ตอนเริ่ม — status PROCESSING, nextStatuses [SHIPPED, CANCELLED]. expect 200
+GET {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{buyer}}
+
+### SHIP-001 step 1 — PROCESSING -> SHIPPED, ต้องได้ trackingNumber มาด้วย. expect 200
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{seller}}
+Content-Type: application/json
+
+{ "status": "SHIPPED" }
+
+### SHIP-001 step 2 — SHIPPED -> IN_TRANSIT (trackingNumber เดิมต้องยังอยู่). expect 200
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{seller}}
+Content-Type: application/json
+
+{ "status": "IN_TRANSIT" }
+
+### SHIP-001 step 3 — IN_TRANSIT -> DELIVERED. expect 200
+# NOT-006 + NOT-007 -> notificationsCreated ต้องเป็น 2 ที่สเต็ปนี้
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{seller}}
+Content-Type: application/json
+
+{ "status": "DELIVERED" }
+
+### SHIP-002 ไทม์ไลน์สุดท้าย — timeline ต้องมีครบ 4 event, nextStatuses ว่าง. expect 200
+GET {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{buyer}}
+
+### SHIP-001 ขยับต่อจาก DELIVERED ไม่ได้ (สถานะสุดท้าย). expect 400
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{seller}}
+Content-Type: application/json
+
+{ "status": "IN_TRANSIT" }
+
+###############################################################################
+# เคสยกเลิก — ต้องสร้างออเดอร์ใหม่อีกใบ เพราะใบบนส่งถึงมือแล้ว
+###############################################################################
+
+### setup — ตะกร้าใหม่
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 2 }
+
+### setup — checkout ใบที่จะยกเลิก
+# @name cancelCheckout
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "E_WALLET",
+  "shippingAddress": {
+    "recipientName": "Anan B.",
+    "line1": "123 Sukhumvit Rd",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0812345678"
+  }
+}
+
+@cancelOrderId = {{cancelCheckout.response.body.$.orders[0].id}}
+@cancelSeller  = {{cancelCheckout.response.body.$.orders[0].sellerId}}
+
+### SHIP-001 ยกเลิกตอนยัง PROCESSING — ของต้องถูกคืนเข้าสต๊อก. expect 200
+PATCH {{baseUrl}}/orders/{{cancelOrderId}}/shipment
+x-mock-user-id: {{cancelSeller}}
+Content-Type: application/json
+
+{ "status": "CANCELLED" }
+
+### ตรวจผล — order.status ต้องเป็น CANCELLED
+GET {{baseUrl}}/orders/{{cancelOrderId}}
+x-mock-user-id: {{buyer}}
+
+### ตรวจผล — stockQty ของสินค้าต้องถูกบวกกลับคืนมา
+GET {{baseUrl}}/products/{{productA1}}

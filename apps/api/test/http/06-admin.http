@@ -1,0 +1,74 @@
+###############################################################################
+# ADM — เครื่องมือแอดมินฝั่ง e-commerce
+# ADM-006: ดูออเดอร์ได้อย่างเดียว V1 ไม่มี endpoint แก้/คืนเงิน
+# ADM-005: ปิด/เปิดสินค้าทุกครั้งต้องแนบเหตุผลไว้ลง audit log
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@productA1 = 00000000-0000-4000-8000-000000000201
+
+### ADM-006 ดูออเดอร์ทั้งระบบ. expect 200
+GET {{baseUrl}}/admin/orders
+x-mock-user-id: {{admin}}
+
+### ADM-006 กรองสถานะ + แบ่งหน้า
+GET {{baseUrl}}/admin/orders?status=PAID&page=1&limit=5
+x-mock-user-id: {{admin}}
+
+### ADM-005 ปิดประกาศขายสินค้า (status -> SUSPENDED). expect 200
+PATCH {{baseUrl}}/admin/products/{{productA1}}/deactivate
+x-mock-user-id: {{admin}}
+Content-Type: application/json
+
+{ "reason": "รูปสินค้าไม่ตรงกับคำอธิบาย" }
+
+### ตรวจผล — คนทั่วไปต้องหาไม่เจอแล้ว (search คืนเฉพาะ ACTIVE)
+GET {{baseUrl}}/products?q=keyboard
+
+### ตรวจผล — แต่เจ้าของยังเปิดดูของตัวเองได้. expect 200
+GET {{baseUrl}}/products/{{productA1}}
+x-mock-user-id: {{sellerA}}
+
+### ตรวจผล — คนทั่วไปเปิดหน้าสินค้าตรงๆ ไม่ได้. expect 404
+GET {{baseUrl}}/products/{{productA1}}
+
+#=============================================================================
+# SRS v5 §7.2 ข้อ 8 — ผู้ขายต้องปลดการระงับเองไม่ได้ ทั้งสามทาง
+#=============================================================================
+
+### ผู้ขายแก้ไขสินค้าที่ถูกระงับไม่ได้. expect 403
+PATCH {{baseUrl}}/products/{{productA1}}
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "price": 1200 }
+
+### ผู้ขายเปิดขายกลับเองไม่ได้. expect 403
+PATCH {{baseUrl}}/products/{{productA1}}/status
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### ผู้ขายเติมสต็อกเพื่อปลดแบนไม่ได้. expect 403
+PATCH {{baseUrl}}/products/{{productA1}}/stock
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "stockQty": 99 }
+
+### ผู้ขาย soft-delete เพื่อลบร่องรอยการระงับไม่ได้. expect 403
+DELETE {{baseUrl}}/products/{{productA1}}
+x-mock-user-id: {{sellerA}}
+
+### ADM-005 เปิดขายกลับ (status -> ACTIVE). expect 200
+PATCH {{baseUrl}}/admin/products/{{productA1}}/reactivate
+x-mock-user-id: {{admin}}
+Content-Type: application/json
+
+{ "reason": "ผู้ขายแก้ไขรูปเรียบร้อยแล้ว" }
+
+### ตรวจผล — กลับมาค้นเจอตามเดิม
+GET {{baseUrl}}/products?q=keyboard
