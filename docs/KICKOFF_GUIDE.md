@@ -216,18 +216,15 @@ enum Role {
 }
 
 model Category {
-  id     String        @id @default(uuid())
-  name   String
-  scope  CategoryScope
-  active Boolean       @default(true)
-}
-
-enum CategoryScope {
-  AUCTION
-  ECOMMERCE
-  BOTH
+  id       String  @id @default(uuid())
+  parentId String?
+  name     String
+  slug     String  @unique
+  isActive Boolean @default(true)
 }
 ```
+
+**หมายเหตุเรื่อง Category:** ใช้ **ชุดเดียวร่วมกันทั้ง Auction และ E-commerce** ไม่มี field `scope` แยกตามโมดูล ตาม SRS §5.1 ที่ระบุว่า "categories ใช้ร่วมกันทั้งสองโมดูล ไม่แยกขอบเขตตามโมดูล" — ทั้ง `auctions` และ `products` อ้างอิงเข้าตารางนี้ตารางเดียว เหตุผลเต็มดูที่ [ADR-0001](architecture/adr/0001-single-admin-role-and-shared-category-set.md)
 
 ```bash
 pnpm dlx prisma migrate dev --name init_identity_and_categories
