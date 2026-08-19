@@ -6,9 +6,12 @@ import { AppService } from './app.service';
 import { CategoriesModule } from './categories/categories.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
+import { ConfigModule } from '@nestjs/config';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     CategoriesModule,
     SupportChatModule,
     AdminModule,

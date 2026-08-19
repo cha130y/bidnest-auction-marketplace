@@ -9,7 +9,7 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default('dev-negotiator-secret-change-me'),
-  CORS_ORIGIN: z.string().min(1),
+  CORS_ORIGIN: z.string().min(1).default('http://localhost:3000'),
 });
 
 export type EnvVariable = z.infer<typeof envSchema>;
