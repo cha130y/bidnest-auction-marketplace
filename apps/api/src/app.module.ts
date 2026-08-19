@@ -13,6 +13,7 @@ import { DatabaseModule } from './database/database.module';
 import { OrderModule } from './order/order.module';
 import { ProductModule } from './product/product.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { ShipmentModule } from './shipment/shipment.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ProductModule,
     CartModule,
     OrderModule,
+    ShipmentModule,
     CategoriesModule,
     AdminModule,
   ],
