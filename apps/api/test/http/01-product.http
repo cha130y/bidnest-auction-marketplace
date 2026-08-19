@@ -3,7 +3,7 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 ###############################################################################
 
-@baseUrl = http://localhost:4000/api
+@baseUrl = http://localhost:4000
 @sellerA = 00000000-0000-4000-8000-000000000002
 @buyer   = 00000000-0000-4000-8000-000000000004
 @catElectronics = 00000000-0000-4000-8000-000000000101
@@ -91,6 +91,34 @@ x-mock-user-id: {{sellerA}}
 Content-Type: application/json
 
 { "stockQty": 7 }
+
+### PROD-002 status — ผู้ขายพักการขายเอง (status -> INACTIVE). expect 200
+PATCH {{baseUrl}}/products/{{newProductId}}/status
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### ตรวจผล — คนทั่วไปหาไม่เจอแล้ว
+GET {{baseUrl}}/products?q=Headphone
+
+### ตรวจผล — แต่เจ้าของยังเปิดดูได้. expect 200
+GET {{baseUrl}}/products/{{newProductId}}
+x-mock-user-id: {{sellerA}}
+
+### PROD-002 status — เปิดขายกลับเอง (stock > 0 จึงกลับเป็น ACTIVE). expect 200
+PATCH {{baseUrl}}/products/{{newProductId}}/status
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### PROD-002 status — ค่าที่ไม่ใช่ ACTIVE/INACTIVE ต้องถูกปฏิเสธ. expect 400
+PATCH {{baseUrl}}/products/{{newProductId}}/status
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "status": "SUSPENDED" }
 
 ### PROD-003 delete — soft delete (status -> REMOVED). expect 200
 DELETE {{baseUrl}}/products/{{newProductId}}

@@ -2,11 +2,11 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { ProductSort } from './constants/product-sort.constant';
 import { CreateProductDto } from './dtos/create-product.dto';
 import { SearchProductDto } from './dtos/search-product.dto';
@@ -15,7 +15,7 @@ import {
   productOwnerSelect,
   productPublicSelect,
   toOwnerProduct,
-  toPublicProduct,
+  toPublicProduct
 } from './product.mapper';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -46,16 +46,16 @@ export class ProductService {
             storageKey: `${sellerId}/${randomUUID()}/${index}`,
             url,
             position: index,
-            isPrimary: index === 0,
-          })),
-        },
+            isPrimary: index === 0
+          }))
+        }
       },
-      select: productOwnerSelect,
+      select: productOwnerSelect
     });
 
     return {
       ...toOwnerProduct(product),
-      warnings: this.buildFloorWarnings(dto),
+      warnings: this.buildFloorWarnings(dto)
     };
   }
 
@@ -81,18 +81,18 @@ export class ProductService {
         ? {
             OR: [
               { title: { contains: dto.q, mode: 'insensitive' } },
-              { description: { contains: dto.q, mode: 'insensitive' } },
-            ],
+              { description: { contains: dto.q, mode: 'insensitive' } }
+            ]
           }
         : {}),
       ...(dto.minPrice !== undefined || dto.maxPrice !== undefined
         ? {
             price: {
               ...(dto.minPrice !== undefined ? { gte: dto.minPrice } : {}),
-              ...(dto.maxPrice !== undefined ? { lte: dto.maxPrice } : {}),
-            },
+              ...(dto.maxPrice !== undefined ? { lte: dto.maxPrice } : {})
+            }
           }
-        : {}),
+        : {})
     };
 
     const [items, total] = await Promise.all([
@@ -101,21 +101,21 @@ export class ProductService {
         select: productPublicSelect,
         orderBy: this.buildOrderBy(dto.sort),
         skip: (page - 1) * limit,
-        take: limit,
+        take: limit
       }),
-      this.prisma.product.count({ where }),
+      this.prisma.product.count({ where })
     ]);
 
     return {
       items: items.map(toPublicProduct),
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
     };
   }
 
   async findOne(id: string, requesterId?: string) {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      select: productOwnerSelect,
+      select: productOwnerSelect
     });
 
     if (!product || product.status === 'REMOVED') {
@@ -162,7 +162,7 @@ export class ProductService {
         dto.quantityDiscountPercent ??
         (existing.quantityDiscountPercent
           ? Number(existing.quantityDiscountPercent)
-          : undefined),
+          : undefined)
     };
     this.assertDiscountRuleIsComplete(merged);
 
@@ -189,19 +189,53 @@ export class ProductService {
                   storageKey: `${sellerId}/${randomUUID()}/${index}`,
                   url,
                   position: index,
-                  isPrimary: index === 0,
-                })),
-              },
+                  isPrimary: index === 0
+                }))
+              }
             }
-          : {}),
+          : {})
       },
-      select: productOwnerSelect,
+      select: productOwnerSelect
     });
 
     return {
       ...toOwnerProduct(product),
-      warnings: this.buildFloorWarnings(merged),
+      warnings: this.buildFloorWarnings(merged)
     };
+  }
+
+  /**
+   * PROD-002 — the seller pauses and resumes their own listing. Resuming honours
+   * the current stock so a sold-out listing never comes back as purchasable
+   * (PROD-005), and REMOVED stays terminal: pausing is what INACTIVE is for.
+   */
+  async updateStatus(
+    id: string,
+    sellerId: string,
+    status: 'ACTIVE' | 'INACTIVE'
+  ) {
+    const existing = await this.findOwnedProduct(id, sellerId);
+
+    this.assertNotSuspended(existing.status);
+
+    if (existing.status === 'REMOVED') {
+      throw new BadRequestException('Removed products cannot be restored');
+    }
+
+    const next =
+      status === 'INACTIVE'
+        ? 'INACTIVE'
+        : existing.stockQty > 0
+          ? 'ACTIVE'
+          : 'OUT_OF_STOCK';
+
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: { status: next },
+      select: productOwnerSelect
+    });
+
+    return toOwnerProduct(product);
   }
 
   async updateStock(id: string, sellerId: string, stockQty: number) {
@@ -216,7 +250,7 @@ export class ProductService {
     const product = await this.prisma.product.update({
       where: { id },
       data: { stockQty, status: this.resolveStatus(existing.status, stockQty) },
-      select: productOwnerSelect,
+      select: productOwnerSelect
     });
 
     return toOwnerProduct(product);
@@ -230,7 +264,7 @@ export class ProductService {
     // PROD-002 — keep order history intact: a referenced product can only be
     // deactivated, never soft-deleted out of the catalog.
     const referencingOrders = await this.prisma.orderItem.count({
-      where: { productId: id, order: { status: { not: 'CANCELLED' } } },
+      where: { productId: id, order: { status: { not: 'CANCELLED' } } }
     });
 
     const status = referencingOrders > 0 ? 'INACTIVE' : 'REMOVED';
@@ -242,7 +276,7 @@ export class ProductService {
       message:
         referencingOrders > 0
           ? 'Product is referenced by existing orders and was deactivated instead of removed'
-          : 'Product removed',
+          : 'Product removed'
     };
   }
 
@@ -257,8 +291,8 @@ export class ProductService {
         stockQty: true,
         negotiationFloor: true,
         quantityDiscountMinQty: true,
-        quantityDiscountPercent: true,
-      },
+        quantityDiscountPercent: true
+      }
     });
 
     if (!product) throw new NotFoundException('Product not found');
@@ -278,7 +312,7 @@ export class ProductService {
   private assertNotSuspended(currentStatus: string) {
     if (currentStatus === 'SUSPENDED') {
       throw new ForbiddenException(
-        'Product was suspended by an admin and can only be restored by an admin',
+        'Product was suspended by an admin and can only be restored by an admin'
       );
     }
   }
@@ -286,7 +320,7 @@ export class ProductService {
   private async assertCategoryIsActive(categoryId: string) {
     const category = await this.prisma.category.findUnique({
       where: { id: categoryId },
-      select: { isActive: true },
+      select: { isActive: true }
     });
 
     if (!category) throw new BadRequestException('Category not found');
@@ -304,7 +338,7 @@ export class ProductService {
 
     if (hasMinQty !== hasPercent) {
       throw new BadRequestException(
-        'quantityDiscountMinQty and quantityDiscountPercent must be set together',
+        'quantityDiscountMinQty and quantityDiscountPercent must be set together'
       );
     }
   }
@@ -329,13 +363,13 @@ export class ProductService {
     if (input.negotiationFloor >= discountedUnitPrice) return [];
 
     return [
-      `negotiationFloor (${input.negotiationFloor}) is below the discounted unit price (${discountedUnitPrice.toFixed(2)}); negotiating buyers may pay less than buyers who qualify for the quantity discount`,
+      `negotiationFloor (${input.negotiationFloor}) is below the discounted unit price (${discountedUnitPrice.toFixed(2)}); negotiating buyers may pay less than buyers who qualify for the quantity discount`
     ];
   }
 
   private resolveStatus(
     currentStatus: string,
-    stockQty: number,
+    stockQty: number
   ): 'ACTIVE' | 'OUT_OF_STOCK' | undefined {
     // PROD-005 — stock drives the ACTIVE/OUT_OF_STOCK flip; INACTIVE, REMOVED
     // and SUSPENDED are deliberate seller/admin states and must not be
@@ -349,7 +383,7 @@ export class ProductService {
 
   // `id` breaks ties so paging stays stable when prices or timestamps collide
   private buildOrderBy(
-    sort?: ProductSort,
+    sort?: ProductSort
   ): Prisma.ProductOrderByWithRelationInput[] {
     switch (sort) {
       case ProductSort.PRICE_ASC:

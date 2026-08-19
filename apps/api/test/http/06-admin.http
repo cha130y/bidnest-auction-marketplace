@@ -4,7 +4,7 @@
 # ADM-005: ปิด/เปิดสินค้าทุกครั้งต้องแนบเหตุผลไว้ลง audit log
 ###############################################################################
 
-@baseUrl = http://localhost:4000/api
+@baseUrl = http://localhost:4000
 @admin   = 00000000-0000-4000-8000-000000000001
 @sellerA = 00000000-0000-4000-8000-000000000002
 @productA1 = 00000000-0000-4000-8000-000000000201
@@ -44,6 +44,13 @@ x-mock-user-id: {{sellerA}}
 Content-Type: application/json
 
 { "price": 1200 }
+
+### ผู้ขายเปิดขายกลับเองไม่ได้. expect 403
+PATCH {{baseUrl}}/products/{{productA1}}/status
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
 
 ### ผู้ขายเติมสต็อกเพื่อปลดแบนไม่ได้. expect 403
 PATCH {{baseUrl}}/products/{{productA1}}/stock

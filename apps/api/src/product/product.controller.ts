@@ -8,7 +8,7 @@ import {
   Patch,
   Post,
   Query,
-  Req,
+  Req
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -17,6 +17,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CreateProductDto } from './dtos/create-product.dto';
 import { SearchProductDto } from './dtos/search-product.dto';
 import { UpdateProductDto } from './dtos/update-product.dto';
+import { UpdateProductStatusDto } from './dtos/update-product-status.dto';
 import { UpdateStockDto } from './dtos/update-stock.dto';
 import { ProductService } from './product.service';
 
@@ -49,16 +50,27 @@ export class ProductController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') sellerId: string,
-    @Body() dto: UpdateProductDto,
+    @Body() dto: UpdateProductDto
   ) {
     return this.productService.update(id, sellerId, dto);
+  }
+
+  // PROD-002 — the seller's own pause switch, kept apart from PATCH :id so a
+  // routine edit can never flip a listing off sale by accident
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: UpdateProductStatusDto
+  ) {
+    return this.productService.updateStatus(id, sellerId, dto.status);
   }
 
   @Patch(':id/stock')
   updateStock(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') sellerId: string,
-    @Body() dto: UpdateStockDto,
+    @Body() dto: UpdateStockDto
   ) {
     return this.productService.updateStock(id, sellerId, dto.stockQty);
   }
@@ -66,7 +78,7 @@ export class ProductController {
   @Delete(':id')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') sellerId: string,
+    @CurrentUser('id') sellerId: string
   ) {
     return this.productService.remove(id, sellerId);
   }
