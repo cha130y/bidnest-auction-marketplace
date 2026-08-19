@@ -124,8 +124,12 @@ export class ProductService {
 
     const isOwner = requesterId === product.sellerId;
 
-    // PROD-002 — INACTIVE listings stay reachable for their seller only
-    if (!isOwner && product.status === 'INACTIVE') {
+    // PROD-002 / ADM-005 — listings that are off sale stay reachable for their
+    // seller only, so a suspended seller still sees why their listing is down
+    if (
+      !isOwner &&
+      (product.status === 'INACTIVE' || product.status === 'SUSPENDED')
+    ) {
       throw new NotFoundException('Product not found');
     }
 
@@ -134,6 +138,8 @@ export class ProductService {
 
   async update(id: string, sellerId: string, dto: UpdateProductDto) {
     const existing = await this.findOwnedProduct(id, sellerId);
+
+    this.assertNotSuspended(existing.status);
 
     if (existing.status === 'REMOVED') {
       throw new BadRequestException('Removed products cannot be edited');
@@ -201,6 +207,8 @@ export class ProductService {
   async updateStock(id: string, sellerId: string, stockQty: number) {
     const existing = await this.findOwnedProduct(id, sellerId);
 
+    this.assertNotSuspended(existing.status);
+
     if (existing.status === 'REMOVED') {
       throw new BadRequestException('Removed products cannot be restocked');
     }
@@ -215,7 +223,9 @@ export class ProductService {
   }
 
   async remove(id: string, sellerId: string) {
-    await this.findOwnedProduct(id, sellerId);
+    const existing = await this.findOwnedProduct(id, sellerId);
+
+    this.assertNotSuspended(existing.status);
 
     // PROD-002 — keep order history intact: a referenced product can only be
     // deactivated, never soft-deleted out of the catalog.
@@ -257,6 +267,20 @@ export class ProductService {
     }
 
     return product;
+  }
+
+  /**
+   * PROD-002 / ADM-005 — an admin takedown is only enforceable if the seller
+   * cannot walk out of it. Checking the *current* status (never the target one)
+   * is what closes the loop: without it a seller soft-deletes to REMOVED first,
+   * which wipes the evidence of the suspension, and rebuilds from there.
+   */
+  private assertNotSuspended(currentStatus: string) {
+    if (currentStatus === 'SUSPENDED') {
+      throw new ForbiddenException(
+        'Product was suspended by an admin and can only be restored by an admin',
+      );
+    }
   }
 
   private async assertCategoryIsActive(categoryId: string) {
@@ -313,8 +337,9 @@ export class ProductService {
     currentStatus: string,
     stockQty: number,
   ): 'ACTIVE' | 'OUT_OF_STOCK' | undefined {
-    // PROD-005 — stock drives the ACTIVE/OUT_OF_STOCK flip; INACTIVE and REMOVED
-    // are deliberate seller/admin states and must not be overridden here.
+    // PROD-005 — stock drives the ACTIVE/OUT_OF_STOCK flip; INACTIVE, REMOVED
+    // and SUSPENDED are deliberate seller/admin states and must not be
+    // overridden here, or a restock would quietly lift an admin takedown.
     if (currentStatus !== 'ACTIVE' && currentStatus !== 'OUT_OF_STOCK') {
       return undefined;
     }
