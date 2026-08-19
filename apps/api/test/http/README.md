@@ -1,4 +1,4 @@
-# วิธีเทส API (โมดูล e-commerce)
+# วิธีเทส API (โมดูล e-commerce และประมูล)
 
 ยังไม่มีระบบ login จริง (รอ Dev 2 / AUTH-008) ตอนนี้บอกว่า "เราเป็นใคร" ด้วย
 header `x-mock-user-id` แทน Bearer token — ดู `src/common/guards/mock-auth.guard.ts`
@@ -66,6 +66,7 @@ pnpm dev:api          # -> http://localhost:4000
 | `05-chat.http` | เปิดห้องแชท / ส่งข้อความ / กล่องข้อความ |
 | `06-admin.http` | ดูออเดอร์ทั้งระบบ / ปิด-เปิดประกาศขาย |
 | `07-negative.http` | เคสที่ต้องพัง — 401 / 403 / 404 / 400 (**ห้ามมี 500**) |
+| `08-auction.http` | ประมูล: สร้าง draft ส่วนตัว + เคสที่ต้องพังของฝั่งประมูล (AUC-001) |
 
 ## 4. ยิงด้วย Postman
 
@@ -103,12 +104,12 @@ pnpm --dir apps/api exec prisma studio
 
 ## 8. เทสอัตโนมัติ
 
-ตอนนี้มีแค่ smoke test ของ Nest starter:
-
 ```bash
-pnpm --dir apps/api test        # unit
-pnpm --dir apps/api test:e2e    # e2e (ต้องมี DB ขึ้นอยู่)
+pnpm --dir apps/api test        # unit (auth, auction)
+pnpm --dir apps/api test:e2e    # e2e (auth, auction — ต้องมี DB ขึ้นอยู่)
 ```
+
+e2e สร้าง user/category ของตัวเองแล้วลบทิ้งเมื่อจบ ไม่พึ่ง seed จึงรันซ้ำได้เรื่อยๆ
 
 ไฟล์ `.http` ชุดนี้ทำหน้าที่เป็นสเปกไว้ก่อน ใครจะเขียน `*.e2e-spec.ts` เพิ่ม
 แปลงจากไฟล์เหล่านี้ได้ตรงๆ (status ที่คาดหวังเขียนกำกับไว้ทุกอันแล้ว)

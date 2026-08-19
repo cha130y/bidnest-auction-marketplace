@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { validate } from './config/env.validation';
 import { AdminModule } from './admin/admin.module';
+import { AuctionModule } from './auction/auction.module';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './cart/cart.module';
 import { CategoriesModule } from './categories/categories.module';
@@ -25,6 +26,7 @@ import { ShipmentModule } from './shipment/shipment.module';
     PrismaModule,
     RealtimeModule,
     AuthModule,
+    AuctionModule,
     ProductModule,
     CartModule,
     OrderModule,
