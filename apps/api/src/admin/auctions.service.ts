@@ -20,7 +20,7 @@ export class AdminAuctionsService {
 
   cancelAuction(auctionId: string): never {
     throw new NotImplementedException(
-      `ADM-001 cancelAuction (auctionId=${auctionId})`,
+      `ADM-001 cancelAuction (auctionId=${auctionId})`
     );
   }
 }
