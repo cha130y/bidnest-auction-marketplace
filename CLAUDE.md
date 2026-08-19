@@ -32,6 +32,7 @@ Group Project (5 developers อ้างอิงจากไฟล์ Team-role
 - SRS: `docs\requirements\BidNest-Auction and Marketplace-v4.pdf`
 - ER Diagram: `docs\architecture\erd\bidnest-erd-v1.dbml` หรือ link: https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff
 - Database schema: `apps\api\prisma\schema.prisma`
+- ADR (บันทึกการตัดสินใจเชิงสถาปัตยกรรม): `docs\architecture\adr\`
 - Kickoff Guide: `docs\KICKOFF_GUIDE.md` (ชื่อ branch แต่ละคน, ขั้นตอน setup, CI/CD)
 - Figma: coming soon
 

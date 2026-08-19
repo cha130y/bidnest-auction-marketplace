@@ -3,11 +3,18 @@ import { AdminModule } from './admin/admin.module';
 import { AiToolsModule } from './ai-tools/ai-tools.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { SupportChatModule } from './support-chat/support-chat.module';
+import { CategoriesModule } from './categories/categories.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { SupportChatModule } from './support-chat/support-chat.module';
 
 @Module({
-  imports: [SupportChatModule, AdminModule, AiToolsModule, PrismaModule],
+  imports: [
+    CategoriesModule,
+    SupportChatModule,
+    AdminModule,
+    AiToolsModule,
+    PrismaModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
