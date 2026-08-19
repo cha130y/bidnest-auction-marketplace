@@ -1,0 +1,334 @@
+###############################################################################
+# NEGATIVE — เคสที่ "ต้องพัง" ตามที่ออกแบบไว้
+#
+# กติกาการอ่านผล: ต้องได้ status ตามที่เขียนกำกับไว้ และต้องไม่ใช่ 500
+# ถ้าเจอ 500 ที่ไหน = บั๊กจริง ให้แจ้งใน PR
+###############################################################################
+
+@baseUrl = http://localhost:4000/api
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@sellerB = 00000000-0000-4000-8000-000000000003
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catElectronics = 00000000-0000-4000-8000-000000000101
+@productA1 = 00000000-0000-4000-8000-000000000201
+@productB2 = 00000000-0000-4000-8000-000000000204
+
+#=============================================================================
+# 1. ยืนยันตัวตน (MockAuthGuard)
+#=============================================================================
+
+### ไม่ส่ง x-mock-user-id ไปที่ route ที่ไม่ public. expect 401
+GET {{baseUrl}}/cart
+
+### ส่ง user id ที่ไม่มีในระบบ. expect 401
+GET {{baseUrl}}/cart
+x-mock-user-id: 00000000-0000-4000-8000-000000009999
+
+### route ที่เป็น @Public ยิงได้แม้ไม่มี header. expect 200
+GET {{baseUrl}}/products
+
+#=============================================================================
+# 2. สิทธิ์ตาม role (RolesGuard)
+#=============================================================================
+
+### แอดมินซื้อของไม่ได้ — ตะกร้าเป็นของ role USER เท่านั้น. expect 403
+GET {{baseUrl}}/cart
+x-mock-user-id: {{admin}}
+
+### แอดมิน checkout ไม่ได้. expect 403
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{admin}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "shippingAddress": {
+    "recipientName": "Admin",
+    "line1": "1 Admin Rd",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0800000000"
+  }
+}
+
+### แอดมินลงขายสินค้าไม่ได้. expect 403
+POST {{baseUrl}}/products
+x-mock-user-id: {{admin}}
+Content-Type: application/json
+
+{
+  "title": "Admin should not sell",
+  "description": "nope",
+  "categoryId": "{{catElectronics}}",
+  "price": 100,
+  "stockQty": 1,
+  "condition": "NEW",
+  "imageUrls": ["https://placehold.co/600x400"]
+}
+
+### user ธรรมดายิง endpoint แอดมินไม่ได้. expect 403
+GET {{baseUrl}}/admin/orders
+x-mock-user-id: {{buyer}}
+
+### user ธรรมดาปิดประกาศสินค้าคนอื่นไม่ได้. expect 403
+PATCH {{baseUrl}}/admin/products/{{productA1}}/deactivate
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "reason": "ไม่มีสิทธิ์" }
+
+#=============================================================================
+# 3. ความเป็นเจ้าของ
+#=============================================================================
+
+### แก้สินค้าที่ไม่ใช่ของตัวเองไม่ได้. expect 403
+PATCH {{baseUrl}}/products/{{productA1}}
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "price": 1 }
+
+### ลบสินค้าที่ไม่ใช่ของตัวเองไม่ได้ (seller B ลบของ seller A). expect 403
+DELETE {{baseUrl}}/products/{{productA1}}
+x-mock-user-id: {{sellerB}}
+
+### CART-001 ผู้ขายซื้อของตัวเองไม่ได้. expect 403
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 1 }
+
+### CHAT-001 ผู้ขายเปิดแชทกับประกาศตัวเองไม่ได้. expect 403
+POST {{baseUrl}}/products/{{productA1}}/conversations
+x-mock-user-id: {{sellerA}}
+
+#=============================================================================
+# 4. ข้อมูลไม่ถูกต้อง (ValidationPipe: whitelist + forbidNonWhitelisted)
+#=============================================================================
+
+### ส่ง field แปลกปลอมที่ไม่มีใน DTO. expect 400
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 1, "hackerField": "boom" }
+
+### จำนวนต้องเป็นจำนวนเต็ม >= 1. expect 400
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 0 }
+
+### :id ไม่ใช่ UUID (ParseUUIDPipe). expect 400
+GET {{baseUrl}}/products/not-a-uuid
+
+### PROD-001 ลงขายโดยไม่แนบรูปสักใบ. expect 400
+POST {{baseUrl}}/products
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "No image",
+  "description": "should fail",
+  "categoryId": "{{catElectronics}}",
+  "price": 100,
+  "stockQty": 1,
+  "condition": "NEW",
+  "imageUrls": []
+}
+
+### PROD-007 ตั้งส่วนลดมาครึ่งเดียว (มี minQty แต่ไม่มี percent). expect 400
+POST {{baseUrl}}/products
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "Half discount rule",
+  "description": "should fail",
+  "categoryId": "{{catElectronics}}",
+  "price": 100,
+  "stockQty": 1,
+  "condition": "NEW",
+  "imageUrls": ["https://placehold.co/600x400"],
+  "quantityDiscountMinQty": 3
+}
+
+### PROD-002 minPrice มากกว่า maxPrice. expect 400
+GET {{baseUrl}}/products?minPrice=5000&maxPrice=100
+
+#=============================================================================
+# 5. สต๊อกและการจ่ายเงิน
+#=============================================================================
+
+### CART-001 ใส่ตะกร้าเกินจำนวนที่มี (figurine เหลือ 1). expect 400
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productB2}}", "quantity": 99 }
+
+### CART-004 checkout ตอนตะกร้าว่าง. expect 400 "Cart is empty"
+# หมายเหตุ: ยิงได้ผลก็ต่อเมื่อตะกร้าของ buyer ว่างจริง
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "shippingAddress": {
+    "recipientName": "Anan B.",
+    "line1": "123 Sukhumvit Rd",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0812345678"
+  }
+}
+
+#-----------------------------------------------------------------------------
+# เคสจ่ายเงินไม่ผ่าน — ยอดรวมต้องเท่ากับ 666.00 พอดี
+# (MockPaymentProvider.DECLINE_AMOUNT)
+#
+# ใช้ seller A เป็นคนซื้อ เพื่อไม่ให้ตะกร้าของ buyer ปนกับเทสอื่น
+# ยิง 3 ข้อล่างนี้เรียงกัน และตะกร้าของ seller A ต้องว่างก่อน
+#-----------------------------------------------------------------------------
+
+### เช็คก่อน — ตะกร้าของ seller A ต้องว่าง (ถ้าไม่ว่างให้ลบทิ้งก่อน)
+GET {{baseUrl}}/cart
+x-mock-user-id: {{sellerA}}
+
+### setup — seller B ลงขายของราคา 666.00. expect 201
+# @name declineProduct
+POST {{baseUrl}}/products
+x-mock-user-id: {{sellerB}}
+Content-Type: application/json
+
+{
+  "title": "Decline Trigger 666",
+  "description": "ยอด 666.00 พอดีจะถูกปฏิเสธการจ่ายเงินเสมอ",
+  "categoryId": "{{catElectronics}}",
+  "price": 666,
+  "stockQty": 5,
+  "condition": "NEW",
+  "imageUrls": ["https://placehold.co/600x400?text=666"]
+}
+
+@declineProductId = {{declineProduct.response.body.$.id}}
+
+### setup — seller A ใส่ตะกร้า 1 ชิ้น (ยอดรวม = 666.00). expect 201
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "productId": "{{declineProductId}}", "quantity": 1 }
+
+### CART-004 จ่ายเงินไม่ผ่าน. expect 400 { message: "Payment failed", checkoutSessionId, reason }
+# ผลข้างเคียงที่ต้องเป็นจริง: ไม่มีออเดอร์เกิดขึ้น + ของยังอยู่ในตะกร้าครบ
+# แต่ยังมีแถวใน payment_transactions สถานะ FAILED ไว้กระทบยอด
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "shippingAddress": {
+    "recipientName": "Somchai",
+    "line1": "9 Ratchada Rd",
+    "city": "Bangkok",
+    "postalCode": "10400",
+    "phone": "0899999999"
+  }
+}
+
+### ตรวจผล — ของต้องยังอยู่ในตะกร้าเหมือนเดิม
+GET {{baseUrl}}/cart
+x-mock-user-id: {{sellerA}}
+
+#=============================================================================
+# 6. การจัดส่ง — ต้องมีออเดอร์จริงก่อน
+#=============================================================================
+
+### setup — buyer ซื้อของ seller A
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 1 }
+
+### setup — checkout
+# @name checkout
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "shippingAddress": {
+    "recipientName": "Anan B.",
+    "line1": "123 Sukhumvit Rd",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0812345678"
+  }
+}
+
+@orderId = {{checkout.response.body.$.orders[0].id}}
+@seller  = {{checkout.response.body.$.orders[0].sellerId}}
+
+### SHIP-001 ข้ามสถานะ PROCESSING -> DELIVERED ตรงๆ ไม่ได้. expect 400
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{seller}}
+Content-Type: application/json
+
+{ "status": "DELIVERED" }
+
+### SHIP-001 ผู้ซื้อเลื่อนสถานะเองไม่ได้. expect 403
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "status": "SHIPPED" }
+
+### SHIP-001 สถานะที่ไม่มีใน enum. expect 400
+PATCH {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{seller}}
+Content-Type: application/json
+
+{ "status": "TELEPORTED" }
+
+#=============================================================================
+# 7. ความเป็นส่วนตัวของข้อมูล — คนนอกต้องได้ 404 ไม่ใช่ 403
+#    (จะได้ไม่รู้ด้วยซ้ำว่าออเดอร์/ห้องแชทนั้นมีอยู่จริง — SRS 6)
+#=============================================================================
+
+### คนนอกเปิดดูออเดอร์ของคนอื่น. expect 404
+GET {{baseUrl}}/orders/{{orderId}}
+x-mock-user-id: {{sellerB}}
+
+### คนนอกดูไทม์ไลน์การจัดส่งของคนอื่น. expect 404
+GET {{baseUrl}}/orders/{{orderId}}/shipment
+x-mock-user-id: {{sellerB}}
+
+### setup — buyer เปิดแชทกับ seller A
+# @name conversation
+POST {{baseUrl}}/products/{{productA1}}/conversations
+x-mock-user-id: {{buyer}}
+
+@conversationId = {{conversation.response.body.$.id}}
+
+### คนนอกอ่านแชทของคนอื่น. expect 404
+GET {{baseUrl}}/conversations/{{conversationId}}/messages
+x-mock-user-id: {{sellerB}}
+
+### แอดมินก็อ่านแชทไม่ได้ (ติด RolesGuard ก่อน). expect 403
+GET {{baseUrl}}/conversations/{{conversationId}}/messages
+x-mock-user-id: {{admin}}
+
+### CHAT-002 ส่งข้อความว่าง. expect 400
+POST {{baseUrl}}/conversations/{{conversationId}}/messages
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "body": "   " }

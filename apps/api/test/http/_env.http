@@ -1,0 +1,32 @@
+###############################################################################
+# BidNest e-commerce API — shared variables
+#
+# VS Code REST Client keeps `@variables` file-scoped, so every 0X-*.http file
+# repeats this block and works on its own. This file is the single source of
+# truth: if seed.ts changes, update here first, then the copies.
+#
+# ids come from apps/api/prisma/seed.ts (fixed UUIDs, stable across re-seeds).
+###############################################################################
+
+@baseUrl = http://localhost:4000/api
+
+# --- users (sent as the x-mock-user-id header) -------------------------------
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@sellerB = 00000000-0000-4000-8000-000000000003
+@buyer   = 00000000-0000-4000-8000-000000000004
+
+# --- categories --------------------------------------------------------------
+@catElectronics  = 00000000-0000-4000-8000-000000000101
+@catFashion      = 00000000-0000-4000-8000-000000000102
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# --- products ----------------------------------------------------------------
+# A1 keyboard  2500.00  stock 10  seller A  (buy 3+ -> 10% off)
+# A2 usb hub   1200.00  stock  5  seller A
+# B1 jacket    1800.00  stock  2  seller B
+# B2 figurine  4500.00  stock  1  seller B
+@productA1 = 00000000-0000-4000-8000-000000000201
+@productA2 = 00000000-0000-4000-8000-000000000202
+@productB1 = 00000000-0000-4000-8000-000000000203
+@productB2 = 00000000-0000-4000-8000-000000000204

@@ -1,0 +1,100 @@
+###############################################################################
+# PROD — product listing, search, detail, edit, stock, delete
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+###############################################################################
+
+@baseUrl = http://localhost:4000/api
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catElectronics = 00000000-0000-4000-8000-000000000101
+@productA1 = 00000000-0000-4000-8000-000000000201
+
+### PROD-001 create — seller A ลงสินค้าใหม่. expect 201
+# negotiationFloor (2500) ต่ำกว่าราคาหลังหักส่วนลด 15% (2720.43)
+# -> response ต้องมี warnings[] ติดมาด้วย (PROD-007)
+# @name createProduct
+POST {{baseUrl}}/products
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "Test Headphone ANC",
+  "description": "Created from 01-product.http",
+  "categoryId": "{{catElectronics}}",
+  "price": 3200.5,
+  "stockQty": 7,
+  "condition": "NEW",
+  "imageUrls": [
+    "https://placehold.co/600x400?text=Headphone",
+    "https://placehold.co/600x400?text=Headphone+2"
+  ],
+  "negotiationFloor": 2500,
+  "quantityDiscountMinQty": 3,
+  "quantityDiscountPercent": 15
+}
+
+@newProductId = {{createProduct.response.body.$.id}}
+
+### PROD-002 search — ทุกรายการ (public, ไม่ต้องมี header). expect 200 + items/meta
+GET {{baseUrl}}/products
+
+### PROD-002 search — keyword
+GET {{baseUrl}}/products?q=keyboard
+
+### PROD-002 search — กรองหมวด + ช่วงราคา + เรียงราคาน้อยไปมาก + แบ่งหน้า
+GET {{baseUrl}}/products?categoryIds={{catElectronics}}&minPrice=1000&maxPrice=5000&sort=price_asc&page=1&limit=2
+
+### PROD-002 search — หลายหมวดคั่นด้วย comma
+GET {{baseUrl}}/products?categoryIds=00000000-0000-4000-8000-000000000101,00000000-0000-4000-8000-000000000102
+
+### PROD-002 search — เรียงใหม่สุดก่อน
+GET {{baseUrl}}/products?sort=newest
+
+### PROD-004 detail — มุมมองคนทั่วไป: ต้อง "ไม่" มี negotiationFloor. expect 200
+GET {{baseUrl}}/products/{{productA1}}
+
+### PROD-006 detail — มุมมองเจ้าของ (seller A): ต้องเห็น negotiationFloor. expect 200
+GET {{baseUrl}}/products/{{productA1}}
+x-mock-user-id: {{sellerA}}
+
+### PROD-004 detail — สินค้าที่เพิ่งสร้าง
+GET {{baseUrl}}/products/{{newProductId}}
+x-mock-user-id: {{sellerA}}
+
+### PROD-003 update — แก้ราคา/คำอธิบาย. expect 200
+PATCH {{baseUrl}}/products/{{newProductId}}
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "price": 2999,
+  "description": "ลดราคาแล้ว - edited from .http"
+}
+
+### PROD-005 stock — ตั้งจำนวนคงเหลือใหม่. expect 200
+PATCH {{baseUrl}}/products/{{newProductId}}/stock
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "stockQty": 3 }
+
+### PROD-005 stock — ตั้งเป็น 0 แล้วสถานะควรกลายเป็น OUT_OF_STOCK. expect 200
+PATCH {{baseUrl}}/products/{{newProductId}}/stock
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "stockQty": 0 }
+
+### PROD-005 stock — เติมของกลับ สถานะควรกลับมา ACTIVE. expect 200
+PATCH {{baseUrl}}/products/{{newProductId}}/stock
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{ "stockQty": 7 }
+
+### PROD-003 delete — soft delete (status -> REMOVED). expect 200
+DELETE {{baseUrl}}/products/{{newProductId}}
+x-mock-user-id: {{sellerA}}
+
+### ตรวจซ้ำ — ของที่ถูกลบต้องไม่โผล่ในผลค้นหา
+GET {{baseUrl}}/products?q=Headphone
