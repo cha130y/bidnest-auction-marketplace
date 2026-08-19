@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AdminModule } from './admin/admin.module';
 import { CartModule } from './cart/cart.module';
 import { CategoriesModule } from './categories/categories.module';
+import { ChatModule } from './chat/chat.module';
 import { MockAuthGuard } from './common/guards/mock-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { validate } from './config/env.validation';
@@ -26,6 +27,7 @@ import { ShipmentModule } from './shipment/shipment.module';
     ShipmentModule,
     CategoriesModule,
     AdminModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [
