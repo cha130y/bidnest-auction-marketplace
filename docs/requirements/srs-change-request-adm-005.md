@@ -1,11 +1,13 @@
 # SRS Change Request — ADM-005 และสถานะสินค้า
 
+- **สถานะ:** ✅ **ปิดแล้ว** — แก้ครบทุกจุดและ export เป็น `BidNest-Auction and Marketplace-v5.pdf` เรียบร้อย
 - **อัปเดตล่าสุด:** 2026-08-19
-- **ไฟล์ต้นฉบับที่ต้องแก้:** `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
-- **SRS ที่อยู่ใน repo ตอนนี้:** `BidNest-Auction and Marketplace-v4.pdf` ← ยังเป็นฉบับเก่า ต้องเปลี่ยน
+- **ไฟล์ต้นฉบับ:** `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
+- **SRS ที่อยู่ใน repo:** `BidNest-Auction and Marketplace-v5.pdf`
 - **อ้างอิงการตัดสินใจ:** [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
 
-> ข้อความในโค้ดบล็อกด้านล่าง copy ไปวางใน Word ได้ทันที ไม่มีสัญลักษณ์ markdown ปน
+> เอกสารนี้เก็บไว้เป็นบันทึกว่าแก้อะไรไปบ้างและทำไม ไม่ต้องทำอะไรต่อแล้ว
+> ข้อความในโค้ดบล็อกคือสิ่งที่ถูกนำไปใส่ใน SRS v5 จริง
 > เหตุผลของแต่ละจุดอยู่ในหัวข้อ "เหตุผลประกอบ" ท้ายเอกสาร
 
 ---
@@ -129,9 +131,12 @@ SRS v4 มีข้อกำหนด 2 ข้อที่ขัดกันเ�
 
 ---
 
-# ส่วนที่ 3 — ปัญหาการ export PDF (แยกจากเนื้อหา)
+# ส่วนที่ 3 — ปัญหาการ export PDF ✅ แก้แล้ว
 
-PDF ที่ export ออกมามีปัญหา **ตัวเลขทั้งเอกสารกลายเป็นอักษรละตินตอน copy หรือค้นหา** แม้จะมองเห็นถูกต้องบนหน้าจอ
+> **สรุป:** v5 export ด้วย `Save As → PDF` จาก Word 365 แล้ว ตัวเลขไม่เพี้ยนอีก และไฟล์เล็กลงจาก 820 KB เหลือ 291 KB
+> หัวข้อนี้เก็บไว้เป็นบันทึกกันพลาดซ้ำตอน export รอบหน้า
+
+ฉบับ v4 (export ด้วย `Microsoft: Print To PDF`) มีปัญหา **ตัวเลขทั้งเอกสารกลายเป็นอักษรละตินตอน copy หรือค้นหา** แม้จะมองเห็นถูกต้องบนหน้าจอ
 
 | ในเอกสารควรเป็น | copy ออกมาได้ |
 | --- | --- |
@@ -151,13 +156,28 @@ PDF ที่ export ออกมามีปัญหา **ตัวเลข�
 
 # Checklist
 
-- [ ] แก้ 4 จุดในส่วนที่ 1 ที่ `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx` (ปิด Word ที่เปิดค้างก่อน — มีไฟล์ `~$...` อยู่)
-- [ ] export PDF ด้วย Save As ไม่ใช่ Print to PDF (ดูส่วนที่ 3)
-- [ ] วาง PDF ใหม่ที่ `docs/requirements/` ชื่อ `BidNest-Auction and Marketplace-v5.pdf`
-- [ ] ลบ `BidNest-Auction and Marketplace-v4.pdf` ออก หรือย้ายไปเก็บเป็นฉบับเก่า
-- [ ] อัปเดต path ของ SRS ใน `CLAUDE.md` ให้ชี้ไฟล์ใหม่
-- [ ] อัปเดต dbdiagram.io ให้ตรงกับ `docs/architecture/erd/bidnest-erd-v1.dbml` (เพิ่ม `SUSPENDED` ใน `product_status`)
+- [x] แก้ 4 จุดในส่วนที่ 1 ที่ `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
+- [x] export PDF ด้วย Save As ไม่ใช่ Print to PDF — ตัวเลขไม่เพี้ยนแล้ว และไฟล์เล็กลงจาก 820 KB เหลือ 291 KB
+- [x] วาง PDF ใหม่ที่ `docs/requirements/BidNest-Auction and Marketplace-v5.pdf`
+- [x] ลบ `BidNest-Auction and Marketplace-v4.pdf` ออก
+- [x] อัปเดต path ของ SRS ใน `CLAUDE.md` ให้ชี้ไฟล์ใหม่
+- [x] อัปเดต dbdiagram.io ให้ตรงกับ `docs/architecture/erd/bidnest-erd-v1.dbml` (เพิ่ม `SUSPENDED` ใน `product_status`)
 - [ ] แจ้ง Dev 3 ว่า story ADM-005, PROD-002, PROD-005 และ CART-001 ใน Jira มีเงื่อนไขเพิ่ม
 - [ ] แจ้ง Dev 1 / Dev 3 เรื่อง confirm dialog ตอนลบสินค้า (ต้องบอกว่ากู้คืนไม่ได้ + เสนอ INACTIVE)
 
-**ระหว่างที่ SRS ยังไม่ออกฉบับสมบูรณ์ ให้ยึด [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md) เป็นหลัก** — schema, migration และ scaffold ใน `apps/api/src/admin/` ทำตาม ADR-0002 ไปแล้ว
+SRS v5, `schema.prisma`, ERD และ scaffold ใน `apps/api/src/admin/` ตรงกันหมดแล้ว รายละเอียดการตัดสินใจดูที่ [ADR-0001](../architecture/adr/0001-single-admin-role-and-shared-category-set.md) และ [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
+
+## เหลือให้ทีมทำต่อ
+
+2 ข้อท้ายที่ยังไม่ติ๊กเป็นงานประสานงาน ไม่ใช่งานในโค้ด — ต้องแจ้งใน Jira เอง
+
+**Dev 3** — story ที่มีเงื่อนไขเพิ่มจากเดิม:
+
+| Story | สิ่งที่เพิ่ม |
+| --- | --- |
+| ADM-005 | ปิด → `SUSPENDED`, เปิดกลับ → `ACTIVE`/`OUT_OF_STOCK` ตามสต็อก, เขียน `admin_actions` ใน transaction เดียวกัน |
+| PROD-002 | สินค้า `SUSPENDED` แก้ไข/เปลี่ยนสถานะ/soft-delete ไม่ได้ — guard เช็คที่สถานะปัจจุบัน ไม่ใช่สถานะปลายทาง |
+| PROD-005 | auto-flip ต้องข้าม `SUSPENDED` ⚠️ พลาดง่ายที่สุด ถ้าลืมคือระบบพังเงียบๆ |
+| CART-001 | เพิ่มลงตะกร้าได้เฉพาะ `ACTIVE` |
+
+**Dev 1 / Dev 3** — confirm dialog ตอนลบสินค้าต้องบอกว่า "ลบแล้วกู้คืนไม่ได้" และเสนอ `INACTIVE` เป็นทางเลือก ปุ่ม "ปิดการขาย" ควรเด่นกว่าปุ่ม "ลบ"
