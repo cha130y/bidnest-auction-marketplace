@@ -15,8 +15,9 @@ import { Injectable, NotImplementedException } from '@nestjs/common';
  * เฉพาะคำสั่งซื้อใหม่
  *
  * ⚠️ งานที่ผูกกันอยู่ในโมดูล e-commerce ของ Dev 3 เอง (ADR-0002):
- *   - PROD-002 ผู้ขายเปลี่ยนสถานะ/แก้ข้อมูล → ถ้าปัจจุบันเป็น SUSPENDED ต้อง 403
- *     (รวมถึงห้าม soft-delete ไป REMOVED ไม่งั้นเลี่ยงการบล็อกได้)
+ *   - PROD-002 ผู้ขายเปลี่ยนสถานะ/แก้ข้อมูล/soft-delete → ถ้า `status === SUSPENDED`
+ *     ต้อง 403 ทุกกรณี เช็คที่ **สถานะปัจจุบัน** ไม่ใช่สถานะปลายทาง ไม่งั้นผู้ขาย
+ *     เดินอ้อม SUSPENDED → REMOVED → ACTIVE ได้ เพราะก้าวแรกลบร่องรอยการระงับทิ้ง
  *   - PROD-005 auto-flip ตอน stock เปลี่ยน → ต้องข้ามสินค้าที่ SUSPENDED
  *     ไม่งั้นการเติม stock จะปลดการระงับเองเงียบๆ
  *   - CART/checkout → สินค้า SUSPENDED เพิ่มลงตะกร้าและ checkout ไม่ได้
