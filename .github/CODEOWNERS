@@ -1,0 +1,28 @@
+# CODEOWNERS — ใครต้อง approve เมื่อไฟล์เหล่านี้ถูกแก้
+#
+# ไฟล์ในลิสต์นี้เป็น "กติกาและข้อตกลงร่วมของทีม" ที่ทุกคนยึดเป็นหลักเดียวกัน
+# ยังเสนอแก้ได้ปกติผ่าน PR แต่ต้องได้ approve จากเจ้าของไฟล์ก่อน merge
+# เพื่อไม่ให้กติกากลางเปลี่ยนไปโดยที่ทีมไม่ได้ตกลงกัน
+#
+# ⚠️ ต้องเปิด branch protection ข้อ "Require review from Code Owners"
+#    ที่ทั้ง main และ dev ด้วย ไฟล์นี้เพียงลำพังไม่ได้บังคับอะไร
+#
+# ถ้าต้องการเพิ่มคำสั่ง/แนวทางส่วนตัวสำหรับ Claude Code ให้สร้างไว้ที่
+# .claude/commands/<ชื่อ>.md ซึ่ง .gitignore กันไว้แล้ว ไม่ขึ้น git
+# และไม่กระทบ CLAUDE.md ของทีม — ดูหัวข้อ "แนวทางส่วนตัว" ใน CLAUDE.md
+
+# กติกาการทำงานร่วมของทีม
+/CLAUDE.md              @cha130y
+
+# เอกสารข้อกำหนดและสถาปัตยกรรม
+/docs/requirements/     @cha130y
+/docs/architecture/     @cha130y
+/docs/team-role/        @cha130y
+
+# Schema กลางที่ทุกโมดูลใช้ร่วมกัน — ห้ามแก้โดยไม่ตกลงกันก่อน
+/apps/api/prisma/       @cha130y
+
+# CI และ config ของ workspace
+/.github/               @cha130y
+/package.json           @cha130y
+/pnpm-workspace.yaml    @cha130y
