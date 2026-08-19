@@ -9,11 +9,13 @@ import { MockAuthGuard } from './common/guards/mock-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate }),
     DatabaseModule,
+    RealtimeModule,
     CategoriesModule,
     AdminModule,
   ],
