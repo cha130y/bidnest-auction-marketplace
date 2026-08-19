@@ -19,7 +19,7 @@ export class AdminUsersService {
 
   changeUserStatus(targetUserId: string, targetStatus: string): never {
     throw new NotImplementedException(
-      `ADM-002 changeUserStatus (targetUserId=${targetUserId}, targetStatus=${targetStatus})`,
+      `ADM-002 changeUserStatus (targetUserId=${targetUserId}, targetStatus=${targetStatus})`
     );
   }
 }

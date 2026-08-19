@@ -30,7 +30,7 @@ export class AdminProductsService {
 
   setProductActivation(productId: string, isActive: boolean): never {
     throw new NotImplementedException(
-      `ADM-005 setProductActivation (productId=${productId}, isActive=${isActive})`,
+      `ADM-005 setProductActivation (productId=${productId}, isActive=${isActive})`
     );
   }
 }
