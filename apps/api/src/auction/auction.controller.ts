@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post
@@ -51,5 +53,27 @@ export class AuctionController {
     @CurrentUser('id') sellerId: string
   ) {
     return this.auctionService.validateOwnDraft(id, sellerId);
+  }
+
+  // AUC-004 — preview is a read, so the draft keeps its status.
+  @Roles('USER')
+  @Get('drafts/:id/preview')
+  previewOwnDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.previewOwnDraft(id, sellerId);
+  }
+
+  // AUC-004 — publish is the state change, hence POST. 200 rather than the
+  // POST default of 201: it moves an auction that already exists.
+  @Roles('USER')
+  @HttpCode(HttpStatus.OK)
+  @Post('drafts/:id/publish')
+  publishDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.publishDraft(id, sellerId);
   }
 }

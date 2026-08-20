@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -104,8 +108,12 @@ describe('AuctionService', () => {
       create: jest.Mock;
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      updateMany: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
     };
+    auctionEvent: { createMany: jest.Mock };
     category: { findUnique: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -113,9 +121,15 @@ describe('AuctionService', () => {
       auction: {
         create: jest.fn(),
         findMany: jest.fn(),
-        findFirst: jest.fn()
+        findFirst: jest.fn(),
+        updateMany: jest.fn(),
+        findUniqueOrThrow: jest.fn()
       },
-      category: { findUnique: jest.fn() }
+      auctionEvent: { createMany: jest.fn() },
+      category: { findUnique: jest.fn() },
+      // Hands the callback the same mock, so assertions can read every call the
+      // transaction made without a second layer of fakes.
+      $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -362,6 +376,210 @@ describe('AuctionService', () => {
       const result = await service.validateOwnDraft(DRAFT_ID, SELLER_ID);
 
       expect(JSON.stringify(result)).not.toContain('4500');
+    });
+  });
+
+  /**
+   * AUC-004 — preview shows the buyer's view without touching the draft, and
+   * publish moves a validated draft to SCHEDULED or ACTIVE depending on when it
+   * is due to start.
+   */
+  describe('previewOwnDraft (AUC-004)', () => {
+    it('returns the buyer-facing shape, without the reserve', async () => {
+      prisma.auction.findFirst.mockResolvedValue(draftRow());
+
+      const preview = await service.previewOwnDraft(DRAFT_ID, SELLER_ID);
+
+      expect(preview).not.toHaveProperty('reservePrice');
+      expect(preview).toMatchObject({ id: DRAFT_ID, reserveMet: false });
+    });
+
+    it('changes nothing — no write of any kind is issued', async () => {
+      prisma.auction.findFirst.mockResolvedValue(draftRow());
+
+      await service.previewOwnDraft(DRAFT_ID, SELLER_ID);
+
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+      expect(prisma.auction.create).not.toHaveBeenCalled();
+      expect(prisma.auctionEvent.createMany).not.toHaveBeenCalled();
+    });
+
+    it('scopes the preview to the seller who owns the draft', async () => {
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.previewOwnDraft(DRAFT_ID, 'another-seller')
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('publishDraft (AUC-004)', () => {
+    /** A gate row whose schedule is relative to the moment of the test run. */
+    const gateRow = (overrides: Record<string, unknown> = {}) => ({
+      id: DRAFT_ID,
+      title: 'Vintage Seiko 5 Automatic',
+      description: 'Serviced last year, original bracelet.',
+      condition: 'USED',
+      startingPrice: dec(3000),
+      minBidIncrement: dec(100),
+      reservePrice: dec(4500),
+      scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+      originalEndAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      category: { isActive: true },
+      images: [{ id: 'image-1' }],
+      ...overrides
+    });
+
+    const publishSucceeds = (row: ReturnType<typeof gateRow>) => {
+      prisma.auction.findFirst.mockResolvedValue(row);
+      prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.auctionEvent.createMany.mockResolvedValue({ count: 1 });
+      prisma.auction.findUniqueOrThrow.mockResolvedValue(draftRow());
+    };
+
+    /** The where/data the publish write actually sent. */
+    const updateArgs = () =>
+      (
+        prisma.auction.updateMany.mock.calls as {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }[][]
+      )[0][0];
+
+    /** The event rows the publish wrote. */
+    const writtenEvents = () =>
+      (
+        prisma.auctionEvent.createMany.mock.calls as {
+          data: { eventType: string }[];
+        }[][]
+      )[0][0].data;
+
+    /** The BadRequest body a failed publish came back with. */
+    const issuesFrom = (error: unknown) =>
+      (
+        (error as BadRequestException).getResponse() as {
+          issues: { code: string }[];
+        }
+      ).issues.map((issue) => issue.code);
+
+    it('lands a future-dated draft in SCHEDULED, not started yet', async () => {
+      publishSucceeds(gateRow());
+
+      await service.publishDraft(DRAFT_ID, SELLER_ID);
+
+      const { data } = updateArgs();
+      expect(data.status).toBe('SCHEDULED');
+      expect(data.startedAt).toBeNull();
+      expect(data.publishedAt).toBeInstanceOf(Date);
+    });
+
+    it('opens a draft whose start time has arrived as ACTIVE', async () => {
+      publishSucceeds(
+        gateRow({ scheduledStartAt: new Date(Date.now() - 60 * 1000) })
+      );
+
+      await service.publishDraft(DRAFT_ID, SELLER_ID);
+
+      const { data } = updateArgs();
+      expect(data.status).toBe('ACTIVE');
+      expect(data.startedAt).toBeInstanceOf(Date);
+    });
+
+    it('records PUBLISHED alone when the auction is only scheduled', async () => {
+      publishSucceeds(gateRow());
+
+      await service.publishDraft(DRAFT_ID, SELLER_ID);
+
+      expect(writtenEvents().map((event) => event.eventType)).toEqual([
+        'PUBLISHED'
+      ]);
+    });
+
+    it('records PUBLISHED and STARTED when it opens immediately', async () => {
+      publishSucceeds(
+        gateRow({ scheduledStartAt: new Date(Date.now() - 60 * 1000) })
+      );
+
+      await service.publishDraft(DRAFT_ID, SELLER_ID);
+
+      expect(writtenEvents().map((event) => event.eventType)).toEqual([
+        'PUBLISHED',
+        'STARTED'
+      ]);
+    });
+
+    it('guards the write on DRAFT so a second click cannot publish twice', async () => {
+      publishSucceeds(gateRow());
+
+      await service.publishDraft(DRAFT_ID, SELLER_ID);
+
+      expect(updateArgs().where).toMatchObject({
+        id: DRAFT_ID,
+        sellerId: SELLER_ID,
+        status: 'DRAFT',
+        deletedAt: null
+      });
+    });
+
+    it('reports a conflict when the guarded write matches no row', async () => {
+      prisma.auction.findFirst.mockResolvedValue(gateRow());
+      prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.publishDraft(DRAFT_ID, SELLER_ID)
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.auctionEvent.createMany).not.toHaveBeenCalled();
+    });
+
+    it('does the whole publish inside one transaction', async () => {
+      publishSucceeds(gateRow());
+
+      await service.publishDraft(DRAFT_ID, SELLER_ID);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a draft that fails validation, and writes nothing', async () => {
+      prisma.auction.findFirst.mockResolvedValue(gateRow({ images: [] }));
+
+      await expect(
+        service.publishDraft(DRAFT_ID, SELLER_ID)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('hands back the unmet rules so the seller knows what to fix', async () => {
+      prisma.auction.findFirst.mockResolvedValue(gateRow({ images: [] }));
+
+      const error = await service
+        .publishDraft(DRAFT_ID, SELLER_ID)
+        .catch((caught: unknown) => caught);
+
+      expect(issuesFrom(error)).toContain('IMAGES_REQUIRED');
+    });
+
+    it('refuses a draft whose end time has already passed', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        gateRow({
+          scheduledStartAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          originalEndAt: new Date(Date.now() - 60 * 60 * 1000)
+        })
+      );
+
+      const error = await service
+        .publishDraft(DRAFT_ID, SELLER_ID)
+        .catch((caught: unknown) => caught);
+
+      expect(issuesFrom(error)).toContain('END_AT_IN_THE_PAST');
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('hides a draft owned by somebody else behind a 404', async () => {
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.publishDraft(DRAFT_ID, 'another-seller')
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

@@ -514,4 +514,229 @@ describe('Auction drafts (e2e)', () => {
       expect(stored.reservePrice?.toString()).toBe('4500');
     });
   });
+
+  /**
+   * AUC-004 — the seller previews the buyer's view without changing anything,
+   * and a validated draft publishes into SCHEDULED or ACTIVE depending on
+   * whether its start time has arrived.
+   */
+  describe('preview and publish (AUC-004)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+    /** Creates a draft, overriding whichever fields the test cares about. */
+    const createDraft = async (overrides: Record<string, unknown> = {}) => {
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send({ ...draftBody(), ...overrides })
+        .expect(201);
+      return (response.body as { id: string }).id;
+    };
+
+    describe('GET /auctions/drafts/:id/preview', () => {
+      it('shows the buyer-facing shape without the reserve', async () => {
+        const draftId = await createDraft();
+
+        const response = await request(app.getHttpServer())
+          .get(`/auctions/drafts/${draftId}/preview`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(200);
+
+        expect(response.body).not.toHaveProperty('reservePrice');
+        expect(JSON.stringify(response.body)).not.toContain('4500');
+        expect(response.body).toMatchObject({
+          id: draftId,
+          reserveMet: false,
+          title: 'Vintage Seiko 5 Automatic'
+        });
+      });
+
+      it('leaves the draft in DRAFT — preview changes no state', async () => {
+        const draftId = await createDraft();
+
+        await request(app.getHttpServer())
+          .get(`/auctions/drafts/${draftId}/preview`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(200);
+
+        const stored = await prisma.auction.findUniqueOrThrow({
+          where: { id: draftId },
+          select: { status: true, publishedAt: true }
+        });
+        expect(stored).toMatchObject({ status: 'DRAFT', publishedAt: null });
+      });
+
+      it('hides the preview of a draft owned by somebody else', async () => {
+        const draftId = await createDraft();
+
+        return request(app.getHttpServer())
+          .get(`/auctions/drafts/${draftId}/preview`)
+          .set(MOCK_USER_HEADER, strangerId)
+          .expect(404);
+      });
+    });
+
+    describe('POST /auctions/drafts/:id/publish', () => {
+      it('publishes a future-dated draft as SCHEDULED', async () => {
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+
+        const response = await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          id: draftId,
+          status: 'SCHEDULED',
+          startedAt: null
+        });
+        expect(
+          (response.body as { publishedAt: string }).publishedAt
+        ).not.toBeNull();
+      });
+
+      it('publishes a draft whose start time has arrived as ACTIVE', async () => {
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(-1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+
+        const response = await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(200);
+
+        expect(response.body).toMatchObject({ status: 'ACTIVE' });
+        expect(
+          (response.body as { startedAt: string }).startedAt
+        ).not.toBeNull();
+      });
+
+      it('records PUBLISHED for a scheduled auction and adds STARTED for a live one', async () => {
+        const scheduledId = await createDraft({
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+        const liveId = await createDraft({
+          scheduledStartAt: hoursFromNow(-1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+
+        for (const id of [scheduledId, liveId]) {
+          await request(app.getHttpServer())
+            .post(`/auctions/drafts/${id}/publish`)
+            .set(MOCK_USER_HEADER, sellerId)
+            .expect(200);
+        }
+
+        const eventsOf = async (auctionId: string) =>
+          (
+            await prisma.auctionEvent.findMany({
+              where: { auctionId },
+              orderBy: { id: 'asc' },
+              select: { eventType: true }
+            })
+          ).map((event) => event.eventType);
+
+        expect(await eventsOf(scheduledId)).toEqual(['CREATED', 'PUBLISHED']);
+        expect(await eventsOf(liveId)).toEqual([
+          'CREATED',
+          'PUBLISHED',
+          'STARTED'
+        ]);
+      });
+
+      it('refuses a draft that has not passed validation, listing what is missing', async () => {
+        const { imageUrls, ...rest } = draftBody();
+        void imageUrls;
+
+        const created = await request(app.getHttpServer())
+          .post('/auctions/drafts')
+          .set(MOCK_USER_HEADER, sellerId)
+          .send({
+            ...rest,
+            scheduledStartAt: hoursFromNow(1),
+            scheduledEndAt: hoursFromNow(4)
+          })
+          .expect(201);
+        const draftId = (created.body as { id: string }).id;
+
+        const response = await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(400);
+
+        const body = response.body as { issues: { code: string }[] };
+        expect(body.issues.map((issue) => issue.code)).toContain(
+          'IMAGES_REQUIRED'
+        );
+
+        const stored = await prisma.auction.findUniqueOrThrow({
+          where: { id: draftId },
+          select: { status: true }
+        });
+        expect(stored.status).toBe('DRAFT');
+      });
+
+      it('refuses a draft whose end time has already passed', async () => {
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(-4),
+          scheduledEndAt: hoursFromNow(-1)
+        });
+
+        const response = await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(400);
+
+        const body = response.body as { issues: { code: string }[] };
+        expect(body.issues.map((issue) => issue.code)).toContain(
+          'END_AT_IN_THE_PAST'
+        );
+      });
+
+      it('refuses to publish the same draft twice', async () => {
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+
+        await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(200);
+
+        // the draft is no longer a DRAFT, so the second attempt cannot find it
+        await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, sellerId)
+          .expect(404);
+
+        const events = await prisma.auctionEvent.findMany({
+          where: { auctionId: draftId, eventType: 'PUBLISHED' }
+        });
+        expect(events).toHaveLength(1);
+      });
+
+      it('refuses a publish by anyone other than the owner', async () => {
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+
+        await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .set(MOCK_USER_HEADER, strangerId)
+          .expect(404);
+
+        await request(app.getHttpServer())
+          .post(`/auctions/drafts/${draftId}/publish`)
+          .expect(401);
+      });
+    });
+  });
 });
