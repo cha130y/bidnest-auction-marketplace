@@ -12,3 +12,6 @@ output/
 !.claude/skills/
 .windsurf/
 skills-lock.json
+
+# Editor settings ส่วนตัวของแต่ละคน — ไม่ต้อง sync เข้าทีม
+.vscode/
