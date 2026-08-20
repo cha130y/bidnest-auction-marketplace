@@ -2,8 +2,8 @@
 # AUC — วงจรชีวิตประมูล (ฝั่ง Dev 4)
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
-# ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft แบบส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่
-# AUC-004 (preview + publish) จะมาต่อในไฟล์นี้เมื่อทำเสร็จ
+# ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -286,3 +286,99 @@ GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
 ### AUC-002 — draft id ที่ไม่ใช่ UUID. expect 400
 GET {{baseUrl}}/auctions/drafts/not-a-uuid/validation
 x-mock-user-id: {{sellerA}}
+
+#=============================================================================
+# 5. Preview และ Publish (AUC-004)
+#=============================================================================
+# preview = อ่านอย่างเดียว ไม่เปลี่ยนสถานะ / publish = เปลี่ยนสถานะจริง
+# กติกาสถานะปลายทาง: เวลาเริ่มยังไม่ถึง -> SCHEDULED, ถึงแล้ว -> ACTIVE
+#
+# ⚠️ วันเวลาในไฟล์นี้ fix ไว้ที่ 2026-09-01 ถ้าวันที่จริงเลยไปแล้ว
+#    จะโดน END_AT_IN_THE_PAST ให้แก้เป็นวันในอนาคตก่อนยิง
+
+### AUC-004 preview — เจ้าของดูหน้าตาที่ผู้ซื้อจะเห็น. expect 200
+# ต้องไม่มี reservePrice ในผลลัพธ์เด็ดขาด มีแค่ reserveMet (AUC-003)
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/preview
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 preview — ยิงซ้ำแล้วเช็คว่า draft ยังเป็น DRAFT อยู่. expect status: DRAFT
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 preview — คนอื่นขอดู preview. expect 404
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/preview
+x-mock-user-id: {{buyer}}
+
+### AUC-004 publish — draft ที่ยังไม่ครบ (ไม่มีรูป/กำหนดการ). expect 400 + issues[]
+POST {{baseUrl}}/auctions/drafts/{{incompleteId}}/publish
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 publish — draft ที่ครบแล้ว เวลาเริ่มยังไม่ถึง. expect 200 + SCHEDULED
+# publishedAt ต้องมีค่า, startedAt ต้องเป็น null
+POST {{baseUrl}}/auctions/drafts/{{draftId}}/publish
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 publish — ยิงซ้ำอันเดิม. expect 404
+# ไม่ใช่ DRAFT แล้ว จึงหาไม่เจอ — กัน publish ซ้ำโดยไม่ต้องพึ่ง client
+POST {{baseUrl}}/auctions/drafts/{{draftId}}/publish
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 publish — draft ที่เวลาเริ่มถึงแล้ว. expect 200 + ACTIVE
+# @name draftStartsNow
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "เริ่มประมูลทันที",
+  "description": "เวลาเริ่มอยู่ในอดีต เวลาจบยังมาไม่ถึง",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 1000,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Live"]
+}
+
+@startsNowId = {{draftStartsNow.response.body.$.id}}
+
+###
+# startedAt ต้องมีค่าด้วย ไม่ใช่แค่ publishedAt
+POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 publish — เวลาจบผ่านไปแล้ว. expect 400 + END_AT_IN_THE_PAST
+# @name draftExpired
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "หมดเวลาไปแล้ว",
+  "description": "ทั้งเวลาเริ่มและเวลาจบอยู่ในอดีต",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 1000,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-01-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-01-02T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Expired"]
+}
+
+@expiredId = {{draftExpired.response.body.$.id}}
+
+###
+GET {{baseUrl}}/auctions/drafts/{{expiredId}}/validation
+x-mock-user-id: {{sellerA}}
+
+###
+POST {{baseUrl}}/auctions/drafts/{{expiredId}}/publish
+x-mock-user-id: {{sellerA}}
+
+### AUC-004 publish — คนอื่นสั่ง publish draft ของเรา. expect 404
+POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
+x-mock-user-id: {{buyer}}
+
+### AUC-004 publish — ไม่ได้ login. expect 401
+POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
