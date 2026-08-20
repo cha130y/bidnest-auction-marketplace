@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -21,11 +22,13 @@ describe('Auction drafts (e2e)', () => {
   const sellerEmail = `auction-seller-${run}@example.com`;
   const strangerEmail = `auction-stranger-${run}@example.com`;
   const adminEmail = `auction-admin-${run}@example.com`;
+  const buyerEmail = `auction-buyer-${run}@example.com`;
 
   let sellerId: string;
   let authOf: (userId: string) => string;
   let strangerId: string;
   let adminId: string;
+  let buyerId: string;
   let activeCategoryId: string;
   let inactiveCategoryId: string;
 
@@ -72,6 +75,7 @@ describe('Auction drafts (e2e)', () => {
     sellerId = await createUser(sellerEmail, 'USER');
     strangerId = await createUser(strangerEmail, 'USER');
     adminId = await createUser(adminEmail, 'ADMIN');
+    buyerId = await createUser(buyerEmail, 'USER');
 
     const active = await prisma.category.create({
       data: { name: `E2E Active ${run}`, slug: `e2e-active-${run}` },
@@ -89,11 +93,13 @@ describe('Auction drafts (e2e)', () => {
     });
     inactiveCategoryId = inactive.id;
 
-    authOf = await authRegistry(app, [sellerId, strangerId, adminId]);
+    authOf = await authRegistry(app, [sellerId, strangerId, adminId, buyerId]);
   });
 
   afterAll(async () => {
-    const userIds = [sellerId, strangerId, adminId];
+    const userIds = [sellerId, strangerId, adminId, buyerId];
+    // bids reference auctions, so they have to go first
+    await prisma.bid.deleteMany({ where: { bidderId: { in: userIds } } });
     await prisma.auction.deleteMany({ where: { sellerId: { in: userIds } } });
     await prisma.category.deleteMany({
       where: { id: { in: [activeCategoryId, inactiveCategoryId] } }
@@ -1171,6 +1177,231 @@ describe('Auction drafts (e2e)', () => {
 
         // CANCELLED is not in the public allow-list, so buyers stop seeing it
         await request(app.getHttpServer()).get(`/auctions/${id}`).expect(404);
+      });
+    });
+  });
+
+  /**
+   * AUC-007 — how an auction ends. There is no bid endpoint yet (BID-001), so
+   * the bids here are written straight through Prisma: this exercises the
+   * settlement rules, not the bidding rules.
+   */
+  describe('auction settlement (AUC-007)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000);
+
+    /** Publishes an auction that is live now and due to end in the past. */
+    const liveAuctionAlreadyDue = async (
+      overrides: Record<string, unknown> = {}
+    ) => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(-2).toISOString(),
+          scheduledEndAt: hoursFromNow(2).toISOString(),
+          ...overrides
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      // Wind the clock past the end. Publishing with an end time in the past is
+      // refused by AUC-004, so the auction is aged here instead.
+      await prisma.auction.update({
+        where: { id },
+        data: {
+          currentEndAt: hoursFromNow(-1),
+          originalEndAt: hoursFromNow(-1)
+        }
+      });
+
+      return id;
+    };
+
+    /** Records a bid directly — BID-001 will own the endpoint that does this. */
+    const placeBid = async (
+      auctionId: string,
+      bidderId: string,
+      amount: number,
+      sequenceNo: number
+    ) =>
+      prisma.bid.create({
+        data: {
+          auctionId,
+          bidderId,
+          amount,
+          sequenceNo,
+          clientRequestId: randomUUID()
+        },
+        select: { id: true }
+      });
+
+    const storedAuction = (id: string) =>
+      prisma.auction.findUniqueOrThrow({
+        where: { id },
+        select: {
+          status: true,
+          winnerUserId: true,
+          winningBidId: true,
+          soldPrice: true,
+          endedAt: true
+        }
+      });
+
+    it('ends SOLD and records the winner when the top bid clears the reserve', async () => {
+      const id = await liveAuctionAlreadyDue();
+      await placeBid(id, strangerId, 4000, 1);
+      const winning = await placeBid(id, buyerId, 5000, 2);
+
+      // reading it is what settles it
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/${id}`)
+        .expect(200);
+      expect(response.body).toMatchObject({ status: 'SOLD' });
+
+      const stored = await storedAuction(id);
+      expect(stored).toMatchObject({
+        status: 'SOLD',
+        winnerUserId: buyerId,
+        winningBidId: winning.id
+      });
+      expect(stored.soldPrice?.toString()).toBe('5000');
+      expect(stored.endedAt).not.toBeNull();
+    });
+
+    it('ends UNSOLD when the top bid is under the reserve', async () => {
+      // reserve is 4500 from draftBody()
+      const id = await liveAuctionAlreadyDue();
+      await placeBid(id, buyerId, 4499, 1);
+
+      await request(app.getHttpServer()).get(`/auctions/${id}`).expect(200);
+
+      const stored = await storedAuction(id);
+      expect(stored).toMatchObject({
+        status: 'UNSOLD',
+        winnerUserId: null,
+        winningBidId: null,
+        soldPrice: null
+      });
+    });
+
+    it('ends UNSOLD when nobody bid at all', async () => {
+      const id = await liveAuctionAlreadyDue();
+
+      await request(app.getHttpServer()).get(`/auctions/${id}`).expect(200);
+
+      expect(await storedAuction(id)).toMatchObject({
+        status: 'UNSOLD',
+        winnerUserId: null
+      });
+    });
+
+    it('ends SOLD on any bid when the auction carries no reserve', async () => {
+      const { reservePrice, ...rest } = draftBody();
+      void reservePrice;
+
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...rest,
+          scheduledStartAt: hoursFromNow(-2).toISOString(),
+          scheduledEndAt: hoursFromNow(2).toISOString()
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+      await prisma.auction.update({
+        where: { id },
+        data: { currentEndAt: hoursFromNow(-1) }
+      });
+      await placeBid(id, buyerId, 3000, 1);
+
+      await request(app.getHttpServer()).get(`/auctions/${id}`).expect(200);
+
+      expect(await storedAuction(id)).toMatchObject({
+        status: 'SOLD',
+        winnerUserId: buyerId
+      });
+    });
+
+    it('picks the highest bid, not the most recent one', async () => {
+      const id = await liveAuctionAlreadyDue();
+      const highest = await placeBid(id, buyerId, 9000, 1);
+      await placeBid(id, strangerId, 5000, 2);
+
+      await request(app.getHttpServer()).get(`/auctions/${id}`).expect(200);
+
+      const stored = await storedAuction(id);
+      expect(stored.winningBidId).toBe(highest.id);
+      expect(stored.winnerUserId).toBe(buyerId);
+    });
+
+    it('records exactly one ENDED event, even when read repeatedly', async () => {
+      const id = await liveAuctionAlreadyDue();
+      await placeBid(id, buyerId, 5000, 1);
+
+      for (let i = 0; i < 3; i += 1) {
+        await request(app.getHttpServer()).get(`/auctions/${id}`).expect(200);
+      }
+
+      const events = await prisma.auctionEvent.findMany({
+        where: { auctionId: id, eventType: 'ENDED' }
+      });
+      expect(events).toHaveLength(1);
+    });
+
+    it('leaves a still-running auction alone', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(-1).toISOString(),
+          scheduledEndAt: hoursFromNow(4).toISOString()
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/${id}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        status: 'ACTIVE',
+        biddingOpen: true
+      });
+      expect((await storedAuction(id)).endedAt).toBeNull();
+    });
+
+    // AUC-003 — the reserve decided the outcome, but never appears in it
+    it('never reveals the reserve in the settled result', async () => {
+      const id = await liveAuctionAlreadyDue();
+      await placeBid(id, buyerId, 4499, 1);
+
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/${id}`)
+        .expect(200);
+
+      expect(response.body).not.toHaveProperty('reservePrice');
+      expect(JSON.stringify(response.body)).not.toContain('4500');
+      expect(response.body).toMatchObject({
+        status: 'UNSOLD',
+        reserveMet: false
       });
     });
   });

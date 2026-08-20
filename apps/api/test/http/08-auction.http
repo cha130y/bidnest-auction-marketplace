@@ -3,7 +3,7 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
-# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก, AUC-007 จบประมูล
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -568,3 +568,66 @@ Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {}
+
+#=============================================================================
+# 8. การจบการประมูล (AUC-007)
+#=============================================================================
+# ผลลัพธ์: บิดสูงสุดที่ผ่าน reserve -> SOLD + บันทึกผู้ชนะ/ราคาที่ชนะ
+#          ไม่มีบิดเลย หรือไม่ผ่าน reserve -> UNSOLD
+#
+# ⚠️ ยังไม่มี scheduler ในระบบ การจบประมูลจึงเกิดตอน "มีคนเปิดอ่าน" ประมูลที่หมดเวลา
+#    (GET /auctions/:id) ยิงซ้ำกี่ครั้งก็จบครั้งเดียว มี ENDED event อันเดียว
+#
+# ⚠️ ยังไม่มี endpoint ลงบิด (BID-001) การเทสมือจึงต้องใส่บิดผ่าน Prisma Studio
+#    หรือ SQL ก่อน แล้วค่อยยิง GET — เคสนี้มีเทสอัตโนมัติคุมครบใน auction.e2e-spec.ts
+
+### AUC-007 — เตรียมประมูลที่หมดเวลาแล้ว (ยิงแล้วต้องแก้ current_end_at เอง)
+# @name auctionToEnd
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ประมูลที่จะจบ",
+  "description": "ใช้ทดสอบผลลัพธ์ SOLD/UNSOLD",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Ending"]
+}
+
+@endingId = {{auctionToEnd.response.body.$.id}}
+
+### publish ให้เป็น ACTIVE ก่อน. expect 200 + ACTIVE
+POST {{baseUrl}}/auctions/drafts/{{endingId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+###
+# ---------------------------------------------------------------------------
+# ก่อนยิงบล็อกถัดไป ให้เปิด prisma studio แล้วทำ 2 อย่างกับ auction ตัวนี้:
+#   1. ตั้ง current_end_at เป็นเวลาที่ผ่านมาแล้ว
+#   2. (ถ้าอยากได้ SOLD) เพิ่มแถวใน bids: auction_id = {{endingId}},
+#      bidder_id = {{buyer}}, amount = 5000, sequence_no = 1,
+#      client_request_id = uuid อะไรก็ได้
+#      - ใส่ amount 4499 แทน จะได้ UNSOLD (ต่ำกว่า reserve 4500)
+#      - ไม่ใส่บิดเลย ก็ได้ UNSOLD เหมือนกัน
+# ---------------------------------------------------------------------------
+
+### AUC-007 — อ่านประมูลที่หมดเวลา = สั่งให้มันจบ. expect 200 + SOLD หรือ UNSOLD
+# response ต้องไม่มี reservePrice โผล่มาแม้ reserve จะเป็นตัวตัดสินผล (AUC-003)
+GET {{baseUrl}}/auctions/{{endingId}}
+
+### AUC-007 — ยิงซ้ำอีกครั้ง. expect ผลเดิม ไม่เปลี่ยน
+# ตรวจใน prisma studio: auction_events ต้องมี ENDED แค่แถวเดียว
+GET {{baseUrl}}/auctions/{{endingId}}
+
+### AUC-007 — เจ้าของเปิดดูผล. expect 200 + เห็น reservePrice ได้ (เจ้าของเท่านั้น)
+GET {{baseUrl}}/auctions/{{endingId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-007 — ประมูลที่ยังไม่หมดเวลา ต้องไม่ถูกจบ. expect 200 + ACTIVE
+GET {{baseUrl}}/auctions/{{startsNowId}}
