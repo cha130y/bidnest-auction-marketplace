@@ -13,6 +13,11 @@ import {
   toPublicAuction
 } from './auction.mapper';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+import { UpdateAuctionDto } from './dtos/update-auction.dto';
+import {
+  assertAuctionIsCancellable,
+  assertAuctionIsEditable
+} from './utils/assert-seller-can-change.util';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
 
 @Injectable()
@@ -224,6 +229,151 @@ export class AuctionService {
     return auction.sellerId === viewerId
       ? toOwnerAuction(auction)
       : toPublicAuction(auction);
+  }
+
+  /**
+   * AUC-006 — a seller may edit their own auction only while it is DRAFT or
+   * SCHEDULED, and only while nobody has bid. Once it is ACTIVE the core data
+   * is settled: people are bidding against what they were shown, so changing
+   * the terms underneath them is not an edit, it is a different auction.
+   *
+   * A SCHEDULED auction is re-validated after the edit, because it is already
+   * public — an edit must not be able to strip a published auction back down
+   * to something that would never have passed the AUC-002 gate. A DRAFT has no
+   * such duty: half-finished is what a draft is for.
+   */
+  async updateOwnAuction(id: string, sellerId: string, dto: UpdateAuctionDto) {
+    if (dto.categoryId) await this.assertCategoryIsActive(dto.categoryId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.auction.findFirst({
+        where: { id, sellerId, deletedAt: null },
+        select: { status: true, bidCount: true }
+      });
+
+      if (!existing) throw new NotFoundException('Auction not found');
+
+      assertAuctionIsEditable(existing);
+
+      const { count } = await tx.auction.updateMany({
+        // Guarded on the status and bid count that were just checked, so an
+        // auction going live mid-edit loses the race instead of being edited.
+        where: {
+          id,
+          sellerId,
+          status: existing.status,
+          bidCount: existing.bidCount,
+          deletedAt: null
+        },
+        data: {
+          categoryId: dto.categoryId,
+          title: dto.title,
+          description: dto.description,
+          condition: dto.condition,
+          startingPrice: dto.startingPrice,
+          minBidIncrement: dto.minBidIncrement,
+          reservePrice: dto.reservePrice,
+          scheduledStartAt: dto.scheduledStartAt,
+          originalEndAt: dto.scheduledEndAt,
+          currentEndAt: dto.scheduledEndAt,
+          rowVersion: { increment: 1 }
+        }
+      });
+
+      if (count !== 1) {
+        throw new ConflictException(
+          'The auction changed in the meantime — reload and try again'
+        );
+      }
+
+      if (dto.imageUrls) {
+        await tx.auctionImage.deleteMany({ where: { auctionId: id } });
+        await tx.auctionImage.createMany({
+          data: dto.imageUrls.map((url, index) => ({
+            auctionId: id,
+            storageKey: `${sellerId}/${randomUUID()}/${index}`,
+            url,
+            position: index,
+            isPrimary: index === 0
+          }))
+        });
+      }
+
+      if (existing.status === 'SCHEDULED') {
+        const gate = await tx.auction.findUniqueOrThrow({
+          where: { id },
+          select: auctionPublishGateSelect
+        });
+        const issues = validateDraftForPublish(gate, new Date());
+
+        if (issues.length > 0) {
+          // Rolls the whole edit back: a published auction never sits in a
+          // state its own publish gate would have refused.
+          throw new BadRequestException({
+            message: 'Edit would leave the published auction incomplete',
+            issues
+          });
+        }
+      }
+
+      const updated = await tx.auction.findUniqueOrThrow({
+        where: { id },
+        select: auctionRowSelect
+      });
+
+      return toOwnerAuction(updated);
+    });
+  }
+
+  /**
+   * AUC-006 — the seller's own cancellation, allowed under the same conditions
+   * as an edit. Cancelling an ACTIVE auction, or one with bids, is a
+   * moderation action and belongs to an admin (ADM-001).
+   */
+  async cancelOwnAuction(id: string, sellerId: string, reason?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.auction.findFirst({
+        where: { id, sellerId, deletedAt: null },
+        select: { status: true, bidCount: true }
+      });
+
+      if (!existing) throw new NotFoundException('Auction not found');
+
+      assertAuctionIsCancellable(existing);
+
+      const { count } = await tx.auction.updateMany({
+        where: {
+          id,
+          sellerId,
+          status: existing.status,
+          bidCount: existing.bidCount,
+          deletedAt: null
+        },
+        data: {
+          status: 'CANCELLED',
+          cancellationReason: reason,
+          endedAt: new Date(),
+          rowVersion: { increment: 1 }
+        }
+      });
+
+      if (count !== 1) {
+        throw new ConflictException(
+          'The auction changed in the meantime — reload and try again'
+        );
+      }
+
+      await tx.auctionEvent.create({
+        data: { auctionId: id, actorUserId: sellerId, eventType: 'CANCELLED' }
+      });
+
+      const cancelled = await tx.auction.findUniqueOrThrow({
+        where: { id },
+        select: auctionRowSelect
+      });
+
+      return toOwnerAuction(cancelled);
+    });
   }
 
   // ADR-0001 — auctions and products draw from the same category set, so an

@@ -880,4 +880,298 @@ describe('Auction drafts (e2e)', () => {
       expect(response.body).toHaveProperty('items');
     });
   });
+
+  /**
+   * AUC-006 — the seller may edit or cancel only while the auction is DRAFT or
+   * SCHEDULED and nobody has bid. Once it is ACTIVE the terms are settled.
+   */
+  describe('edit and cancel (AUC-006)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+    const createDraft = async (overrides: Record<string, unknown> = {}) => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4),
+          ...overrides
+        })
+        .expect(201);
+      return (created.body as { id: string }).id;
+    };
+
+    const publish = async (id: string) => {
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+      return id;
+    };
+
+    const statusOf = async (id: string) =>
+      (
+        await prisma.auction.findUniqueOrThrow({
+          where: { id },
+          select: { status: true }
+        })
+      ).status;
+
+    describe('PATCH /auctions/:id', () => {
+      it('edits a DRAFT', async () => {
+        const id = await createDraft();
+
+        const response = await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ title: 'Renamed while still a draft' })
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          id,
+          title: 'Renamed while still a draft',
+          status: 'DRAFT'
+        });
+      });
+
+      it('edits a SCHEDULED auction and keeps it scheduled', async () => {
+        const id = await publish(await createDraft());
+
+        // stays under the 4500 reserve the draft was created with
+        const response = await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ startingPrice: 3500 })
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          startingPrice: '3500',
+          status: 'SCHEDULED'
+        });
+      });
+
+      it('refuses an edit that pushes the starting price above the reserve', async () => {
+        const id = await publish(await createDraft());
+
+        const response = await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ startingPrice: 5000 })
+          .expect(400);
+
+        const body = response.body as { issues: { code: string }[] };
+        expect(body.issues.map((issue) => issue.code)).toContain(
+          'RESERVE_BELOW_STARTING_PRICE'
+        );
+
+        // rolled back — the published auction keeps the price it had
+        const stored = await prisma.auction.findUniqueOrThrow({
+          where: { id },
+          select: { startingPrice: true }
+        });
+        expect(stored.startingPrice.toString()).toBe('3000');
+      });
+
+      it('replaces the image set rather than appending to it', async () => {
+        const id = await createDraft();
+
+        const response = await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ imageUrls: ['https://placehold.co/600x400?text=Only'] })
+          .expect(200);
+
+        const body = response.body as { images: { url: string }[] };
+        expect(body.images).toHaveLength(1);
+        expect(body.images[0].url).toBe(
+          'https://placehold.co/600x400?text=Only'
+        );
+      });
+
+      it('refuses an edit that would leave a published auction incomplete', async () => {
+        const id = await publish(await createDraft());
+
+        const response = await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ imageUrls: [] })
+          .expect(400);
+
+        const body = response.body as { issues: { code: string }[] };
+        expect(body.issues.map((issue) => issue.code)).toContain(
+          'IMAGES_REQUIRED'
+        );
+
+        // the whole edit rolled back — the images are still there
+        const stored = await prisma.auctionImage.findMany({
+          where: { auctionId: id }
+        });
+        expect(stored.length).toBeGreaterThan(0);
+      });
+
+      it('lets a DRAFT be edited down to something incomplete', async () => {
+        const id = await createDraft();
+
+        await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ imageUrls: [] })
+          .expect(200);
+      });
+
+      it('refuses to edit an ACTIVE auction', async () => {
+        const id = await publish(
+          await createDraft({
+            scheduledStartAt: hoursFromNow(-1),
+            scheduledEndAt: hoursFromNow(4)
+          })
+        );
+        expect(await statusOf(id)).toBe('ACTIVE');
+
+        await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ title: 'Too late' })
+          .expect(400);
+      });
+
+      it('refuses an edit from anyone but the owner', async () => {
+        const id = await createDraft();
+
+        await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(strangerId))
+          .send({ title: 'Not mine' })
+          .expect(404);
+
+        await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .send({ title: 'Anonymous' })
+          .expect(401);
+      });
+
+      it('rejects unknown fields instead of trusting them', async () => {
+        const id = await createDraft();
+
+        await request(app.getHttpServer())
+          .patch(`/auctions/${id}`)
+          .set('Authorization', authOf(sellerId))
+          .send({ status: 'ACTIVE' })
+          .expect(400);
+      });
+    });
+
+    describe('POST /auctions/:id/cancel', () => {
+      it('cancels a DRAFT', async () => {
+        const id = await createDraft();
+
+        const response = await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({})
+          .expect(200);
+
+        expect(response.body).toMatchObject({ id, status: 'CANCELLED' });
+      });
+
+      it('cancels a SCHEDULED auction, storing the reason and the event', async () => {
+        const id = await publish(await createDraft());
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({ reason: 'Item was damaged in storage' })
+          .expect(200);
+
+        const stored = await prisma.auction.findUniqueOrThrow({
+          where: { id },
+          select: { status: true, cancellationReason: true, endedAt: true }
+        });
+        expect(stored).toMatchObject({
+          status: 'CANCELLED',
+          cancellationReason: 'Item was damaged in storage'
+        });
+        expect(stored.endedAt).not.toBeNull();
+
+        const events = await prisma.auctionEvent.findMany({
+          where: { auctionId: id, eventType: 'CANCELLED' }
+        });
+        expect(events).toHaveLength(1);
+      });
+
+      it('accepts a cancellation with no reason', async () => {
+        const id = await createDraft();
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({})
+          .expect(200);
+      });
+
+      it('refuses to cancel an ACTIVE auction — that is an admin action', async () => {
+        const id = await publish(
+          await createDraft({
+            scheduledStartAt: hoursFromNow(-1),
+            scheduledEndAt: hoursFromNow(4)
+          })
+        );
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({})
+          .expect(400);
+
+        expect(await statusOf(id)).toBe('ACTIVE');
+      });
+
+      it('refuses a second cancellation of the same auction', async () => {
+        const id = await createDraft();
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({})
+          .expect(200);
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({})
+          .expect(400);
+      });
+
+      it('refuses a cancellation from anyone but the owner', async () => {
+        const id = await createDraft();
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(strangerId))
+          .send({})
+          .expect(404);
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .send({})
+          .expect(401);
+      });
+
+      // a cancelled auction is not deleted — it stays readable as CANCELLED
+      it('keeps a cancelled auction readable on the public route', async () => {
+        const id = await publish(await createDraft());
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/cancel`)
+          .set('Authorization', authOf(sellerId))
+          .send({ reason: 'Changed my mind' })
+          .expect(200);
+
+        // CANCELLED is not in the public allow-list, so buyers stop seeing it
+        await request(app.getHttpServer()).get(`/auctions/${id}`).expect(404);
+      });
+    });
+  });
 });

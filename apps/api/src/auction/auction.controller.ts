@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req
 } from '@nestjs/common';
@@ -14,7 +15,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
+import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+import { UpdateAuctionDto } from './dtos/update-auction.dto';
 
 @Controller('auctions')
 export class AuctionController {
@@ -78,6 +81,31 @@ export class AuctionController {
     @CurrentUser('id') sellerId: string
   ) {
     return this.auctionService.publishDraft(id, sellerId);
+  }
+
+  // AUC-006 — editing covers DRAFT and SCHEDULED alike, so this sits on the
+  // auction path rather than under `drafts`, which only ever matches a DRAFT.
+  @Roles('USER')
+  @Patch(':id')
+  updateOwnAuction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: UpdateAuctionDto
+  ) {
+    return this.auctionService.updateOwnAuction(id, sellerId, dto);
+  }
+
+  // AUC-006 — a cancellation is a lifecycle move, not a deletion: the auction
+  // stays readable as CANCELLED, which is why this is not a DELETE.
+  @Roles('USER')
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/cancel')
+  cancelOwnAuction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: CancelAuctionDto
+  ) {
+    return this.auctionService.cancelOwnAuction(id, sellerId, dto.reason);
   }
 
   /**
