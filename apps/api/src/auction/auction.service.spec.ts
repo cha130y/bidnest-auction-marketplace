@@ -111,6 +111,7 @@ describe('AuctionService', () => {
       updateMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
       findFirstOrThrow: jest.Mock;
+      count: jest.Mock;
     };
     auctionEvent: { createMany: jest.Mock; create: jest.Mock };
     auctionImage: { deleteMany: jest.Mock; createMany: jest.Mock };
@@ -127,7 +128,8 @@ describe('AuctionService', () => {
         findFirst: jest.fn(),
         updateMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
-        findFirstOrThrow: jest.fn()
+        findFirstOrThrow: jest.fn(),
+        count: jest.fn()
       },
       auctionEvent: { createMany: jest.fn(), create: jest.fn() },
       auctionImage: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -1258,6 +1260,113 @@ describe('AuctionService', () => {
       await service.settleAuction(DRAFT_ID);
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * AUC-008 — Hot Auctions. Only ACTIVE, undeleted auctions, ranked by accepted
+   * bids desc, then soonest end, then id — and nothing else.
+   */
+  describe('listHotAuctions (AUC-008)', () => {
+    const listSucceeds = (
+      rows: ReturnType<typeof draftRow>[],
+      total = rows.length
+    ) => {
+      prisma.auction.findMany.mockResolvedValue(rows);
+      prisma.auction.count.mockResolvedValue(total);
+    };
+
+    const findManyArgs = () =>
+      (
+        prisma.auction.findMany.mock.calls as {
+          where: Record<string, unknown>;
+          orderBy: unknown;
+          skip: number;
+          take: number;
+        }[][]
+      )[0][0];
+
+    it('lists only auctions that are ACTIVE and not deleted', async () => {
+      listSucceeds([]);
+
+      await service.listHotAuctions({});
+
+      expect(findManyArgs().where).toEqual({
+        status: 'ACTIVE',
+        deletedAt: null
+      });
+    });
+
+    it('ranks by accepted bids, then soonest end, then id', async () => {
+      listSucceeds([]);
+
+      await service.listHotAuctions({});
+
+      expect(findManyArgs().orderBy).toEqual([
+        { bidCount: 'desc' },
+        { currentEndAt: 'asc' },
+        { id: 'asc' }
+      ]);
+    });
+
+    it('counts with exactly the same filter it lists with', async () => {
+      listSucceeds([]);
+
+      await service.listHotAuctions({});
+
+      const countArgs = (
+        prisma.auction.count.mock.calls as WhereArgs[][]
+      )[0][0];
+      expect(countArgs.where).toEqual(findManyArgs().where);
+    });
+
+    it('never exposes the reserve in the list', async () => {
+      listSucceeds([draftRow({ status: 'ACTIVE' })]);
+
+      const result = await service.listHotAuctions({});
+
+      expect(result.items[0]).not.toHaveProperty('reservePrice');
+      expect(JSON.stringify(result.items)).not.toContain('4500');
+    });
+
+    describe('paging', () => {
+      it('defaults to the first page of twenty', async () => {
+        listSucceeds([]);
+
+        await service.listHotAuctions({});
+
+        expect(findManyArgs()).toMatchObject({ skip: 0, take: 20 });
+      });
+
+      it('skips whole pages, not rows', async () => {
+        listSucceeds([]);
+
+        await service.listHotAuctions({ page: 3, limit: 10 });
+
+        expect(findManyArgs()).toMatchObject({ skip: 20, take: 10 });
+      });
+
+      it('reports how many pages there are', async () => {
+        listSucceeds([], 45);
+
+        const result = await service.listHotAuctions({ limit: 20 });
+
+        expect(result.meta).toEqual({
+          page: 1,
+          limit: 20,
+          total: 45,
+          totalPages: 3
+        });
+      });
+
+      it('reports zero pages when nothing is running', async () => {
+        listSucceeds([], 0);
+
+        const result = await service.listHotAuctions({});
+
+        expect(result.meta).toMatchObject({ total: 0, totalPages: 0 });
+        expect(result.items).toEqual([]);
+      });
     });
   });
 });

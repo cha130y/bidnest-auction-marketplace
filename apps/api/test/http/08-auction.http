@@ -3,7 +3,7 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
-# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก, AUC-007 จบประมูล
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก, AUC-007 จบประมูล, AUC-008 Hot Auctions
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -631,3 +631,40 @@ Authorization: Bearer {{sellerAToken}}
 
 ### AUC-007 — ประมูลที่ยังไม่หมดเวลา ต้องไม่ถูกจบ. expect 200 + ACTIVE
 GET {{baseUrl}}/auctions/{{startsNowId}}
+
+#=============================================================================
+# 9. Hot Auctions (AUC-008)
+#=============================================================================
+# list สาธารณะของประมูลที่กำลังวิ่งอยู่ เรียงตามเกณฑ์ตายตัว 3 ชั้น:
+#   1. จำนวนบิดที่ยอมรับแล้ว มาก -> น้อย
+#   2. เวลาสิ้นสุดปัจจุบัน ใกล้ -> ไกล
+#   3. auction id
+#
+# ไม่มี query `sort` ให้เปลี่ยนลำดับ — SRS ระบุว่าห้ามมี flag พิเศษหรือ hidden scoring
+# เห็นเฉพาะ ACTIVE เท่านั้น (SCHEDULED / CANCELLED / จบแล้ว / ถูกลบ จะไม่อยู่ในลิสต์)
+
+### AUC-008 — คนไม่ได้ login ดู hot auctions. expect 200 + items[] + meta
+GET {{baseUrl}}/auctions
+
+### AUC-008 — ขอทีละ 5 รายการ. expect 200 + items ไม่เกิน 5
+GET {{baseUrl}}/auctions?limit=5
+
+### AUC-008 — หน้าที่ 2. expect 200 + ไม่ซ้ำกับหน้าแรก
+GET {{baseUrl}}/auctions?page=2&limit=5
+
+### AUC-008 — เช็คว่า reservePrice ไม่โผล่ในลิสต์เลย (AUC-003)
+# ไล่ดูทุก item ต้องไม่มี key reservePrice
+GET {{baseUrl}}/auctions?limit=100
+
+### AUC-008 — limit เกินเพดาน 100. expect 400
+GET {{baseUrl}}/auctions?limit=500
+
+### AUC-008 — page เป็น 0. expect 400
+GET {{baseUrl}}/auctions?page=0
+
+### AUC-008 — page ไม่ใช่ตัวเลข. expect 400
+GET {{baseUrl}}/auctions?page=abc
+
+### AUC-008 — ส่ง sort มาเอง. expect 400
+# ห้ามให้ client เปลี่ยนลำดับ — DTO ไม่มี field นี้จึงโดน forbidNonWhitelisted ปัดตก
+GET {{baseUrl}}/auctions?sort=price_asc

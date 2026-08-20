@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Query,
   Patch,
   Post,
   Req
@@ -17,6 +18,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
 import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 
 @Controller('auctions')
@@ -106,6 +108,17 @@ export class AuctionController {
     @Body() dto: CancelAuctionDto
   ) {
     return this.auctionService.cancelOwnAuction(id, sellerId, dto.reason);
+  }
+
+  /**
+   * AUC-008 — Hot Auctions. Public, and paging is the only thing a caller may
+   * ask for: the ranking is fixed by the requirement, so there is no `sort`
+   * parameter to reach for.
+   */
+  @Public()
+  @Get()
+  listHotAuctions(@Query() dto: ListHotAuctionsDto) {
+    return this.auctionService.listHotAuctions(dto);
   }
 
   /**
