@@ -84,3 +84,20 @@ export function toOwnerAuction(auction: OwnerAuctionRow) {
     reservePrice: auction.reservePrice?.toString() ?? null
   };
 }
+
+// AUC-002 — the publish gate reads only the fields the acceptance criteria
+// measure, so a validation call skips the seller/category/image joins the
+// buyer-facing selects need.
+export const auctionPublishGateSelect = {
+  id: true,
+  title: true,
+  description: true,
+  condition: true,
+  startingPrice: true,
+  minBidIncrement: true,
+  reservePrice: true,
+  scheduledStartAt: true,
+  originalEndAt: true,
+  category: { select: { isActive: true } },
+  images: { select: { id: true } }
+} satisfies Prisma.AuctionSelect;
