@@ -6,7 +6,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  auctionOwnerSelect,
+  auctionRowSelect,
   auctionPublishGateSelect,
   toOwnerAuction
 } from './auction.mapper';
@@ -50,7 +50,7 @@ export class AuctionService {
         },
         events: { create: { eventType: 'CREATED', actorUserId: sellerId } }
       },
-      select: auctionOwnerSelect
+      select: auctionRowSelect
     });
 
     return toOwnerAuction(auction);
@@ -59,7 +59,7 @@ export class AuctionService {
   async listOwnDrafts(sellerId: string) {
     const drafts = await this.prisma.auction.findMany({
       where: { sellerId, status: 'DRAFT', deletedAt: null },
-      select: auctionOwnerSelect,
+      select: auctionRowSelect,
       // `id` breaks ties so paging stays stable when timestamps collide
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]
     });
@@ -75,7 +75,7 @@ export class AuctionService {
   async findOwnDraft(id: string, sellerId: string) {
     const auction = await this.prisma.auction.findFirst({
       where: { id, sellerId, status: 'DRAFT', deletedAt: null },
-      select: auctionOwnerSelect
+      select: auctionRowSelect
     });
 
     if (!auction) throw new NotFoundException('Auction draft not found');
