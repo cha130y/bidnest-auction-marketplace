@@ -11,6 +11,7 @@ import { ChatModule } from './chat/chat.module';
 import { MockAuthGuard } from './common/guards/mock-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HealthController } from './health/health.controller';
+import { MailModule } from './mail/mail.module';
 import { OrderModule } from './order/order.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module';
@@ -24,6 +25,7 @@ import { ShipmentModule } from './shipment/shipment.module';
       validate
     }),
     PrismaModule,
+    MailModule,
     RealtimeModule,
     AuthModule,
     AuctionModule,

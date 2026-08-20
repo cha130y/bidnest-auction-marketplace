@@ -1,8 +1,23 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  UnauthorizedException
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  AuthTokensResponse,
+  PendingTwoFactorResponse
+} from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
+import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { HashingService } from './hashing.service';
+import { TokenService } from './token.service';
+import { TwoFactorService } from './two-factor.service';
 
 /** Prisma raises P2002 when a write violates a unique index. */
 function isUniqueViolation(error: unknown): boolean {
@@ -14,11 +29,40 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+/** Everything the auth flows need about an account, profile included. */
+const accountSelect = {
+  id: true,
+  email: true,
+  role: true,
+  status: true,
+  passwordHash: true,
+  createdAt: true,
+  profile: {
+    select: { firstName: true, lastName: true, displayName: true }
+  }
+} as const;
+
+type Account = {
+  id: string;
+  email: string;
+  role: AuthUserResponse['role'];
+  status: AuthUserResponse['status'];
+  passwordHash: string | null;
+  createdAt: Date;
+  profile: {
+    firstName: string;
+    lastName: string | null;
+    displayName: string;
+  } | null;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly hashing: HashingService
+    private readonly hashing: HashingService,
+    private readonly twoFactor: TwoFactorService,
+    private readonly tokens: TokenService
   ) {}
 
   /**
@@ -52,16 +96,7 @@ export class AuthService {
             }
           }
         },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          profile: {
-            select: { firstName: true, lastName: true, displayName: true }
-          }
-        }
+        select: accountSelect
       })
       .catch((error: unknown) => {
         if (isUniqueViolation(error)) {
@@ -70,15 +105,115 @@ export class AuthService {
         throw error;
       });
 
+    return this.toAuthUser(user);
+  }
+
+  /**
+   * AUTH-002 step one. Credentials are checked and an OTP is mailed, but no
+   * token is issued yet — that only happens in verifyTwoFactor.
+   */
+  async login(dto: LoginDto): Promise<PendingTwoFactorResponse> {
+    const account = await this.authenticate(dto);
+
+    // Re-posting the login form inside the cooldown must not mail a second
+    // code; the one already in the inbox is still the live one.
+    const cooldown = await this.twoFactor.checkCooldown(account.id);
+    if (!cooldown.blocked) {
+      await this.twoFactor.issue(account);
+    }
+
     return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-      firstName: user.profile!.firstName,
-      lastName: user.profile!.lastName,
-      displayName: user.profile!.displayName,
-      createdAt: user.createdAt
+      status: 'PENDING_2FA',
+      expiresInMinutes: this.twoFactor.ttlMinutes,
+      resendAfterSeconds: cooldown.blocked
+        ? cooldown.retryAfterSeconds
+        : this.twoFactor.cooldownSeconds
+    };
+  }
+
+  /**
+   * AUTH-002 step two / AUTH-007. The password is verified again alongside the
+   * OTP, so a leaked code on its own is worthless.
+   */
+  async verifyTwoFactor(dto: VerifyTwoFactorDto): Promise<AuthTokensResponse> {
+    const account = await this.authenticate(dto);
+
+    if (!(await this.twoFactor.consume(account.id, dto.otp))) {
+      // Wrong, expired and already-used codes are one answer on purpose.
+      throw new UnauthorizedException('Invalid or expired verification code');
+    }
+
+    const { accessToken, refreshToken } = await this.tokens.issue(account);
+
+    await this.prisma.user.update({
+      where: { id: account.id },
+      data: { lastLoginAt: new Date() }
+    });
+
+    return { accessToken, refreshToken, user: this.toAuthUser(account) };
+  }
+
+  /** AUTH-007 — resend, rate limited so the inbox cannot be flooded. */
+  async resendTwoFactor(dto: LoginDto): Promise<PendingTwoFactorResponse> {
+    const account = await this.authenticate(dto);
+
+    const cooldown = await this.twoFactor.checkCooldown(account.id);
+    if (cooldown.blocked) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'A code was sent recently, please wait before asking again',
+          retryAfterSeconds: cooldown.retryAfterSeconds
+        },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+
+    await this.twoFactor.issue(account);
+
+    return {
+      status: 'PENDING_2FA',
+      expiresInMinutes: this.twoFactor.ttlMinutes,
+      resendAfterSeconds: this.twoFactor.cooldownSeconds
+    };
+  }
+
+  /**
+   * Shared credential check. A missing account, an OAuth-only account and a
+   * wrong password all produce the same 401 — only the suspended case is
+   * called out, because AUTH-002 requires rejecting it up front.
+   */
+  private async authenticate(dto: LoginDto): Promise<Account> {
+    const account = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+      select: accountSelect
+    });
+
+    if (!account?.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!(await this.hashing.compare(dto.password, account.passwordHash))) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (account.status !== 'ACTIVE') {
+      throw new ForbiddenException('Account is not active');
+    }
+
+    return account;
+  }
+
+  private toAuthUser(account: Account): AuthUserResponse {
+    return {
+      id: account.id,
+      email: account.email,
+      role: account.role,
+      status: account.status,
+      firstName: account.profile?.firstName ?? '',
+      lastName: account.profile?.lastName ?? null,
+      displayName: account.profile?.displayName ?? '',
+      createdAt: account.createdAt
     };
   }
 }
