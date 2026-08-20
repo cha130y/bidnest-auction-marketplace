@@ -1405,4 +1405,188 @@ describe('Auction drafts (e2e)', () => {
       });
     });
   });
+
+  /**
+   * AUC-008 — Hot Auctions. The ordering is the whole requirement, so these
+   * tests build auctions that differ in exactly one tie-breaker at a time.
+   */
+  describe('GET /auctions (AUC-008)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000);
+
+    /** Publishes a live auction, then forces its bid count and end time. */
+    const liveAuction = async (bidCount: number, endsInHours: number) => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(-1).toISOString(),
+          scheduledEndAt: hoursFromNow(endsInHours).toISOString()
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      // BID-001 will maintain bidCount; here it is set directly so the ranking
+      // can be tested without a bid endpoint.
+      await prisma.auction.update({
+        where: { id },
+        data: { bidCount, currentEndAt: hoursFromNow(endsInHours) }
+      });
+
+      return id;
+    };
+
+    /** Ids from the hot list, in the order the API returned them. */
+    const hotIds = async (query = '') => {
+      const response = await request(app.getHttpServer())
+        .get(`/auctions${query}`)
+        .expect(200);
+      return (response.body as { items: { id: string }[] }).items.map(
+        (item) => item.id
+      );
+    };
+
+    it('is readable by a signed-out visitor', async () => {
+      await liveAuction(1, 5);
+
+      const response = await request(app.getHttpServer())
+        .get('/auctions')
+        .expect(200);
+
+      expect(response.body).toHaveProperty('items');
+      expect(response.body).toHaveProperty('meta');
+    });
+
+    it('puts the auction with more bids first', async () => {
+      const quiet = await liveAuction(2, 5);
+      const busy = await liveAuction(9, 5);
+
+      const ids = await hotIds();
+
+      expect(ids.indexOf(busy)).toBeLessThan(ids.indexOf(quiet));
+    });
+
+    it('breaks a tie on bids by whichever ends soonest', async () => {
+      const later = await liveAuction(4, 8);
+      const sooner = await liveAuction(4, 2);
+
+      const ids = await hotIds();
+
+      expect(ids.indexOf(sooner)).toBeLessThan(ids.indexOf(later));
+    });
+
+    // Without the id the order of a full tie is undefined, and paging would
+    // start showing duplicates
+    it('breaks a full tie by auction id, giving a stable order', async () => {
+      const endsAt = hoursFromNow(6);
+      const first = await liveAuction(3, 6);
+      const second = await liveAuction(3, 6);
+      await prisma.auction.updateMany({
+        where: { id: { in: [first, second] } },
+        data: { currentEndAt: endsAt }
+      });
+
+      const expected = [first, second].sort();
+      const ids = (await hotIds()).filter((id) => expected.includes(id));
+
+      expect(ids).toEqual(expected);
+    });
+
+    it('leaves out auctions that are not running', async () => {
+      const running = await liveAuction(1, 5);
+
+      // scheduled: published but not started
+      const scheduledDraft = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(2).toISOString(),
+          scheduledEndAt: hoursFromNow(6).toISOString()
+        })
+        .expect(201);
+      const scheduledId = (scheduledDraft.body as { id: string }).id;
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${scheduledId}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      // cancelled
+      const cancelled = await liveAuction(1, 5);
+      await prisma.auction.update({
+        where: { id: cancelled },
+        data: { status: 'CANCELLED' }
+      });
+
+      // soft-deleted
+      const deleted = await liveAuction(1, 5);
+      await prisma.auction.update({
+        where: { id: deleted },
+        data: { deletedAt: new Date() }
+      });
+
+      const ids = await hotIds();
+
+      expect(ids).toContain(running);
+      expect(ids).not.toContain(scheduledId);
+      expect(ids).not.toContain(cancelled);
+      expect(ids).not.toContain(deleted);
+    });
+
+    // AUC-003 — the list is buyer-facing, so the same rule holds
+    it('never exposes the reserve in the list', async () => {
+      await liveAuction(1, 5);
+
+      const response = await request(app.getHttpServer())
+        .get('/auctions')
+        .expect(200);
+
+      const body = response.body as { items: Record<string, unknown>[] };
+      expect(body.items.every((item) => !('reservePrice' in item))).toBe(true);
+      expect(JSON.stringify(body.items)).not.toContain('4500');
+    });
+
+    it('pages without repeating or skipping an auction', async () => {
+      for (let bids = 1; bids <= 4; bids += 1) {
+        await liveAuction(bids, 5);
+      }
+
+      const firstPage = await hotIds('?page=1&limit=2');
+      const secondPage = await hotIds('?page=2&limit=2');
+
+      expect(firstPage).toHaveLength(2);
+      expect(secondPage).toHaveLength(2);
+      expect(firstPage.some((id) => secondPage.includes(id))).toBe(false);
+    });
+
+    it('reports the totals alongside the page', async () => {
+      await liveAuction(1, 5);
+
+      const response = await request(app.getHttpServer())
+        .get('/auctions?limit=1')
+        .expect(200);
+
+      const meta = (response.body as { meta: Record<string, number> }).meta;
+      expect(meta.page).toBe(1);
+      expect(meta.limit).toBe(1);
+      expect(meta.total).toBeGreaterThan(0);
+      expect(meta.totalPages).toBe(Math.ceil(meta.total / 1));
+    });
+
+    it('rejects a limit past the cap instead of returning everything', () => {
+      return request(app.getHttpServer())
+        .get('/auctions?limit=500')
+        .expect(400);
+    });
+
+    it('rejects a page that is not a positive number', () => {
+      return request(app.getHttpServer()).get('/auctions?page=0').expect(400);
+    });
+  });
 });

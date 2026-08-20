@@ -13,7 +13,9 @@ import {
   toOwnerAuction,
   toPublicAuction
 } from './auction.mapper';
+import { HOT_AUCTION_ORDER } from './constants/hot-auction-order.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import {
   assertAuctionIsCancellable,
@@ -21,6 +23,9 @@ import {
 } from './utils/assert-seller-can-change.util';
 import { calculateReserveMet } from './utils/calculate-reserve-met.util';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
+
+/** Matches the product catalogue, so both lists page the same way. */
+const DEFAULT_HOT_PAGE_SIZE = 20;
 
 @Injectable()
 export class AuctionService {
@@ -260,6 +265,44 @@ export class AuctionService {
     return auction.sellerId === viewerId
       ? toOwnerAuction(auction)
       : toPublicAuction(auction);
+  }
+
+  /**
+   * AUC-008 — the Hot Auctions list: everything currently running, ranked by
+   * how much bidding it has attracted. Only ACTIVE auctions appear, so a
+   * scheduled one waiting to open is not "hot" yet and a finished one has
+   * dropped off.
+   *
+   * The ordering lives in HOT_AUCTION_ORDER and is not a query parameter —
+   * "no special flags or hidden scoring" means a caller cannot ask for a
+   * different arrangement, and there is no promotion or weighting to find.
+   *
+   * Mapped through toPublicAuction, so the reserve stays out of the list the
+   * same way it stays out of a single read (AUC-003).
+   */
+  async listHotAuctions(dto: ListHotAuctionsDto) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? DEFAULT_HOT_PAGE_SIZE;
+    const where: Prisma.AuctionWhereInput = {
+      status: 'ACTIVE',
+      deletedAt: null
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.auction.findMany({
+        where,
+        select: auctionRowSelect,
+        orderBy: HOT_AUCTION_ORDER,
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      this.prisma.auction.count({ where })
+    ]);
+
+    return {
+      items: items.map(toPublicAuction),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
   }
 
   /**
