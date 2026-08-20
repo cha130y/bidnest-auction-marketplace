@@ -466,7 +466,7 @@ describe('Auction drafts (e2e)', () => {
     it('gives the owner reserveMet alongside the reserve itself', async () => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(draftBody())
         .expect(201);
 
@@ -484,7 +484,7 @@ describe('Auction drafts (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(rest)
         .expect(201);
 
@@ -497,7 +497,7 @@ describe('Auction drafts (e2e)', () => {
     it('never writes a reserve_met_at column — reserveMet is computed on read', async () => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(draftBody())
         .expect(201);
       const { id } = response.body as { id: string };
