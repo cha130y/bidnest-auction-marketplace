@@ -26,3 +26,8 @@
 /.github/               @cha130y
 /package.json           @cha130y
 /pnpm-workspace.yaml    @cha130y
+
+# Dependency ของ API — การเพิ่ม/ถอด package เปลี่ยน tech stack ของทั้งทีม
+# (CLAUDE.md "อย่าเปลี่ยน tech stack โดยไม่ถาม") และทุกคนต้อง pnpm install ใหม่
+# เดิมไฟล์นี้ไม่มีใครดูแล ทั้งที่ /package.json ที่ root มี
+/apps/api/package.json  @cha130y
