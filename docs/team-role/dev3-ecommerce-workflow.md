@@ -3,6 +3,7 @@
 > **เจ้าของแนวทาง:** Dev 3 (E-Commerce Module)
 > **ไฟล์นี้คืออะไร:** สำเนาของ slash command ส่วนตัว `/dev3` ที่ใช้อยู่จริง เอาขึ้น repo ไว้เป็น **แม่แบบให้เพื่อนในทีมก็อปไปปรับเป็นของตัวเอง**
 > **ไม่ใช่กติกาทีม** — กติกาที่ทั้งทีมยึดร่วมกันอยู่ใน `CLAUDE.md` เท่านั้น ไฟล์นี้เป็นแนวทางส่วนบุคคล ปรับได้ตามใจ
+> **ใช้คู่กับ:** [`dev3-commit-workflow.md`](./dev3-commit-workflow.md) — ไฟล์นี้ครอบแค่ **build + test** แล้วจบที่คำถาม "พร้อม commit หรือยัง" ส่วนขั้นตอน **ship** (commit / push / PR) อยู่ในอีกไฟล์
 > **อ้างอิง:** SRS v5, Team Role Distribution v2 · เขียนคู่กับ `dev4-auction-workflow.md`
 
 ---
@@ -107,10 +108,11 @@ description: ทำ requirement ฝั่ง E-Commerce ของ Dev 3 ที�
    - รัน `pnpm check` ให้ผ่านด้วย (typecheck + test + lint)
 2. รายงานผลเทสตามจริง — ข้อไหนผ่าน ข้อไหนไม่ผ่าน ข้อไหนยังไม่ได้เทสและเพราะอะไร
 3. **ถามก่อนว่าพร้อม commit + push หรือยัง** แล้วรอคำตอบ
-4. ถ้าตอบตกลง → commit + push + ร่าง PR title/description ตามรูปแบบใน CLAUDE.md
-   - commit message: `<type>(<requirement-id>): <คำอธิบายภาษาอังกฤษสั้นๆ>`
-   - PR base = `dev` เสมอ
-   - **ห้ามกดสร้าง/merge PR ให้เอง** — ส่ง URL กับข้อความให้ผู้ใช้กดเอง
+4. ถ้าตอบตกลง → เรียก `/commit <requirement-id>` (เช่น `/commit PROD-006`) แล้วทำตามนั้น
+
+ขั้นตอน ship ทั้งหมด (ตรวจสถานะ git, ร่าง commit message, push, เช็ค PR ที่เปิดค้าง,
+ประกอบ URL ฟอร์ม PR) อยู่ใน `.claude/commands/commit.md` **ที่เดียว** — ห้ามเขียนซ้ำในไฟล์นี้
+เพราะถ้าแก้ที่นั่นแล้วลืมแก้ที่นี่ สองไฟล์จะเพี้ยนกัน
 ````
 
 ---
