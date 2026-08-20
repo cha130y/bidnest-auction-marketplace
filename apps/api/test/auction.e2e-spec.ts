@@ -283,4 +283,172 @@ describe('Auction drafts (e2e)', () => {
       expect((stranger.body as { items: unknown[] }).items).toEqual([]);
     });
   });
+
+  /**
+   * AUC-002 — every acceptance rule the draft must satisfy before it may be
+   * published: the required fields, amounts above zero, an end after the start,
+   * at least one image and a reserve no lower than the starting price.
+   */
+  describe('GET /auctions/drafts/:id/validation', () => {
+    /** Creates a draft from `draftBody()` with the given fields overridden. */
+    const createDraft = async (overrides: Record<string, unknown> = {}) => {
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send({ ...draftBody(), ...overrides })
+        .expect(201);
+      return (response.body as { id: string }).id;
+    };
+
+    const validationOf = async (draftId: string, userId = sellerId) => {
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/drafts/${draftId}/validation`)
+        .set(MOCK_USER_HEADER, userId)
+        .expect(200);
+      return response.body as {
+        auctionId: string;
+        ready: boolean;
+        issues: { field: string; code: string; message: string }[];
+      };
+    };
+
+    it('reports a complete draft as ready to publish', async () => {
+      const draftId = await createDraft();
+
+      expect(await validationOf(draftId)).toEqual({
+        auctionId: draftId,
+        ready: true,
+        issues: []
+      });
+    });
+
+    it('reports a draft with no schedule and no images as not ready', async () => {
+      const { scheduledStartAt, scheduledEndAt, imageUrls, ...rest } =
+        draftBody();
+      void [scheduledStartAt, scheduledEndAt, imageUrls];
+
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send(rest)
+        .expect(201);
+      const draftId = (response.body as { id: string }).id;
+
+      const validation = await validationOf(draftId);
+      expect(validation.ready).toBe(false);
+      expect(validation.issues.map((issue) => issue.code)).toEqual(
+        expect.arrayContaining([
+          'START_AT_REQUIRED',
+          'END_AT_REQUIRED',
+          'IMAGES_REQUIRED'
+        ])
+      );
+    });
+
+    it('rejects an end time that is not after the start time', async () => {
+      const draftId = await createDraft({
+        scheduledStartAt: '2026-09-01T12:00:00.000Z',
+        scheduledEndAt: '2026-09-01T10:00:00.000Z'
+      });
+
+      const validation = await validationOf(draftId);
+      expect(validation.ready).toBe(false);
+      expect(validation.issues).toContainEqual(
+        expect.objectContaining({
+          field: 'scheduledEndAt',
+          code: 'END_AT_NOT_AFTER_START_AT'
+        })
+      );
+    });
+
+    it('rejects a reserve below the starting price', async () => {
+      const draftId = await createDraft({
+        startingPrice: 3000,
+        reservePrice: 2999
+      });
+
+      const validation = await validationOf(draftId);
+      expect(validation.ready).toBe(false);
+      expect(validation.issues).toContainEqual(
+        expect.objectContaining({
+          field: 'reservePrice',
+          code: 'RESERVE_BELOW_STARTING_PRICE'
+        })
+      );
+    });
+
+    it('accepts a reserve equal to the starting price', async () => {
+      const draftId = await createDraft({
+        startingPrice: 3000,
+        reservePrice: 3000
+      });
+
+      expect((await validationOf(draftId)).ready).toBe(true);
+    });
+
+    it('accepts a draft with no reserve at all', async () => {
+      const { reservePrice, ...rest } = draftBody();
+      void reservePrice;
+
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send(rest)
+        .expect(201);
+
+      const draftId = (response.body as { id: string }).id;
+      expect((await validationOf(draftId)).ready).toBe(true);
+    });
+
+    // ADR-0001 — the category was active at create time; publishing re-checks it
+    it('flags a category an admin deactivated after the draft was saved', async () => {
+      const draftId = await createDraft();
+      await prisma.category.update({
+        where: { id: activeCategoryId },
+        data: { isActive: false }
+      });
+
+      try {
+        const validation = await validationOf(draftId);
+        expect(validation.ready).toBe(false);
+        expect(validation.issues).toContainEqual(
+          expect.objectContaining({
+            field: 'categoryId',
+            code: 'CATEGORY_INACTIVE'
+          })
+        );
+      } finally {
+        await prisma.category.update({
+          where: { id: activeCategoryId },
+          data: { isActive: true }
+        });
+      }
+    });
+
+    // AUC-003 — the checklist reports whether the reserve rule is met, never
+    // the reserve itself, so it stays safe even though only the owner reads it
+    it('never echoes the reserve price back', async () => {
+      const draftId = await createDraft({ reservePrice: 4500 });
+
+      const validation = await validationOf(draftId);
+      expect(JSON.stringify(validation)).not.toContain('4500');
+    });
+
+    it('hides the checklist of a draft owned by somebody else', async () => {
+      const draftId = await createDraft();
+
+      return request(app.getHttpServer())
+        .get(`/auctions/drafts/${draftId}/validation`)
+        .set(MOCK_USER_HEADER, strangerId)
+        .expect(404);
+    });
+
+    it('refuses an anonymous caller', async () => {
+      const draftId = await createDraft();
+
+      return request(app.getHttpServer())
+        .get(`/auctions/drafts/${draftId}/validation`)
+        .expect(401);
+    });
+  });
 });

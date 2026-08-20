@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { auctionPublicSelect } from './auction.mapper';
 import { AuctionService } from './auction.service';
@@ -281,6 +282,83 @@ describe('AuctionService', () => {
         deletedAt: null
       });
       expect(result.items).toHaveLength(1);
+    });
+  });
+
+  describe('validateOwnDraft (AUC-002)', () => {
+    /** A row shaped like auctionPublishGateSelect, with real Decimals. */
+    const gateRow = (overrides: Record<string, unknown> = {}) => ({
+      id: DRAFT_ID,
+      title: 'Vintage Seiko 5 Automatic',
+      description: 'Serviced last year, original bracelet.',
+      condition: 'USED',
+      startingPrice: new Prisma.Decimal(3000),
+      minBidIncrement: new Prisma.Decimal(100),
+      reservePrice: new Prisma.Decimal(4500),
+      scheduledStartAt: START_AT,
+      originalEndAt: END_AT,
+      category: { isActive: true },
+      images: [{ id: 'image-1' }],
+      ...overrides
+    });
+
+    it('reports a complete draft as ready with no issues', async () => {
+      prisma.auction.findFirst.mockResolvedValue(gateRow());
+
+      const result = await service.validateOwnDraft(DRAFT_ID, SELLER_ID);
+
+      expect(result).toEqual({
+        auctionId: DRAFT_ID,
+        ready: true,
+        issues: []
+      });
+    });
+
+    it('reports an unfinished draft as not ready and lists what is missing', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        gateRow({ scheduledStartAt: null, originalEndAt: null, images: [] })
+      );
+
+      const result = await service.validateOwnDraft(DRAFT_ID, SELLER_ID);
+
+      expect(result.ready).toBe(false);
+      expect(result.issues.map((issue) => issue.code)).toEqual(
+        expect.arrayContaining([
+          'START_AT_REQUIRED',
+          'END_AT_REQUIRED',
+          'IMAGES_REQUIRED'
+        ])
+      );
+    });
+
+    it('scopes the check to the seller who owns the draft', async () => {
+      prisma.auction.findFirst.mockResolvedValue(gateRow());
+
+      await service.validateOwnDraft(DRAFT_ID, SELLER_ID);
+
+      const args = (prisma.auction.findFirst.mock.calls as WhereArgs[][])[0][0];
+      expect(args.where).toMatchObject({
+        id: DRAFT_ID,
+        sellerId: SELLER_ID,
+        status: 'DRAFT',
+        deletedAt: null
+      });
+    });
+
+    it('hides a draft owned by somebody else behind the same 404', async () => {
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.validateOwnDraft(DRAFT_ID, 'another-seller')
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('never reads the reserve into the response (AUC-003)', async () => {
+      prisma.auction.findFirst.mockResolvedValue(gateRow());
+
+      const result = await service.validateOwnDraft(DRAFT_ID, SELLER_ID);
+
+      expect(JSON.stringify(result)).not.toContain('4500');
     });
   });
 

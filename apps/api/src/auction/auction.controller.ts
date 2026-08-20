@@ -41,4 +41,15 @@ export class AuctionController {
   ) {
     return this.auctionService.findOwnDraft(id, sellerId);
   }
+
+  // AUC-002 — a read-only checklist: it reports what still blocks publishing
+  // and changes nothing, which is why it is a GET.
+  @Roles('USER')
+  @Get('drafts/:id/validation')
+  validateOwnDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.validateOwnDraft(id, sellerId);
+  }
 }

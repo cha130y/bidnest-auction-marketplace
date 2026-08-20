@@ -5,8 +5,13 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { auctionOwnerSelect, toOwnerAuction } from './auction.mapper';
+import {
+  auctionOwnerSelect,
+  auctionPublishGateSelect,
+  toOwnerAuction
+} from './auction.mapper';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
 
 @Injectable()
 export class AuctionService {
@@ -76,6 +81,27 @@ export class AuctionService {
     if (!auction) throw new NotFoundException('Auction draft not found');
 
     return toOwnerAuction(auction);
+  }
+
+  /**
+   * AUC-002 — the pre-publish check. It reports what the draft is still missing
+   * instead of throwing, so the seller can see and fix everything at once; the
+   * same rules become the hard gate when AUC-004 publishes.
+   *
+   * Scoped by sellerId for the same reason findOwnDraft is: the checklist would
+   * otherwise tell a stranger what a private draft does and does not contain.
+   */
+  async validateOwnDraft(id: string, sellerId: string) {
+    const draft = await this.prisma.auction.findFirst({
+      where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+      select: auctionPublishGateSelect
+    });
+
+    if (!draft) throw new NotFoundException('Auction draft not found');
+
+    const issues = validateDraftForPublish(draft);
+
+    return { auctionId: draft.id, ready: issues.length === 0, issues };
   }
 
   // ADR-0001 — auctions and products draw from the same category set, so an
