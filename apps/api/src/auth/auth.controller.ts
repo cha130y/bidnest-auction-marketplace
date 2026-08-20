@@ -5,6 +5,7 @@ import {
   ApiOperation,
   ApiTags
 } from '@nestjs/swagger';
+import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { RegisterDto } from './dto/register.dto';
@@ -14,6 +15,7 @@ import { RegisterDto } from './dto/register.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
