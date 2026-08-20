@@ -99,7 +99,7 @@ export class AuctionService {
 
     if (!draft) throw new NotFoundException('Auction draft not found');
 
-    const issues = validateDraftForPublish(draft);
+    const issues = validateDraftForPublish(draft, new Date());
 
     return { auctionId: draft.id, ready: issues.length === 0, issues };
   }
