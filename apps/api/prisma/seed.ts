@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { JwtService } from '@nestjs/jwt';
+import type { JwtSignOptions } from '@nestjs/jwt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 
@@ -6,7 +8,7 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-// Fixed UUIDs so `x-mock-user-id` headers stay stable across re-seeds
+// Fixed UUIDs so the seeded actors stay stable across re-seeds
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001';
 const SELLER_A_ID = '00000000-0000-4000-8000-000000000002';
 const SELLER_B_ID = '00000000-0000-4000-8000-000000000003';
@@ -171,16 +173,45 @@ async function seedProducts() {
   }
 }
 
+/**
+ * AUTH-008 replaced the x-mock-user-id header with real bearer tokens, so the
+ * .http collections need a token rather than a raw id. Printing them here
+ * keeps manual testing a copy-paste away: signing in for real would mean
+ * fetching an emailed OTP first (AUTH-007).
+ *
+ * They expire on the normal JWT_ACCESS_TTL — re-run the seed for fresh ones.
+ */
+function printAccessTokens() {
+  const secret = process.env.JWT_ACCESS_SECRET;
+  if (!secret) {
+    console.log('Seed complete. Set JWT_ACCESS_SECRET to also print tokens.');
+    return;
+  }
+
+  const jwt = new JwtService();
+  // ms-style strings like '15m'; the env is a plain string, the option is not.
+  const expiresIn = (process.env.JWT_ACCESS_TTL ??
+    '15m') as JwtSignOptions['expiresIn'];
+  const actors: [string, string, string, string][] = [
+    ['admin', ADMIN_ID, 'admin@bidnest.test', 'ADMIN'],
+    ['sellerA', SELLER_A_ID, 'seller-a@bidnest.test', 'USER'],
+    ['sellerB', SELLER_B_ID, 'seller-b@bidnest.test', 'USER'],
+    ['buyer', BUYER_ID, 'buyer@bidnest.test', 'USER'],
+  ];
+
+  console.log('Seed complete. Paste these into test/http/_env.http:');
+  for (const [name, id, email, role] of actors) {
+    const token = jwt.sign({ sub: id, email, role }, { secret, expiresIn });
+    console.log(`@${name}Token = ${token}`);
+  }
+}
+
 async function main() {
   await seedUsers();
   await seedCategories();
   await seedProducts();
 
-  console.log('Seed complete. Use these ids in the x-mock-user-id header:');
-  console.log(`  admin    ${ADMIN_ID}`);
-  console.log(`  seller-a ${SELLER_A_ID}`);
-  console.log(`  seller-b ${SELLER_B_ID}`);
-  console.log(`  buyer    ${BUYER_ID}`);
+  printAccessTokens();
 }
 
 main()

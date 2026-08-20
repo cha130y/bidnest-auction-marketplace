@@ -1,6 +1,18 @@
 import type { Prisma } from '../../generated/prisma/client';
+import { calculateReserveMet } from './utils/calculate-reserve-met.util';
 
-export const auctionPublicSelect = {
+/**
+ * The one field set every auction read uses. `reservePrice` is part of it
+ * because AUC-003 requires `reserveMet` to be computed on read — the reserve
+ * has to be loaded to be compared against.
+ *
+ * That is why the confidentiality guard lives on the way OUT, in the mappers
+ * below, rather than on this select: `toPublicAuction()` drops the reserve
+ * every time, and `toOwnerAuction()` is the only function that passes it
+ * through. A single output funnel is checkable; a select that omits the field
+ * would just push the computation somewhere else.
+ */
+export const auctionRowSelect = {
   id: true,
   sellerId: true,
   categoryId: true,
@@ -11,6 +23,7 @@ export const auctionPublicSelect = {
   currency: true,
   startingPrice: true,
   minBidIncrement: true,
+  reservePrice: true,
   currentPrice: true,
   bidCount: true,
   scheduledStartAt: true,
@@ -30,21 +43,14 @@ export const auctionPublicSelect = {
   seller: { select: { id: true, profile: { select: { displayName: true } } } }
 } satisfies Prisma.AuctionSelect;
 
-// AUC-003 / SRS section 6 — reservePrice is layered on top of the public select,
-// never the other way round, so a buyer-facing path cannot leak it by omission.
-export const auctionOwnerSelect = {
-  ...auctionPublicSelect,
-  reservePrice: true
-} satisfies Prisma.AuctionSelect;
+type AuctionRow = Prisma.AuctionGetPayload<{ select: typeof auctionRowSelect }>;
 
-type PublicAuctionRow = Prisma.AuctionGetPayload<{
-  select: typeof auctionPublicSelect;
-}>;
-type OwnerAuctionRow = Prisma.AuctionGetPayload<{
-  select: typeof auctionOwnerSelect;
-}>;
-
-export function toPublicAuction(auction: PublicAuctionRow) {
+/**
+ * AUC-003 — what a buyer is allowed to see. The reserve is replaced by the
+ * computed `reserveMet`; the amount itself never appears in the returned
+ * object, and nothing else here is derived from it.
+ */
+export function toPublicAuction(auction: AuctionRow) {
   return {
     id: auction.id,
     title: auction.title,
@@ -55,6 +61,11 @@ export function toPublicAuction(auction: PublicAuctionRow) {
     startingPrice: auction.startingPrice.toString(),
     minBidIncrement: auction.minBidIncrement.toString(),
     currentPrice: auction.currentPrice.toString(),
+    reserveMet: calculateReserveMet(auction.currentPrice, auction.reservePrice),
+    // AUC-005 — a SCHEDULED auction is public to look at, but bidding only
+    // opens once it turns ACTIVE. Saying so here keeps the frontend from
+    // deriving the rule from `status` on its own and getting it wrong.
+    biddingOpen: auction.status === 'ACTIVE',
     bidCount: auction.bidCount,
     scheduledStartAt: auction.scheduledStartAt,
     originalEndAt: auction.originalEndAt,
@@ -78,12 +89,27 @@ export function toPublicAuction(auction: PublicAuctionRow) {
   };
 }
 
-export function toOwnerAuction(auction: OwnerAuctionRow) {
+/**
+ * The seller's own view. Only reached from a query already scoped by sellerId,
+ * which is what makes returning the reserve here safe.
+ */
+export function toOwnerAuction(auction: AuctionRow) {
   return {
     ...toPublicAuction(auction),
     reservePrice: auction.reservePrice?.toString() ?? null
   };
 }
+
+/**
+ * AUC-003, enforced at compile time: if `reservePrice` ever appears in what
+ * toPublicAuction returns, this line stops being assignable and the build
+ * fails. A reviewer adding the field back cannot merge past it.
+ */
+type PublicAuction = ReturnType<typeof toPublicAuction>;
+const _publicAuctionHidesReserve: 'reservePrice' extends keyof PublicAuction
+  ? never
+  : true = true;
+void _publicAuctionHidesReserve;
 
 // AUC-002 — the publish gate reads only the fields the acceptance criteria
 // measure, so a validation call skips the seller/category/image joins the

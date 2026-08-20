@@ -6,6 +6,10 @@ Group Project (5 developers อ้างอิงจากไฟล์ Team-role
 
 ## ให้อ้างอิงข้อมูลจากไฟล์ SRS และ Team-role-distribution เป็นหลัก
 
+## Git commits
+
+Do NOT add "Co-Authored-By: Claude" or "Claude-Session:" trailer to commit messages.
+
 ## กติกาการทำงาน
 
 - ตอบและอธิบายเป็นภาษาไทย

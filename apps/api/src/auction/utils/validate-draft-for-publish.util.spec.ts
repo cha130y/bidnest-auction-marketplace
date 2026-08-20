@@ -10,6 +10,10 @@ const dec = (value: string | number) => new Prisma.Decimal(value);
 const START_AT = new Date('2026-09-01T10:00:00.000Z');
 const END_AT = new Date('2026-09-01T12:00:00.000Z');
 
+// A fixed "now" before both, so the schedule rules are judged against a clock
+// the test controls rather than the machine's.
+const NOW = new Date('2026-08-20T09:00:00.000Z');
+
 /** A draft that meets every AUC-002 rule; each test breaks exactly one. */
 const publishableDraft = (
   overrides: Partial<DraftForPublish> = {}
@@ -28,16 +32,16 @@ const publishableDraft = (
 });
 
 const codesOf = (draft: DraftForPublish) =>
-  validateDraftForPublish(draft).map((issue) => issue.code);
+  validateDraftForPublish(draft, NOW).map((issue) => issue.code);
 
 describe('validateDraftForPublish (AUC-002)', () => {
   it('passes a draft that meets every rule', () => {
-    expect(validateDraftForPublish(publishableDraft())).toEqual([]);
+    expect(validateDraftForPublish(publishableDraft(), NOW)).toEqual([]);
   });
 
   it('passes a draft with no reserve at all — the reserve is optional', () => {
     expect(
-      validateDraftForPublish(publishableDraft({ reservePrice: null }))
+      validateDraftForPublish(publishableDraft({ reservePrice: null }), NOW)
     ).toEqual([]);
   });
 
@@ -130,6 +134,40 @@ describe('validateDraftForPublish (AUC-002)', () => {
       ).toContain(DraftIssueCode.END_AT_NOT_AFTER_START_AT);
     });
 
+    // AUC-004 — publishing a draft whose end time has gone by would open an
+    // auction that is already over
+    it('flags an end time that has already passed', () => {
+      const codes = codesOf(
+        publishableDraft({
+          scheduledStartAt: new Date('2026-08-01T10:00:00.000Z'),
+          originalEndAt: new Date('2026-08-01T12:00:00.000Z')
+        })
+      );
+
+      expect(codes).toContain(DraftIssueCode.END_AT_IN_THE_PAST);
+      // the two times are still in the right order relative to each other
+      expect(codes).not.toContain(DraftIssueCode.END_AT_NOT_AFTER_START_AT);
+    });
+
+    it('accepts a start time in the past as long as the end is still ahead', () => {
+      const issues = validateDraftForPublish(
+        publishableDraft({
+          scheduledStartAt: new Date('2026-08-20T08:00:00.000Z'),
+          originalEndAt: new Date('2026-08-20T18:00:00.000Z')
+        }),
+        NOW
+      );
+
+      // that is simply an auction meant to run right now (AUC-004)
+      expect(issues).toEqual([]);
+    });
+
+    it('treats an end time exactly at now as already passed', () => {
+      const codes = codesOf(publishableDraft({ originalEndAt: new Date(NOW) }));
+
+      expect(codes).toContain(DraftIssueCode.END_AT_IN_THE_PAST);
+    });
+
     it('does not add the ordering issue when one end is missing anyway', () => {
       const codes = codesOf(publishableDraft({ scheduledStartAt: null }));
 
@@ -147,7 +185,10 @@ describe('validateDraftForPublish (AUC-002)', () => {
 
     it('accepts a single image', () => {
       expect(
-        validateDraftForPublish(publishableDraft({ images: [{ id: 'only' }] }))
+        validateDraftForPublish(
+          publishableDraft({ images: [{ id: 'only' }] }),
+          NOW
+        )
       ).toEqual([]);
     });
   });
@@ -170,7 +211,8 @@ describe('validateDraftForPublish (AUC-002)', () => {
           publishableDraft({
             startingPrice: dec(3000),
             reservePrice: dec(3000)
-          })
+          }),
+          NOW
         )
       ).toEqual([]);
     });
@@ -181,7 +223,8 @@ describe('validateDraftForPublish (AUC-002)', () => {
           publishableDraft({
             startingPrice: dec('3000.00'),
             reservePrice: dec('3000.000')
-          })
+          }),
+          NOW
         )
       ).toEqual([]);
     });
@@ -213,7 +256,8 @@ describe('validateDraftForPublish (AUC-002)', () => {
 
   it('points each issue at the field the seller edits', () => {
     const issues = validateDraftForPublish(
-      publishableDraft({ originalEndAt: null })
+      publishableDraft({ originalEndAt: null }),
+      NOW
     );
 
     // the column is originalEndAt, but the seller's form field is scheduledEndAt

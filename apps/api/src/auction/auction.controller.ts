@@ -2,14 +2,24 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
-  Post
+  Query,
+  Patch,
+  Post,
+  Req
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
+import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
+import { UpdateAuctionDto } from './dtos/update-auction.dto';
 
 @Controller('auctions')
 export class AuctionController {
@@ -51,5 +61,82 @@ export class AuctionController {
     @CurrentUser('id') sellerId: string
   ) {
     return this.auctionService.validateOwnDraft(id, sellerId);
+  }
+
+  // AUC-004 — preview is a read, so the draft keeps its status.
+  @Roles('USER')
+  @Get('drafts/:id/preview')
+  previewOwnDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.previewOwnDraft(id, sellerId);
+  }
+
+  // AUC-004 — publish is the state change, hence POST. 200 rather than the
+  // POST default of 201: it moves an auction that already exists.
+  @Roles('USER')
+  @HttpCode(HttpStatus.OK)
+  @Post('drafts/:id/publish')
+  publishDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.publishDraft(id, sellerId);
+  }
+
+  // AUC-006 — editing covers DRAFT and SCHEDULED alike, so this sits on the
+  // auction path rather than under `drafts`, which only ever matches a DRAFT.
+  @Roles('USER')
+  @Patch(':id')
+  updateOwnAuction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: UpdateAuctionDto
+  ) {
+    return this.auctionService.updateOwnAuction(id, sellerId, dto);
+  }
+
+  // AUC-006 — a cancellation is a lifecycle move, not a deletion: the auction
+  // stays readable as CANCELLED, which is why this is not a DELETE.
+  @Roles('USER')
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/cancel')
+  cancelOwnAuction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: CancelAuctionDto
+  ) {
+    return this.auctionService.cancelOwnAuction(id, sellerId, dto.reason);
+  }
+
+  /**
+   * AUC-008 — Hot Auctions. Public, and paging is the only thing a caller may
+   * ask for: the ranking is fixed by the requirement, so there is no `sort`
+   * parameter to reach for.
+   */
+  @Public()
+  @Get()
+  listHotAuctions(@Query() dto: ListHotAuctionsDto) {
+    return this.auctionService.listHotAuctions(dto);
+  }
+
+  /**
+   * AUC-005 — the first buyer-facing route, and the reason every `drafts` path
+   * above has to stay above it: `:id` would otherwise swallow the literal
+   * segment `drafts`.
+   *
+   * Public, so a signed-out visitor can browse. AccessTokenGuard still fills in
+   * `request.user` when a token happens to be sent, which is what lets the
+   * seller's own view come back through the owner mapper. `@CurrentUser()`
+   * cannot be used here — it throws when nobody is signed in.
+   */
+  @Public()
+  @Get(':id')
+  findPublicAuction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request
+  ) {
+    return this.auctionService.findPublicAuction(id, request.user?.id);
   }
 }
