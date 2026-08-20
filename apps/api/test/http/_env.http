@@ -10,11 +10,26 @@
 
 @baseUrl = http://localhost:4000
 
-# --- users (sent as the x-mock-user-id header) -------------------------------
+# --- users --------------------------------------------------------------------
+# ids, still used in request bodies and paths
 @admin   = 00000000-0000-4000-8000-000000000001
 @sellerA = 00000000-0000-4000-8000-000000000002
 @sellerB = 00000000-0000-4000-8000-000000000003
 @buyer   = 00000000-0000-4000-8000-000000000004
+
+# --- auth (AUTH-008) ----------------------------------------------------------
+# The x-mock-user-id header is gone: AccessTokenGuard now wants a real bearer
+# token, so requests carry
+#
+#   Authorization: Bearer {{sellerAToken}}
+#
+# `pnpm --filter api exec prisma db seed` prints a ready @xToken line per
+# actor — paste them below. They expire on JWT_ACCESS_TTL (15m by default), so
+# re-run the seed when a request starts answering 401.
+@adminToken   =
+@sellerAToken =
+@sellerBToken =
+@buyerToken   =
 
 # --- categories --------------------------------------------------------------
 @catElectronics  = 00000000-0000-4000-8000-000000000101
