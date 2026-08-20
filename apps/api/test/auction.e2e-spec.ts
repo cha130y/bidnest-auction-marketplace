@@ -451,4 +451,67 @@ describe('Auction drafts (e2e)', () => {
         .expect(401);
     });
   });
+
+  /**
+   * AUC-003 — the reserve never leaves the server on a buyer-facing path; only
+   * the computed reserveMet does. There is no public auction endpoint yet
+   * (AUC-004/005), so what can be proven over HTTP today is the owner's view:
+   * reserveMet is present and correct, and it does not depend on the reserve
+   * being visible. The mapper unit tests cover the buyer-facing shape.
+   */
+  describe('reserve confidentiality (AUC-003)', () => {
+    it('gives the owner reserveMet alongside the reserve itself', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send(draftBody())
+        .expect(201);
+
+      // starting price 3000, reserve 4500, no bids yet -> not met
+      expect(response.body).toMatchObject({
+        reservePrice: '4500',
+        currentPrice: '0',
+        reserveMet: false
+      });
+    });
+
+    it('reports reserveMet true when the draft has no reserve at all', async () => {
+      const { reservePrice, ...rest } = draftBody();
+      void reservePrice;
+
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send(rest)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        reservePrice: null,
+        reserveMet: true
+      });
+    });
+
+    it('never writes a reserve_met_at column — reserveMet is computed on read', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set(MOCK_USER_HEADER, sellerId)
+        .send(draftBody())
+        .expect(201);
+      const { id } = response.body as { id: string };
+
+      const columns = await prisma.$queryRaw<{ column_name: string }[]>`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'auctions'
+      `;
+      expect(columns.map((column) => column.column_name)).not.toContain(
+        'reserve_met_at'
+      );
+
+      const stored = await prisma.auction.findUniqueOrThrow({
+        where: { id },
+        select: { reservePrice: true, currentPrice: true }
+      });
+      expect(stored.reservePrice?.toString()).toBe('4500');
+    });
+  });
 });

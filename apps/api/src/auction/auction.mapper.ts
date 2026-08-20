@@ -1,4 +1,5 @@
 import type { Prisma } from '../../generated/prisma/client';
+import { calculateReserveMet } from './utils/calculate-reserve-met.util';
 
 /**
  * The one field set every auction read uses. `reservePrice` is part of it
@@ -60,6 +61,7 @@ export function toPublicAuction(auction: AuctionRow) {
     startingPrice: auction.startingPrice.toString(),
     minBidIncrement: auction.minBidIncrement.toString(),
     currentPrice: auction.currentPrice.toString(),
+    reserveMet: calculateReserveMet(auction.currentPrice, auction.reservePrice),
     bidCount: auction.bidCount,
     scheduledStartAt: auction.scheduledStartAt,
     originalEndAt: auction.originalEndAt,
