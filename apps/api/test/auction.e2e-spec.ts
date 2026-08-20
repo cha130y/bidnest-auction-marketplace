@@ -531,7 +531,7 @@ describe('Auction drafts (e2e)', () => {
     const createDraft = async (overrides: Record<string, unknown> = {}) => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send({ ...draftBody(), ...overrides })
         .expect(201);
       return (response.body as { id: string }).id;
@@ -543,7 +543,7 @@ describe('Auction drafts (e2e)', () => {
 
         const response = await request(app.getHttpServer())
           .get(`/auctions/drafts/${draftId}/preview`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(200);
 
         expect(response.body).not.toHaveProperty('reservePrice');
@@ -560,7 +560,7 @@ describe('Auction drafts (e2e)', () => {
 
         await request(app.getHttpServer())
           .get(`/auctions/drafts/${draftId}/preview`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(200);
 
         const stored = await prisma.auction.findUniqueOrThrow({
@@ -575,7 +575,7 @@ describe('Auction drafts (e2e)', () => {
 
         return request(app.getHttpServer())
           .get(`/auctions/drafts/${draftId}/preview`)
-          .set(MOCK_USER_HEADER, strangerId)
+          .set('Authorization', authOf(strangerId))
           .expect(404);
       });
     });
@@ -589,7 +589,7 @@ describe('Auction drafts (e2e)', () => {
 
         const response = await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(200);
 
         expect(response.body).toMatchObject({
@@ -610,7 +610,7 @@ describe('Auction drafts (e2e)', () => {
 
         const response = await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(200);
 
         expect(response.body).toMatchObject({ status: 'ACTIVE' });
@@ -632,7 +632,7 @@ describe('Auction drafts (e2e)', () => {
         for (const id of [scheduledId, liveId]) {
           await request(app.getHttpServer())
             .post(`/auctions/drafts/${id}/publish`)
-            .set(MOCK_USER_HEADER, sellerId)
+            .set('Authorization', authOf(sellerId))
             .expect(200);
         }
 
@@ -659,7 +659,7 @@ describe('Auction drafts (e2e)', () => {
 
         const created = await request(app.getHttpServer())
           .post('/auctions/drafts')
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .send({
             ...rest,
             scheduledStartAt: hoursFromNow(1),
@@ -670,7 +670,7 @@ describe('Auction drafts (e2e)', () => {
 
         const response = await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(400);
 
         const body = response.body as { issues: { code: string }[] };
@@ -693,7 +693,7 @@ describe('Auction drafts (e2e)', () => {
 
         const response = await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(400);
 
         const body = response.body as { issues: { code: string }[] };
@@ -710,13 +710,13 @@ describe('Auction drafts (e2e)', () => {
 
         await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(200);
 
         // the draft is no longer a DRAFT, so the second attempt cannot find it
         await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, sellerId)
+          .set('Authorization', authOf(sellerId))
           .expect(404);
 
         const events = await prisma.auctionEvent.findMany({
@@ -733,7 +733,7 @@ describe('Auction drafts (e2e)', () => {
 
         await request(app.getHttpServer())
           .post(`/auctions/drafts/${draftId}/publish`)
-          .set(MOCK_USER_HEADER, strangerId)
+          .set('Authorization', authOf(strangerId))
           .expect(404);
 
         await request(app.getHttpServer())

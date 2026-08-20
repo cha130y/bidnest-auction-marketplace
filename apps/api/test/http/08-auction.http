@@ -12,6 +12,13 @@
 @buyer   = 00000000-0000-4000-8000-000000000004
 @catCollectibles = 00000000-0000-4000-8000-000000000103
 
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน `pnpm --filter api exec prisma db seed` แล้ว copy บรรทัด @xToken ที่มันพิมพ์
+# ออกมาวางตรงนี้ (token หมดอายุตาม JWT_ACCESS_TTL — พอเริ่มได้ 401 ให้ seed ใหม่)
+@adminToken   =
+@sellerAToken =
+@buyerToken   =
+
 #=============================================================================
 # 1. สร้าง draft (AUC-001)
 #=============================================================================
@@ -21,7 +28,7 @@
 # originalEndAt กับ currentEndAt ต้องเท่ากันทั้งคู่ = scheduledEndAt ที่ส่งไป
 # @name createDraft
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -46,7 +53,7 @@ Content-Type: application/json
 # ตั้งใจให้ผ่าน: SRS แยกการตรวจครบถ้วนไว้ที่ AUC-002 ตอน "ก่อนเผยแพร่"
 # ไม่ใช่ตอนเซฟ draft — response ต้องได้ reservePrice: null, images: []
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -64,23 +71,23 @@ Content-Type: application/json
 
 ### AUC-001 detail — เจ้าของเปิด draft ตัวเอง. expect 200 + เห็น reservePrice
 GET {{baseUrl}}/auctions/drafts/{{draftId}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-001 detail — user คนอื่นเปิด draft เดียวกัน. expect 404
 # ต้องเป็น 404 ไม่ใช่ 403 — คำตอบต้องไม่ยืนยันว่า draft นี้มีอยู่จริง
 GET {{baseUrl}}/auctions/drafts/{{draftId}}
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### AUC-001 detail — คนไม่ได้ login. expect 401
 GET {{baseUrl}}/auctions/drafts/{{draftId}}
 
 ### AUC-001 list — เจ้าของเห็น draft ของตัวเองทั้งหมด. expect 200 + items ≥ 2
 GET {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-001 list — คนอื่นเห็นเป็น list ว่าง. expect 200 + items: []
 GET {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 #=============================================================================
 # 3. เคสที่ต้องพัง (ห้ามมี 500)
@@ -88,7 +95,7 @@ x-mock-user-id: {{buyer}}
 
 ### สิทธิ์ — แอดมินสร้างประมูลไม่ได้ (SRS §2 แอดมินกำกับดูแล ไม่ได้ขายเอง). expect 403
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{admin}}
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
@@ -100,13 +107,13 @@ Content-Type: application/json
   "minBidIncrement": 10
 }
 
-### สิทธิ์ — ไม่ส่ง x-mock-user-id. expect 401
+### สิทธิ์ — ไม่ส่ง Authorization header. expect 401
 POST {{baseUrl}}/auctions/drafts
 Content-Type: application/json
 
 {
   "title": "ไม่ได้ login",
-  "description": "ต้องโดน MockAuthGuard ปัดตก",
+  "description": "ต้องโดน AccessTokenGuard ปัดตก",
   "categoryId": "{{catCollectibles}}",
   "condition": "NEW",
   "startingPrice": 100,
@@ -115,7 +122,7 @@ Content-Type: application/json
 
 ### หมวดหมู่ — id ที่ไม่มีอยู่จริง. expect 400
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -133,7 +140,7 @@ Content-Type: application/json
 # categories.is_active = false ของ {{catCollectibles}} ก่อนยิง block นี้ แล้วตั้งกลับ
 # (เคสนี้มีเทสอัตโนมัติคุมอยู่แล้วใน test/auction.e2e-spec.ts)
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -147,7 +154,7 @@ Content-Type: application/json
 
 ### validation — ราคาเริ่มต้นต้อง > 0. expect 400
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -161,7 +168,7 @@ Content-Type: application/json
 
 ### validation — ชื่อเรื่องมีแต่ช่องว่าง (Trim แล้วต้องว่าง). expect 400
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -176,7 +183,7 @@ Content-Type: application/json
 ### validation — ยัด field ที่ไม่ได้อยู่ใน DTO เข้ามา. expect 400
 # ห้ามให้ client ตั้ง status เองเด็ดขาด — draft ต้องเกิดเป็น DRAFT เสมอ
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -191,7 +198,7 @@ Content-Type: application/json
 
 ### validation — draft id ที่ไม่ใช่ UUID. expect 400
 GET {{baseUrl}}/auctions/drafts/not-a-uuid
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 #=============================================================================
 # 4. ตรวจสอบก่อนเผยแพร่ (AUC-002)
@@ -202,13 +209,13 @@ x-mock-user-id: {{sellerA}}
 
 ### AUC-002 — draft ที่กรอกครบจาก request ที่ 1. expect 200 + ready: true, issues: []
 GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-002 — draft ที่ยังไม่มีกำหนดการกับรูป. expect 200 + ready: false
 # issues ต้องมี START_AT_REQUIRED, END_AT_REQUIRED, IMAGES_REQUIRED ครบทั้ง 3
 # @name draftIncomplete
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -224,12 +231,12 @@ Content-Type: application/json
 
 ### AUC-002 — ยิง checklist ของ draft ที่ยังไม่เสร็จ. expect ready: false + 3 issues
 GET {{baseUrl}}/auctions/drafts/{{incompleteId}}/validation
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-002 — เวลาสิ้นสุดมาก่อนเวลาเริ่ม. expect ready: false + END_AT_NOT_AFTER_START_AT
 # @name draftBadSchedule
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -248,12 +255,12 @@ Content-Type: application/json
 
 ###
 GET {{baseUrl}}/auctions/drafts/{{badScheduleId}}/validation
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-002 — reserve ต่ำกว่าราคาเริ่มต้น. expect ready: false + RESERVE_BELOW_STARTING_PRICE
 # @name draftLowReserve
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -274,18 +281,18 @@ Content-Type: application/json
 ###
 # response ต้องไม่มีเลข 2999 โผล่ออกมาเลย — บอกได้แค่ว่า "ผิดกฎ" (AUC-003)
 GET {{baseUrl}}/auctions/drafts/{{lowReserveId}}/validation
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-002 — คนอื่นขอดู checklist ของ draft คนอื่น. expect 404
 GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### AUC-002 — ไม่ได้ login. expect 401
 GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
 
 ### AUC-002 — draft id ที่ไม่ใช่ UUID. expect 400
 GET {{baseUrl}}/auctions/drafts/not-a-uuid/validation
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 #=============================================================================
 # 5. Preview และ Publish (AUC-004)
@@ -299,34 +306,34 @@ x-mock-user-id: {{sellerA}}
 ### AUC-004 preview — เจ้าของดูหน้าตาที่ผู้ซื้อจะเห็น. expect 200
 # ต้องไม่มี reservePrice ในผลลัพธ์เด็ดขาด มีแค่ reserveMet (AUC-003)
 GET {{baseUrl}}/auctions/drafts/{{draftId}}/preview
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 preview — ยิงซ้ำแล้วเช็คว่า draft ยังเป็น DRAFT อยู่. expect status: DRAFT
 GET {{baseUrl}}/auctions/drafts/{{draftId}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 preview — คนอื่นขอดู preview. expect 404
 GET {{baseUrl}}/auctions/drafts/{{draftId}}/preview
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### AUC-004 publish — draft ที่ยังไม่ครบ (ไม่มีรูป/กำหนดการ). expect 400 + issues[]
 POST {{baseUrl}}/auctions/drafts/{{incompleteId}}/publish
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 publish — draft ที่ครบแล้ว เวลาเริ่มยังไม่ถึง. expect 200 + SCHEDULED
 # publishedAt ต้องมีค่า, startedAt ต้องเป็น null
 POST {{baseUrl}}/auctions/drafts/{{draftId}}/publish
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 publish — ยิงซ้ำอันเดิม. expect 404
 # ไม่ใช่ DRAFT แล้ว จึงหาไม่เจอ — กัน publish ซ้ำโดยไม่ต้องพึ่ง client
 POST {{baseUrl}}/auctions/drafts/{{draftId}}/publish
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 publish — draft ที่เวลาเริ่มถึงแล้ว. expect 200 + ACTIVE
 # @name draftStartsNow
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -346,12 +353,12 @@ Content-Type: application/json
 ###
 # startedAt ต้องมีค่าด้วย ไม่ใช่แค่ publishedAt
 POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 publish — เวลาจบผ่านไปแล้ว. expect 400 + END_AT_IN_THE_PAST
 # @name draftExpired
 POST {{baseUrl}}/auctions/drafts
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -370,15 +377,15 @@ Content-Type: application/json
 
 ###
 GET {{baseUrl}}/auctions/drafts/{{expiredId}}/validation
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ###
 POST {{baseUrl}}/auctions/drafts/{{expiredId}}/publish
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### AUC-004 publish — คนอื่นสั่ง publish draft ของเรา. expect 404
 POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### AUC-004 publish — ไม่ได้ login. expect 401
 POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
