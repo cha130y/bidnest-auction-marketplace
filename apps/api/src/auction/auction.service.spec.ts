@@ -113,6 +113,7 @@ describe('AuctionService', () => {
     };
     auctionEvent: { createMany: jest.Mock; create: jest.Mock };
     auctionImage: { deleteMany: jest.Mock; createMany: jest.Mock };
+    bid: { findFirst: jest.Mock };
     category: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -128,6 +129,7 @@ describe('AuctionService', () => {
       },
       auctionEvent: { createMany: jest.fn(), create: jest.fn() },
       auctionImage: { deleteMany: jest.fn(), createMany: jest.fn() },
+      bid: { findFirst: jest.fn() },
       category: { findUnique: jest.fn() },
       // Hands the callback the same mock, so assertions can read every call the
       // transaction made without a second layer of fakes.
@@ -593,9 +595,15 @@ describe('AuctionService', () => {
     const publishedRow = (overrides: Record<string, unknown> = {}) =>
       draftRow({ status: 'SCHEDULED', ...overrides });
 
-    /** The `where` the public lookup narrowed itself with. */
-    const lookupWhere = () =>
-      (prisma.auction.findFirst.mock.calls as WhereArgs[][])[0][0].where;
+    /**
+     * The `where` the public lookup narrowed itself with. It is the last read,
+     * not the first: AUC-007 settles the auction before it is read, and that
+     * settlement does its own ACTIVE-scoped lookup first.
+     */
+    const lookupWhere = () => {
+      const calls = prisma.auction.findFirst.mock.calls as WhereArgs[][];
+      return calls[calls.length - 1][0].where;
+    };
 
     it('shows a SCHEDULED auction to a signed-out visitor', async () => {
       prisma.auction.findFirst.mockResolvedValue(publishedRow());
@@ -988,6 +996,196 @@ describe('AuctionService', () => {
       await expect(
         service.cancelOwnAuction(DRAFT_ID, 'another-seller')
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  /**
+   * AUC-007 — the highest valid bid that clears the reserve ends the auction as
+   * SOLD with the winner and winning price recorded; no bids, or a top bid
+   * under the reserve, ends it UNSOLD.
+   */
+  describe('settleAuction (AUC-007)', () => {
+    const ended = (overrides: Record<string, unknown> = {}) => ({
+      id: DRAFT_ID,
+      currentEndAt: new Date(Date.now() - 60 * 1000),
+      reservePrice: dec(4500),
+      ...overrides
+    });
+
+    const bid = (amount: string | number, bidderId = 'bidder-1') => ({
+      id: 'bid-1',
+      bidderId,
+      amount: dec(amount)
+    });
+
+    const settleWith = (
+      auction: ReturnType<typeof ended>,
+      highestBid: ReturnType<typeof bid> | null
+    ) => {
+      prisma.auction.findFirst.mockResolvedValue(auction);
+      prisma.bid.findFirst.mockResolvedValue(highestBid);
+      prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.auctionEvent.create.mockResolvedValue({});
+    };
+
+    const updateData = () =>
+      (
+        prisma.auction.updateMany.mock.calls as {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }[][]
+      )[0][0].data;
+
+    it('ends SOLD when the top bid clears the reserve', async () => {
+      settleWith(ended(), bid(5000, 'winner-id'));
+
+      const result = await service.settleAuction(DRAFT_ID);
+
+      expect(result).toEqual({ sold: true });
+      expect(updateData()).toMatchObject({
+        status: 'SOLD',
+        winnerUserId: 'winner-id',
+        winningBidId: 'bid-1'
+      });
+    });
+
+    it('records the winning price, not the reserve', async () => {
+      settleWith(ended(), bid(5000));
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect((updateData().soldPrice as Prisma.Decimal).toString()).toBe(
+        '5000'
+      );
+    });
+
+    it('ends SOLD when the top bid exactly meets the reserve', async () => {
+      settleWith(ended(), bid(4500));
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect(updateData().status).toBe('SOLD');
+    });
+
+    it('ends UNSOLD when the top bid is under the reserve', async () => {
+      settleWith(ended(), bid(4499));
+
+      const result = await service.settleAuction(DRAFT_ID);
+
+      expect(result).toEqual({ sold: false });
+      expect(updateData()).toMatchObject({
+        status: 'UNSOLD',
+        winnerUserId: null,
+        winningBidId: null,
+        soldPrice: null
+      });
+    });
+
+    it('ends UNSOLD when nobody bid at all', async () => {
+      settleWith(ended(), null);
+
+      const result = await service.settleAuction(DRAFT_ID);
+
+      expect(result).toEqual({ sold: false });
+      expect(updateData().status).toBe('UNSOLD');
+    });
+
+    it('ends SOLD on any bid when the auction has no reserve', async () => {
+      settleWith(ended({ reservePrice: null }), bid(1));
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect(updateData().status).toBe('SOLD');
+    });
+
+    it('takes the highest bid, and the earliest of equal ones', async () => {
+      settleWith(ended(), bid(5000));
+
+      await service.settleAuction(DRAFT_ID);
+
+      const args = (
+        prisma.bid.findFirst.mock.calls as { orderBy: unknown }[][]
+      )[0][0];
+      expect(args.orderBy).toEqual([{ amount: 'desc' }, { sequenceNo: 'asc' }]);
+    });
+
+    it('stamps when the auction ended', async () => {
+      settleWith(ended(), bid(5000));
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect(updateData().endedAt).toBeInstanceOf(Date);
+    });
+
+    it('records an ENDED event pointing at the winning bid', async () => {
+      settleWith(ended(), bid(5000));
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect(prisma.auctionEvent.create).toHaveBeenCalledWith({
+        data: { auctionId: DRAFT_ID, eventType: 'ENDED', bidId: 'bid-1' }
+      });
+    });
+
+    it('records an ENDED event with no bid when there were none', async () => {
+      settleWith(ended(), null);
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect(prisma.auctionEvent.create).toHaveBeenCalledWith({
+        data: { auctionId: DRAFT_ID, eventType: 'ENDED', bidId: undefined }
+      });
+    });
+
+    describe('leaves alone what it should', () => {
+      it('does nothing while the auction is still running', async () => {
+        prisma.auction.findFirst.mockResolvedValue(
+          ended({ currentEndAt: new Date(Date.now() + 60 * 60 * 1000) })
+        );
+
+        const result = await service.settleAuction(DRAFT_ID);
+
+        expect(result).toBeNull();
+        expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('does nothing for an auction that is not ACTIVE', async () => {
+        // the ACTIVE filter means the lookup simply finds nothing
+        prisma.auction.findFirst.mockResolvedValue(null);
+
+        const result = await service.settleAuction(DRAFT_ID);
+
+        expect(result).toBeNull();
+        expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('does nothing when the auction has no end time', async () => {
+        prisma.auction.findFirst.mockResolvedValue(
+          ended({ currentEndAt: null })
+        );
+
+        expect(await service.settleAuction(DRAFT_ID)).toBeNull();
+        expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('writes no second ENDED event when another reader settled first', async () => {
+        prisma.auction.findFirst.mockResolvedValue(ended());
+        prisma.bid.findFirst.mockResolvedValue(bid(5000));
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+        const result = await service.settleAuction(DRAFT_ID);
+
+        expect(result).toBeNull();
+        expect(prisma.auctionEvent.create).not.toHaveBeenCalled();
+      });
+    });
+
+    it('settles inside one transaction', async () => {
+      settleWith(ended(), bid(5000));
+
+      await service.settleAuction(DRAFT_ID);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -18,6 +18,7 @@ import {
   assertAuctionIsCancellable,
   assertAuctionIsEditable
 } from './utils/assert-seller-can-change.util';
+import { calculateReserveMet } from './utils/calculate-reserve-met.util';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
 
 @Injectable()
@@ -215,6 +216,11 @@ export class AuctionService {
    * routes stop matching the moment the status changes.
    */
   async findPublicAuction(id: string, viewerId?: string) {
+    // AUC-007 — an auction past its end time is settled before it is read, so
+    // nobody is shown a result that is out of date. See settleAuction for why
+    // the read is what triggers it.
+    await this.settleAuction(id);
+
     const auction = await this.prisma.auction.findFirst({
       where: {
         id,
@@ -229,6 +235,67 @@ export class AuctionService {
     return auction.sellerId === viewerId
       ? toOwnerAuction(auction)
       : toPublicAuction(auction);
+  }
+
+  /**
+   * AUC-007 — decides how an auction ends. The highest valid bid that clears
+   * the reserve makes it SOLD and records the winner and the winning price; no
+   * bids at all, or a top bid under the reserve, makes it UNSOLD (AUC-003).
+   *
+   * Nothing happens unless the auction is ACTIVE and its end time has passed,
+   * so this is safe to call on any read. It is called from a read precisely
+   * because there is no scheduler in the project yet: settling lazily keeps a
+   * finished auction from being *reported* as still running, which is the part
+   * the acceptance criteria are about. A timer that closes auctions nobody is
+   * looking at is a separate piece of work.
+   */
+  async settleAuction(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const auction = await tx.auction.findFirst({
+        where: { id, status: 'ACTIVE', deletedAt: null },
+        select: { id: true, currentEndAt: true, reservePrice: true }
+      });
+
+      // Not running, or still running — either way there is nothing to settle.
+      if (!auction?.currentEndAt) return null;
+      if (auction.currentEndAt.getTime() > Date.now()) return null;
+
+      const highestBid = await tx.bid.findFirst({
+        where: { auctionId: id },
+        // A tie on amount goes to whoever got there first, which is what the
+        // sequence number records.
+        orderBy: [{ amount: 'desc' }, { sequenceNo: 'asc' }],
+        select: { id: true, bidderId: true, amount: true }
+      });
+
+      const reserveMet =
+        highestBid !== null &&
+        calculateReserveMet(highestBid.amount, auction.reservePrice);
+      const sold = highestBid !== null && reserveMet;
+
+      const { count } = await tx.auction.updateMany({
+        // Guarded on ACTIVE, so two readers arriving at once cannot both settle
+        // the same auction and write two ENDED events.
+        where: { id, status: 'ACTIVE', deletedAt: null },
+        data: {
+          status: sold ? 'SOLD' : 'UNSOLD',
+          endedAt: new Date(),
+          winnerUserId: sold ? highestBid.bidderId : null,
+          winningBidId: sold ? highestBid.id : null,
+          soldPrice: sold ? highestBid.amount : null,
+          rowVersion: { increment: 1 }
+        }
+      });
+
+      // The other reader won the race and has already settled it.
+      if (count !== 1) return null;
+
+      await tx.auctionEvent.create({
+        data: { auctionId: id, eventType: 'ENDED', bidId: highestBid?.id }
+      });
+
+      return { sold };
+    });
   }
 
   /**
