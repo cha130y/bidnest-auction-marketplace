@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { ScheduleModule } from '@nestjs/schedule';
 import { validate } from './config/env.validation';
 import { AdminModule } from './admin/admin.module';
 import { AuctionModule } from './auction/auction.module';
@@ -28,6 +29,12 @@ import { ShipmentModule } from './shipment/shipment.module';
     // The global AccessTokenGuard is built in this injector, so JwtService has
     // to be resolvable here too. Secrets are passed per verify call.
     JwtModule.register({}),
+    // Timers are left out under test. AuctionLifecycleService moves auctions on
+    // a schedule (AUC-005 / AUC-007), and a background pass firing mid-suite
+    // would race the very transitions the tests assert on — and keep Jest alive
+    // after they finish. The lifecycle methods are called directly in tests
+    // instead, so the logic is still covered.
+    ...(process.env.NODE_ENV === 'test' ? [] : [ScheduleModule.forRoot()]),
     PrismaModule,
     MailModule,
     RealtimeModule,
