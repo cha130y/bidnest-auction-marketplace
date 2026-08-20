@@ -582,4 +582,91 @@ describe('AuctionService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  /**
+   * AUC-005 — a published auction is public to look at from SCHEDULED onwards;
+   * only bidding waits for ACTIVE. A DRAFT is never public.
+   */
+  describe('findPublicAuction (AUC-005)', () => {
+    const publishedRow = (overrides: Record<string, unknown> = {}) =>
+      draftRow({ status: 'SCHEDULED', ...overrides });
+
+    /** The `where` the public lookup narrowed itself with. */
+    const lookupWhere = () =>
+      (prisma.auction.findFirst.mock.calls as WhereArgs[][])[0][0].where;
+
+    it('shows a SCHEDULED auction to a signed-out visitor', async () => {
+      prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+      const auction = await service.findPublicAuction(DRAFT_ID);
+
+      expect(auction).toMatchObject({ id: DRAFT_ID, status: 'SCHEDULED' });
+    });
+
+    it('reports bidding as closed while the auction is only SCHEDULED', async () => {
+      prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+      const auction = await service.findPublicAuction(DRAFT_ID);
+
+      expect(auction.biddingOpen).toBe(false);
+    });
+
+    it('reports bidding as open once the auction is ACTIVE', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        publishedRow({ status: 'ACTIVE' })
+      );
+
+      const auction = await service.findPublicAuction(DRAFT_ID);
+
+      expect(auction.biddingOpen).toBe(true);
+    });
+
+    it('never exposes the reserve to a visitor', async () => {
+      prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+      const auction = await service.findPublicAuction(DRAFT_ID);
+
+      expect(auction).not.toHaveProperty('reservePrice');
+      expect(JSON.stringify(auction)).not.toContain('4500');
+    });
+
+    it('never exposes the reserve to another signed-in user either', async () => {
+      prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+      const auction = await service.findPublicAuction(DRAFT_ID, 'someone-else');
+
+      expect(auction).not.toHaveProperty('reservePrice');
+    });
+
+    // Publishing makes the draft routes stop matching, so this is the only way
+    // a seller can still read their own reserve afterwards
+    it('gives the seller their own reserve back', async () => {
+      prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+      const auction = await service.findPublicAuction(DRAFT_ID, SELLER_ID);
+
+      expect(auction).toMatchObject({ reservePrice: '4500' });
+    });
+
+    it('limits the lookup to statuses that are public, excluding DRAFT', async () => {
+      prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+      await service.findPublicAuction(DRAFT_ID);
+
+      expect(lookupWhere()).toMatchObject({
+        id: DRAFT_ID,
+        status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
+        deletedAt: null
+      });
+    });
+
+    it('hides an auction that is still a draft behind a 404', async () => {
+      // the status filter means the row simply is not found
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(service.findPublicAuction(DRAFT_ID)).rejects.toBeInstanceOf(
+        NotFoundException
+      );
+    });
+  });
 });

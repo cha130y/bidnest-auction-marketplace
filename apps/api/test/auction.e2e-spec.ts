@@ -742,4 +742,142 @@ describe('Auction drafts (e2e)', () => {
       });
     });
   });
+
+  /**
+   * AUC-005 — a published auction is public from SCHEDULED onwards. This is the
+   * first route a signed-out visitor can reach, so it is also where the reserve
+   * confidentiality of AUC-003 finally gets tested over real HTTP.
+   */
+  describe('GET /auctions/:id (AUC-005)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+    /** Creates a draft and publishes it, returning its id. */
+    const publishAuction = async (startInHours: number) => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(startInHours),
+          scheduledEndAt: hoursFromNow(startInHours + 4)
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      return id;
+    };
+
+    it('lets a signed-out visitor read a SCHEDULED auction', async () => {
+      const auctionId = await publishAuction(1);
+
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        id: auctionId,
+        status: 'SCHEDULED',
+        title: 'Vintage Seiko 5 Automatic'
+      });
+    });
+
+    it('tells a visitor that bidding is not open until the auction is ACTIVE', async () => {
+      const scheduledId = await publishAuction(1);
+      const activeId = await publishAuction(-1);
+
+      const scheduled = await request(app.getHttpServer())
+        .get(`/auctions/${scheduledId}`)
+        .expect(200);
+      const active = await request(app.getHttpServer())
+        .get(`/auctions/${activeId}`)
+        .expect(200);
+
+      expect(scheduled.body).toMatchObject({
+        status: 'SCHEDULED',
+        biddingOpen: false
+      });
+      expect(active.body).toMatchObject({
+        status: 'ACTIVE',
+        biddingOpen: true
+      });
+    });
+
+    // AUC-003 over the wire, on the first route where the public can reach it
+    it('never sends the reserve to a visitor or to another user', async () => {
+      const auctionId = await publishAuction(1);
+
+      const anonymous = await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}`)
+        .expect(200);
+      const stranger = await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}`)
+        .set('Authorization', authOf(strangerId))
+        .expect(200);
+
+      for (const response of [anonymous, stranger]) {
+        expect(response.body).not.toHaveProperty('reservePrice');
+        expect(JSON.stringify(response.body)).not.toContain('4500');
+        expect(response.body).toMatchObject({ reserveMet: false });
+      }
+    });
+
+    it('still gives the seller their own reserve after publishing', async () => {
+      const auctionId = await publishAuction(1);
+
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      expect(response.body).toMatchObject({ reservePrice: '4500' });
+    });
+
+    it('keeps an unpublished draft out of the public route', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send(draftBody())
+        .expect(201);
+      const draftId = (created.body as { id: string }).id;
+
+      // 404 for everyone, including the seller who owns it — a DRAFT is simply
+      // not something this route serves
+      await request(app.getHttpServer())
+        .get(`/auctions/${draftId}`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/auctions/${draftId}`)
+        .set('Authorization', authOf(sellerId))
+        .expect(404);
+    });
+
+    it('answers 404 for an auction that does not exist', () => {
+      return request(app.getHttpServer())
+        .get('/auctions/00000000-0000-4000-8000-0000000099ff')
+        .expect(404);
+    });
+
+    it('answers 400 for an id that is not a uuid', () => {
+      return request(app.getHttpServer())
+        .get('/auctions/not-a-uuid')
+        .expect(400);
+    });
+
+    // the literal `drafts` segment must not be swallowed by `:id`
+    it('does not let the public route shadow the drafts routes', async () => {
+      await request(app.getHttpServer()).get('/auctions/drafts').expect(401);
+
+      const response = await request(app.getHttpServer())
+        .get('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+      expect(response.body).toHaveProperty('items');
+    });
+  });
 });

@@ -62,6 +62,10 @@ export function toPublicAuction(auction: AuctionRow) {
     minBidIncrement: auction.minBidIncrement.toString(),
     currentPrice: auction.currentPrice.toString(),
     reserveMet: calculateReserveMet(auction.currentPrice, auction.reservePrice),
+    // AUC-005 — a SCHEDULED auction is public to look at, but bidding only
+    // opens once it turns ACTIVE. Saying so here keeps the frontend from
+    // deriving the rule from `status` on its own and getting it wrong.
+    biddingOpen: auction.status === 'ACTIVE',
     bidCount: auction.bidCount,
     scheduledStartAt: auction.scheduledStartAt,
     originalEndAt: auction.originalEndAt,
