@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GeminiClientService } from '../ai-tools/gemini-client.service';
 import { PromptBuilderService } from '../ai-tools/prompt-builder.service';
 import { ChatRole } from '../../generated/prisma/enums';
+import { ChatMessageDto, SendMessageResponseDto } from './dto/chat-message.dto';
 
 const ESCALATION_THRESHOLD = 3;
 const FALLBACK_MARKER = 'ยังไม่มีข้อมูลเรื่องนี้';
@@ -19,7 +20,10 @@ export class SupportChatService {
     private readonly promptBuilder: PromptBuilderService
   ) {}
 
-  async getHistory(sessionId: string, userId: string) {
+  async getHistory(
+    sessionId: string,
+    userId: string
+  ): Promise<ChatMessageDto[]> {
     await this.getOwnedSession(sessionId, userId);
 
     return this.prisma.supportChatMessage.findMany({
@@ -28,7 +32,11 @@ export class SupportChatService {
     });
   }
 
-  async sendMessage(userId: string, message: string, sessionId?: string) {
+  async sendMessage(
+    userId: string,
+    message: string,
+    sessionId?: string
+  ): Promise<SendMessageResponseDto> {
     const session = sessionId
       ? await this.getOwnedSession(sessionId, userId)
       : await this.prisma.supportChatSession.create({ data: { userId } });
