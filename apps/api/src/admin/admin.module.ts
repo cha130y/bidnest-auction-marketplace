@@ -39,14 +39,14 @@ import { AdminActionsService } from './actions.service';
     AdminAuctionsController,
     AdminProductsController,
     AdminOrdersController,
-    AdminActionsController,
+    AdminActionsController
   ],
   providers: [
     AdminUsersService,
     AdminAuctionsService,
     AdminProductsService,
     AdminOrdersService,
-    AdminActionsService,
-  ],
+    AdminActionsService
+  ]
 })
 export class AdminModule {}

@@ -1,4 +1,14 @@
-import { Controller, Get, Param, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch
+} from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { ModerateProductDto } from './dtos/moderate-product.dto';
 import { AdminProductsService } from './products.service';
 
 /**
@@ -10,9 +20,11 @@ import { AdminProductsService } from './products.service';
  * (ต่างจาก INACTIVE ที่ผู้ขายปิดเองและเปิดกลับเองได้ตาม PROD-002)
  * state machine เต็มและกฎที่ต้อง implement ทุกข้อดูที่ ADR-0002
  *
- * TODO(Dev 3): เมื่อ AUTH-008 พร้อม ใส่ guard ที่ระดับ class
- *   `@UseGuards(AccessTokenGuard, RolesGuard)` + `@Roles(UserRole.ADMIN)`
+ * `@Roles('ADMIN')` ทำงานผ่าน RolesGuard ที่ลงทะเบียนเป็น APP_GUARD ใน AppModule
+ * ตัวตนผู้เรียกมาจาก MockAuthGuard (ยืนแทน AUTH-008 ของ Dev 2) เปลี่ยนเป็น JWT
+ * จริงแล้ว controller นี้ไม่ต้องแก้อะไร
  */
+@Roles('ADMIN')
 @Controller('admin/products')
 export class AdminProductsController {
   constructor(private readonly adminProductsService: AdminProductsService) {}
@@ -25,13 +37,31 @@ export class AdminProductsController {
 
   /** body: { reason: string } → products.status = SUSPENDED */
   @Patch(':productId/deactivate')
-  deactivateProduct(@Param('productId') productId: string) {
-    return this.adminProductsService.setProductActivation(productId, false);
+  deactivateProduct(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto: ModerateProductDto
+  ) {
+    return this.adminProductsService.setProductActivation(
+      productId,
+      false,
+      adminId,
+      dto.reason
+    );
   }
 
   /** body: { reason: string } → products.status = ACTIVE (หรือ OUT_OF_STOCK ถ้า stockQty = 0) */
   @Patch(':productId/reactivate')
-  reactivateProduct(@Param('productId') productId: string) {
-    return this.adminProductsService.setProductActivation(productId, true);
+  reactivateProduct(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto: ModerateProductDto
+  ) {
+    return this.adminProductsService.setProductActivation(
+      productId,
+      true,
+      adminId,
+      dto.reason
+    );
   }
 }

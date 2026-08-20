@@ -1,0 +1,288 @@
+###############################################################################
+# AUC — วงจรชีวิตประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft แบบส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่
+# AUC-004 (preview + publish) จะมาต่อในไฟล์นี้เมื่อทำเสร็จ
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+#=============================================================================
+# 1. สร้าง draft (AUC-001)
+#=============================================================================
+
+### AUC-001 create — draft ที่กรอกครบทุกช่อง. expect 201 + status DRAFT
+# reservePrice ต้องกลับมาด้วย เพราะคนยิงคือ "เจ้าของ draft" (AUC-003)
+# originalEndAt กับ currentEndAt ต้องเท่ากันทั้งคู่ = scheduledEndAt ที่ส่งไป
+# @name createDraft
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "Vintage Seiko 5 Automatic",
+  "description": "Created from 08-auction.http — ล้างเครื่องปีที่แล้ว สายเดิมโรงงาน",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-09-01T10:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T12:00:00.000Z",
+  "imageUrls": [
+    "https://placehold.co/600x400?text=Seiko+Front",
+    "https://placehold.co/600x400?text=Seiko+Back"
+  ]
+}
+
+@draftId = {{createDraft.response.body.$.id}}
+
+### AUC-001 create — draft ที่ยังกรอกไม่ครบ (ไม่มี reserve/กำหนดการ/รูป). expect 201
+# ตั้งใจให้ผ่าน: SRS แยกการตรวจครบถ้วนไว้ที่ AUC-002 ตอน "ก่อนเผยแพร่"
+# ไม่ใช่ตอนเซฟ draft — response ต้องได้ reservePrice: null, images: []
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "Draft ที่ยังทำไม่เสร็จ",
+  "description": "ยังไม่ใส่รูปกับกำหนดการ",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 500,
+  "minBidIncrement": 50
+}
+
+#=============================================================================
+# 2. draft เป็นของส่วนตัว (AUC-001)
+#=============================================================================
+
+### AUC-001 detail — เจ้าของเปิด draft ตัวเอง. expect 200 + เห็น reservePrice
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+x-mock-user-id: {{sellerA}}
+
+### AUC-001 detail — user คนอื่นเปิด draft เดียวกัน. expect 404
+# ต้องเป็น 404 ไม่ใช่ 403 — คำตอบต้องไม่ยืนยันว่า draft นี้มีอยู่จริง
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+x-mock-user-id: {{buyer}}
+
+### AUC-001 detail — คนไม่ได้ login. expect 401
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+
+### AUC-001 list — เจ้าของเห็น draft ของตัวเองทั้งหมด. expect 200 + items ≥ 2
+GET {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+
+### AUC-001 list — คนอื่นเห็นเป็น list ว่าง. expect 200 + items: []
+GET {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{buyer}}
+
+#=============================================================================
+# 3. เคสที่ต้องพัง (ห้ามมี 500)
+#=============================================================================
+
+### สิทธิ์ — แอดมินสร้างประมูลไม่ได้ (SRS §2 แอดมินกำกับดูแล ไม่ได้ขายเอง). expect 403
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{admin}}
+Content-Type: application/json
+
+{
+  "title": "Admin ไม่ควรสร้างได้",
+  "description": "ต้องโดน RolesGuard ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### สิทธิ์ — ไม่ส่ง x-mock-user-id. expect 401
+POST {{baseUrl}}/auctions/drafts
+Content-Type: application/json
+
+{
+  "title": "ไม่ได้ login",
+  "description": "ต้องโดน MockAuthGuard ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### หมวดหมู่ — id ที่ไม่มีอยู่จริง. expect 400
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "หมวดหมู่ไม่มีจริง",
+  "description": "ต้องได้ Category not found",
+  "categoryId": "00000000-0000-4000-8000-000000009999",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### หมวดหมู่ — หมวดที่ถูกปิดใช้งาน (ADR-0001). expect 400
+# ยิงตรงๆ ตอนนี้ยังไม่ได้: ADM-003 ของ Dev 2 ยัง NotImplemented อยู่
+# วิธีเทสชั่วคราว — เปิด `pnpm --dir apps/api exec prisma studio` แล้วตั้ง
+# categories.is_active = false ของ {{catCollectibles}} ก่อนยิง block นี้ แล้วตั้งกลับ
+# (เคสนี้มีเทสอัตโนมัติคุมอยู่แล้วใน test/auction.e2e-spec.ts)
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "หมวดหมู่ถูกปิด",
+  "description": "ต้องได้ Category is not active",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### validation — ราคาเริ่มต้นต้อง > 0. expect 400
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "ราคาเริ่มต้นเป็นศูนย์",
+  "description": "ต้องโดน @IsPositive ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 0,
+  "minBidIncrement": 10
+}
+
+### validation — ชื่อเรื่องมีแต่ช่องว่าง (Trim แล้วต้องว่าง). expect 400
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "   ",
+  "description": "ต้องโดน @Trim + @IsNotEmpty ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### validation — ยัด field ที่ไม่ได้อยู่ใน DTO เข้ามา. expect 400
+# ห้ามให้ client ตั้ง status เองเด็ดขาด — draft ต้องเกิดเป็น DRAFT เสมอ
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "แอบตั้ง status เอง",
+  "description": "ต้องโดน forbidNonWhitelisted ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10,
+  "status": "ACTIVE"
+}
+
+### validation — draft id ที่ไม่ใช่ UUID. expect 400
+GET {{baseUrl}}/auctions/drafts/not-a-uuid
+x-mock-user-id: {{sellerA}}
+
+#=============================================================================
+# 4. ตรวจสอบก่อนเผยแพร่ (AUC-002)
+#=============================================================================
+# checklist แบบอ่านอย่างเดียว — ไม่เปลี่ยนสถานะ draft
+# ready: true  = ผ่านครบทุกเกณฑ์ พร้อมให้ AUC-004 publish
+# ready: false = issues[] บอกว่าเหลืออะไร (field = ชื่อช่องในฟอร์ม ไม่ใช่ชื่อคอลัมน์)
+
+### AUC-002 — draft ที่กรอกครบจาก request ที่ 1. expect 200 + ready: true, issues: []
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
+x-mock-user-id: {{sellerA}}
+
+### AUC-002 — draft ที่ยังไม่มีกำหนดการกับรูป. expect 200 + ready: false
+# issues ต้องมี START_AT_REQUIRED, END_AT_REQUIRED, IMAGES_REQUIRED ครบทั้ง 3
+# @name draftIncomplete
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "Draft ที่ยังทำไม่เสร็จ",
+  "description": "ยังไม่ใส่รูปกับกำหนดการ",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 500,
+  "minBidIncrement": 50
+}
+
+@incompleteId = {{draftIncomplete.response.body.$.id}}
+
+### AUC-002 — ยิง checklist ของ draft ที่ยังไม่เสร็จ. expect ready: false + 3 issues
+GET {{baseUrl}}/auctions/drafts/{{incompleteId}}/validation
+x-mock-user-id: {{sellerA}}
+
+### AUC-002 — เวลาสิ้นสุดมาก่อนเวลาเริ่ม. expect ready: false + END_AT_NOT_AFTER_START_AT
+# @name draftBadSchedule
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "เวลาสลับกัน",
+  "description": "เวลาสิ้นสุดมาก่อนเวลาเริ่ม",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 500,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-09-01T12:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T10:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Only"]
+}
+
+@badScheduleId = {{draftBadSchedule.response.body.$.id}}
+
+###
+GET {{baseUrl}}/auctions/drafts/{{badScheduleId}}/validation
+x-mock-user-id: {{sellerA}}
+
+### AUC-002 — reserve ต่ำกว่าราคาเริ่มต้น. expect ready: false + RESERVE_BELOW_STARTING_PRICE
+# @name draftLowReserve
+POST {{baseUrl}}/auctions/drafts
+x-mock-user-id: {{sellerA}}
+Content-Type: application/json
+
+{
+  "title": "reserve ต่ำกว่าราคาเริ่มต้น",
+  "description": "3000 vs 2999",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 2999,
+  "scheduledStartAt": "2026-09-01T10:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T12:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Only"]
+}
+
+@lowReserveId = {{draftLowReserve.response.body.$.id}}
+
+###
+# response ต้องไม่มีเลข 2999 โผล่ออกมาเลย — บอกได้แค่ว่า "ผิดกฎ" (AUC-003)
+GET {{baseUrl}}/auctions/drafts/{{lowReserveId}}/validation
+x-mock-user-id: {{sellerA}}
+
+### AUC-002 — คนอื่นขอดู checklist ของ draft คนอื่น. expect 404
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
+x-mock-user-id: {{buyer}}
+
+### AUC-002 — ไม่ได้ login. expect 401
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
+
+### AUC-002 — draft id ที่ไม่ใช่ UUID. expect 400
+GET {{baseUrl}}/auctions/drafts/not-a-uuid/validation
+x-mock-user-id: {{sellerA}}

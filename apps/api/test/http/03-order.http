@@ -1,0 +1,78 @@
+###############################################################################
+# ORDER / CHECKOUT — ตะกร้า -> จ่ายเงิน (จำลอง) -> ออเดอร์แยกตามผู้ขาย
+#
+# ไฟล์นี้ยิงเองได้ครบ: request แรกเติมของลงตะกร้าให้ก่อน
+# ของ 2 ผู้ขายในตะกร้าเดียว -> checkout ครั้งเดียวต้องได้ orders 2 ใบ (CART-003)
+# เงินไม่ขยับจริง ทุกอย่างเป็น MockPaymentProvider (SRS 1.2)
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@buyer   = 00000000-0000-4000-8000-000000000004
+@sellerA = 00000000-0000-4000-8000-000000000002
+@productA2 = 00000000-0000-4000-8000-000000000202
+@productB1 = 00000000-0000-4000-8000-000000000203
+
+### setup — ใส่ของผู้ขาย A ลงตะกร้า
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productA2}}", "quantity": 1 }
+
+### setup — ใส่ของผู้ขาย B ลงตะกร้า (ทำให้ sellerCount = 2)
+POST {{baseUrl}}/cart/items
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{ "productId": "{{productB1}}", "quantity": 1 }
+
+### CART-004/005 checkout — expect 201, paymentStatus SUCCEEDED, orders 2 ใบ
+# ดู log ฝั่ง server ต้องขึ้น "[simulated] charge ... -> SUCCEEDED"
+# และ "[stub] notification:created -> user:..."
+# @name checkout
+POST {{baseUrl}}/orders/checkout
+x-mock-user-id: {{buyer}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "shippingAddress": {
+    "recipientName": "Anan B.",
+    "line1": "123 Sukhumvit Rd",
+    "line2": "ห้อง 15A",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0812345678"
+  }
+}
+
+@orderId = {{checkout.response.body.$.orders[0].id}}
+# ผู้ขายเจ้าของออเดอร์ใบแรก — ดึงจาก response ตรงๆ จะได้ไม่ต้องเดาว่า A หรือ B
+@orderSellerId = {{checkout.response.body.$.orders[0].sellerId}}
+
+### ตรวจว่าตะกร้าถูกล้างหลังจ่ายเงินสำเร็จ — items ต้องว่าง
+GET {{baseUrl}}/cart
+x-mock-user-id: {{buyer}}
+
+### ORD-001 รายการที่ฉันซื้อ (มุมมอง buyer). expect 200
+GET {{baseUrl}}/orders
+x-mock-user-id: {{buyer}}
+
+### ORD-001 กรองตามสถานะ + แบ่งหน้า
+GET {{baseUrl}}/orders?status=PAID&page=1&limit=5
+x-mock-user-id: {{buyer}}
+
+### ORD-002 รายการที่ฉันขาย (มุมมอง seller A). expect 200
+GET {{baseUrl}}/orders/selling
+x-mock-user-id: {{sellerA}}
+
+### ORD-003 รายละเอียดออเดอร์ — buyer ดูได้. expect 200
+GET {{baseUrl}}/orders/{{orderId}}
+x-mock-user-id: {{buyer}}
+
+### ORD-003 รายละเอียดออเดอร์ — ผู้ขายในออเดอร์นั้นก็ดูได้. expect 200
+GET {{baseUrl}}/orders/{{orderId}}
+x-mock-user-id: {{orderSellerId}}
+
+### PROD-005 ตรวจว่าสต๊อกถูกตัดจริงหลัง checkout
+GET {{baseUrl}}/products/{{productA2}}

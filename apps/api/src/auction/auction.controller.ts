@@ -1,0 +1,55 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post
+} from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { AuctionService } from './auction.service';
+import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
+
+@Controller('auctions')
+export class AuctionController {
+  constructor(private readonly auctionService: AuctionService) {}
+
+  // SRS 2 — admins moderate the marketplace, they never sell in it
+  @Roles('USER')
+  @Post('drafts')
+  createDraft(
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: CreateAuctionDraftDto
+  ) {
+    return this.auctionService.createDraft(sellerId, dto);
+  }
+
+  // Keep every `drafts` route above a future `GET :id`, or Nest matches the
+  // literal path against the parameter route first.
+  @Roles('USER')
+  @Get('drafts')
+  listOwnDrafts(@CurrentUser('id') sellerId: string) {
+    return this.auctionService.listOwnDrafts(sellerId);
+  }
+
+  @Roles('USER')
+  @Get('drafts/:id')
+  findOwnDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.findOwnDraft(id, sellerId);
+  }
+
+  // AUC-002 — a read-only checklist: it reports what still blocks publishing
+  // and changes nothing, which is why it is a GET.
+  @Roles('USER')
+  @Get('drafts/:id/validation')
+  validateOwnDraft(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.validateOwnDraft(id, sellerId);
+  }
+}

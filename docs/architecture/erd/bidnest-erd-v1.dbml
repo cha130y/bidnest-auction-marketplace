@@ -74,6 +74,7 @@ enum product_status {
   INACTIVE
   OUT_OF_STOCK
   REMOVED
+  SUSPENDED // ใหม่ — ADM-005 (admin สั่งปิดเท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้ — ADR-0002)
 }
 
 enum offer_decision {
@@ -355,7 +356,7 @@ Table products {
     (seller_id, status)
   }
 
-  Note: 'PROD-001..007'
+  Note: 'PROD-001..007 · status = SUSPENDED สงวนไว้ให้ ADM-005 เท่านั้น (ADR-0002)'
 }
 
 Table product_images {
