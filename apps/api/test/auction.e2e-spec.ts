@@ -4,7 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
-import { MOCK_USER_HEADER } from './../src/common/guards/mock-auth.guard';
+import { authRegistry } from './helpers/auth';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 /**
@@ -23,6 +23,7 @@ describe('Auction drafts (e2e)', () => {
   const adminEmail = `auction-admin-${run}@example.com`;
 
   let sellerId: string;
+  let authOf: (userId: string) => string;
   let strangerId: string;
   let adminId: string;
   let activeCategoryId: string;
@@ -87,6 +88,8 @@ describe('Auction drafts (e2e)', () => {
       select: { id: true }
     });
     inactiveCategoryId = inactive.id;
+
+    authOf = await authRegistry(app, [sellerId, strangerId, adminId]);
   });
 
   afterAll(async () => {
@@ -103,7 +106,7 @@ describe('Auction drafts (e2e)', () => {
     it('creates a DRAFT holding every field of the draft', async () => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(draftBody())
         .expect(201);
 
@@ -140,7 +143,7 @@ describe('Auction drafts (e2e)', () => {
     it('records the CREATED lifecycle event alongside the draft', async () => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(draftBody())
         .expect(201);
 
@@ -167,7 +170,7 @@ describe('Auction drafts (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(rest)
         .expect(201);
 
@@ -183,7 +186,7 @@ describe('Auction drafts (e2e)', () => {
     it('rejects a category an admin has deactivated', () => {
       return request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send({ ...draftBody(), categoryId: inactiveCategoryId })
         .expect(400);
     });
@@ -191,7 +194,7 @@ describe('Auction drafts (e2e)', () => {
     it('rejects a non-positive starting price', () => {
       return request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send({ ...draftBody(), startingPrice: 0 })
         .expect(400);
     });
@@ -202,7 +205,7 @@ describe('Auction drafts (e2e)', () => {
 
       return request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(withoutTitle)
         .expect(400);
     });
@@ -210,7 +213,7 @@ describe('Auction drafts (e2e)', () => {
     it('strips unknown fields instead of trusting them', () => {
       return request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send({ ...draftBody(), status: 'ACTIVE' })
         .expect(400);
     });
@@ -225,7 +228,7 @@ describe('Auction drafts (e2e)', () => {
     it('refuses an admin, who moderates rather than sells', () => {
       return request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, adminId)
+        .set('Authorization', authOf(adminId))
         .send(draftBody())
         .expect(403);
     });
@@ -237,7 +240,7 @@ describe('Auction drafts (e2e)', () => {
     beforeAll(async () => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(draftBody())
         .expect(201);
       draftId = (response.body as { id: string }).id;
@@ -246,7 +249,7 @@ describe('Auction drafts (e2e)', () => {
     it('lets the owner read their own draft', async () => {
       const response = await request(app.getHttpServer())
         .get(`/auctions/drafts/${draftId}`)
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .expect(200);
 
       expect(response.body).toMatchObject({ id: draftId, status: 'DRAFT' });
@@ -255,7 +258,7 @@ describe('Auction drafts (e2e)', () => {
     it('hides the draft from another logged-in user', () => {
       return request(app.getHttpServer())
         .get(`/auctions/drafts/${draftId}`)
-        .set(MOCK_USER_HEADER, strangerId)
+        .set('Authorization', authOf(strangerId))
         .expect(404);
     });
 
@@ -268,7 +271,7 @@ describe('Auction drafts (e2e)', () => {
     it('lists the seller their own drafts only', async () => {
       const response = await request(app.getHttpServer())
         .get('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .expect(200);
 
       const body = response.body as { items: { id: string; status: string }[] };
@@ -278,7 +281,7 @@ describe('Auction drafts (e2e)', () => {
 
       const stranger = await request(app.getHttpServer())
         .get('/auctions/drafts')
-        .set(MOCK_USER_HEADER, strangerId)
+        .set('Authorization', authOf(strangerId))
         .expect(200);
       expect((stranger.body as { items: unknown[] }).items).toEqual([]);
     });
@@ -294,7 +297,7 @@ describe('Auction drafts (e2e)', () => {
     const createDraft = async (overrides: Record<string, unknown> = {}) => {
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send({ ...draftBody(), ...overrides })
         .expect(201);
       return (response.body as { id: string }).id;
@@ -303,7 +306,7 @@ describe('Auction drafts (e2e)', () => {
     const validationOf = async (draftId: string, userId = sellerId) => {
       const response = await request(app.getHttpServer())
         .get(`/auctions/drafts/${draftId}/validation`)
-        .set(MOCK_USER_HEADER, userId)
+        .set('Authorization', authOf(userId))
         .expect(200);
       return response.body as {
         auctionId: string;
@@ -329,7 +332,7 @@ describe('Auction drafts (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(rest)
         .expect(201);
       const draftId = (response.body as { id: string }).id;
@@ -392,7 +395,7 @@ describe('Auction drafts (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/auctions/drafts')
-        .set(MOCK_USER_HEADER, sellerId)
+        .set('Authorization', authOf(sellerId))
         .send(rest)
         .expect(201);
 
@@ -439,7 +442,7 @@ describe('Auction drafts (e2e)', () => {
 
       return request(app.getHttpServer())
         .get(`/auctions/drafts/${draftId}/validation`)
-        .set(MOCK_USER_HEADER, strangerId)
+        .set('Authorization', authOf(strangerId))
         .expect(404);
     });
 

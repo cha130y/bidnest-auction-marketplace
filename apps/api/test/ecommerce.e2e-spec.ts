@@ -4,7 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
-import { MOCK_USER_HEADER } from './../src/common/guards/mock-auth.guard';
+import { authRegistry } from './helpers/auth';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 /**
@@ -22,6 +22,7 @@ describe('E-commerce (e2e)', () => {
   const suiteStartedAt = new Date();
 
   let sellerAId: string;
+  let authOf: (userId: string) => string;
   let sellerBId: string;
   let buyerId: string;
   let strangerId: string;
@@ -58,7 +59,7 @@ describe('E-commerce (e2e)', () => {
   ) => {
     const response = await request(app.getHttpServer())
       .post('/products')
-      .set(MOCK_USER_HEADER, sellerId)
+      .set('Authorization', authOf(sellerId))
       .send({
         title: `E2E Product ${run}`,
         description: 'Created by the e-commerce e2e suite.',
@@ -79,24 +80,24 @@ describe('E-commerce (e2e)', () => {
   const addToCart = (userId: string, productId: string, quantity: number) =>
     request(app.getHttpServer())
       .post('/cart/items')
-      .set(MOCK_USER_HEADER, userId)
+      .set('Authorization', authOf(userId))
       .send({ productId, quantity });
 
   const checkout = (userId: string, paymentMethod = 'CARD') =>
     request(app.getHttpServer())
       .post('/orders/checkout')
-      .set(MOCK_USER_HEADER, userId)
+      .set('Authorization', authOf(userId))
       .send({ paymentMethod, shippingAddress: address });
 
   const emptyCart = async (userId: string) => {
     const cart = await request(app.getHttpServer())
       .get('/cart')
-      .set(MOCK_USER_HEADER, userId);
+      .set('Authorization', authOf(userId));
     const body = cart.body as { items: { id: string }[] };
     for (const item of body.items ?? []) {
       await request(app.getHttpServer())
         .delete(`/cart/items/${item.id}`)
-        .set(MOCK_USER_HEADER, userId);
+        .set('Authorization', authOf(userId));
     }
   };
 
@@ -122,6 +123,14 @@ describe('E-commerce (e2e)', () => {
       select: { id: true }
     });
     categoryId = category.id;
+
+    authOf = await authRegistry(app, [
+      sellerAId,
+      sellerBId,
+      buyerId,
+      strangerId,
+      adminId
+    ]);
   });
 
   afterAll(async () => {
@@ -210,7 +219,7 @@ describe('E-commerce (e2e)', () => {
     it('is absent for a signed-in buyer who does not own it', async () => {
       const response = await request(app.getHttpServer())
         .get(`/products/${productId}`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(200);
 
       expect(response.body).not.toHaveProperty('negotiationFloor');
@@ -219,7 +228,7 @@ describe('E-commerce (e2e)', () => {
     it('is visible to the seller who set it', async () => {
       const response = await request(app.getHttpServer())
         .get(`/products/${productId}`)
-        .set(MOCK_USER_HEADER, sellerAId)
+        .set('Authorization', authOf(sellerAId))
         .expect(200);
 
       expect(response.body).toHaveProperty('negotiationFloor');
@@ -272,7 +281,7 @@ describe('E-commerce (e2e)', () => {
     it('empties the cart once the orders exist', async () => {
       const response = await request(app.getHttpServer())
         .get('/cart')
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(200);
 
       expect((response.body as { items: unknown[] }).items).toHaveLength(0);
@@ -292,13 +301,13 @@ describe('E-commerce (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(200);
 
       // Not-found rather than forbidden: an outsider learns nothing.
       await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
-        .set(MOCK_USER_HEADER, strangerId)
+        .set('Authorization', authOf(strangerId))
         .expect(404);
 
       await request(app.getHttpServer()).get(`/orders/${orderId}`).expect(401);
@@ -334,7 +343,7 @@ describe('E-commerce (e2e)', () => {
     it('keeps the cart intact so the buyer can retry', async () => {
       const response = await request(app.getHttpServer())
         .get('/cart')
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(200);
 
       expect((response.body as { items: unknown[] }).items).toHaveLength(1);
@@ -399,13 +408,13 @@ describe('E-commerce (e2e)', () => {
     const advance = (status: string, actorId: string) =>
       request(app.getHttpServer())
         .patch(`/orders/${orderId}/shipment`)
-        .set(MOCK_USER_HEADER, actorId)
+        .set('Authorization', authOf(actorId))
         .send({ status });
 
     it('starts at PROCESSING with no tracking number', async () => {
       const response = await request(app.getHttpServer())
         .get(`/orders/${orderId}/shipment`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(200);
 
       expect(response.body).toMatchObject({
@@ -459,7 +468,7 @@ describe('E-commerce (e2e)', () => {
     it('records every step in an append-only timeline (SHIP-002)', async () => {
       const response = await request(app.getHttpServer())
         .get(`/orders/${orderId}/shipment`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(200);
 
       const body = response.body as { timeline: { status: string }[] };
@@ -482,21 +491,21 @@ describe('E-commerce (e2e)', () => {
     it('refuses moderation without a reason', () =>
       request(app.getHttpServer())
         .patch(`/admin/products/${productId}/deactivate`)
-        .set(MOCK_USER_HEADER, adminId)
+        .set('Authorization', authOf(adminId))
         .send({})
         .expect(400));
 
     it('refuses moderation by a regular user', () =>
       request(app.getHttpServer())
         .patch(`/admin/products/${productId}/deactivate`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .send({ reason: 'not mine to moderate' })
         .expect(403));
 
     it('suspends the listing and logs the reason', async () => {
       const response = await request(app.getHttpServer())
         .patch(`/admin/products/${productId}/deactivate`)
-        .set(MOCK_USER_HEADER, adminId)
+        .set('Authorization', authOf(adminId))
         .send({ reason: 'Suspected counterfeit' })
         .expect(200);
 
@@ -519,19 +528,19 @@ describe('E-commerce (e2e)', () => {
     it('locks the seller out of every route back to sale', async () => {
       await request(app.getHttpServer())
         .patch(`/products/${productId}`)
-        .set(MOCK_USER_HEADER, sellerAId)
+        .set('Authorization', authOf(sellerAId))
         .send({ price: 400 })
         .expect(403);
 
       await request(app.getHttpServer())
         .patch(`/products/${productId}/status`)
-        .set(MOCK_USER_HEADER, sellerAId)
+        .set('Authorization', authOf(sellerAId))
         .send({ status: 'ACTIVE' })
         .expect(403);
 
       await request(app.getHttpServer())
         .patch(`/products/${productId}/stock`)
-        .set(MOCK_USER_HEADER, sellerAId)
+        .set('Authorization', authOf(sellerAId))
         .send({ stockQty: 9 })
         .expect(403);
     });
@@ -539,7 +548,7 @@ describe('E-commerce (e2e)', () => {
     it('comes back on sale only through the admin', async () => {
       const response = await request(app.getHttpServer())
         .patch(`/admin/products/${productId}/reactivate`)
-        .set(MOCK_USER_HEADER, adminId)
+        .set('Authorization', authOf(adminId))
         .send({ reason: 'Seller cleared it up' })
         .expect(200);
 
@@ -558,12 +567,12 @@ describe('E-commerce (e2e)', () => {
     it('opens one thread per (product, buyer, seller)', async () => {
       const first = await request(app.getHttpServer())
         .post(`/products/${productId}/conversations`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(201);
 
       const second = await request(app.getHttpServer())
         .post(`/products/${productId}/conversations`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .expect(201);
 
       conversationId = (first.body as { id: string }).id;
@@ -573,13 +582,13 @@ describe('E-commerce (e2e)', () => {
     it('refuses to let a seller open a thread on their own listing', () =>
       request(app.getHttpServer())
         .post(`/products/${productId}/conversations`)
-        .set(MOCK_USER_HEADER, sellerAId)
+        .set('Authorization', authOf(sellerAId))
         .expect(403));
 
     it('notifies the other side of a new message (NOT-008)', async () => {
       await request(app.getHttpServer())
         .post(`/conversations/${conversationId}/messages`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .send({ body: '  Is this still available?  ' })
         .expect(201);
 
@@ -592,7 +601,7 @@ describe('E-commerce (e2e)', () => {
     it('trims the message and rejects an empty one', async () => {
       const response = await request(app.getHttpServer())
         .get(`/conversations/${conversationId}/messages`)
-        .set(MOCK_USER_HEADER, sellerAId)
+        .set('Authorization', authOf(sellerAId))
         .expect(200);
 
       const body = response.body as { items: { body: string }[] };
@@ -600,7 +609,7 @@ describe('E-commerce (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/conversations/${conversationId}/messages`)
-        .set(MOCK_USER_HEADER, buyerId)
+        .set('Authorization', authOf(buyerId))
         .send({ body: '   ' })
         .expect(400);
     });
@@ -608,19 +617,19 @@ describe('E-commerce (e2e)', () => {
     it('keeps the thread away from outsiders and admins (SRS 6)', async () => {
       await request(app.getHttpServer())
         .get(`/conversations/${conversationId}/messages`)
-        .set(MOCK_USER_HEADER, strangerId)
+        .set('Authorization', authOf(strangerId))
         .expect(404);
 
       await request(app.getHttpServer())
         .post(`/conversations/${conversationId}/messages`)
-        .set(MOCK_USER_HEADER, strangerId)
+        .set('Authorization', authOf(strangerId))
         .send({ body: 'let me in' })
         .expect(404);
 
       // V1 has no chat moderation, so an admin has no way in either.
       await request(app.getHttpServer())
         .get(`/conversations/${conversationId}/messages`)
-        .set(MOCK_USER_HEADER, adminId)
+        .set('Authorization', authOf(adminId))
         .expect(403);
     });
   });
@@ -629,7 +638,7 @@ describe('E-commerce (e2e)', () => {
     it('cannot list a product, fill a cart, or check out', async () => {
       await request(app.getHttpServer())
         .post('/products')
-        .set(MOCK_USER_HEADER, adminId)
+        .set('Authorization', authOf(adminId))
         .send({
           title: 'Admin listing',
           description: 'should never exist',
