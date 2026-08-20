@@ -26,7 +26,7 @@ import { SupportChatModule } from './support-chat/support-chat.module';
       isGlobal: true,
       validate
     }),
-    // AI-001 rate-limit (SRS §6) — เฉพาะของ Dev 5, ไม่กระทบ guard/module อื่น
+    // AI-001 rate-limit (SRS §6) — เฉพาะของ Dev 5 เท่านั้น ไม่กระทบ guard/module อื่น
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
     PrismaModule,
     RealtimeModule,

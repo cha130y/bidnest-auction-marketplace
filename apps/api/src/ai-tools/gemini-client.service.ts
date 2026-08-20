@@ -24,7 +24,7 @@ export class GeminiClientService {
     try {
       const result = await Promise.race([
         model.generateContent(prompt),
-        timeoutPromise,
+        timeoutPromise
       ]);
       return result.response.text();
     } catch (error) {
