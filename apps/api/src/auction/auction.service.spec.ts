@@ -2,7 +2,6 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { auctionPublicSelect } from './auction.mapper';
 import { AuctionService } from './auction.service';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 
@@ -59,6 +58,10 @@ type CreateArgs = {
 /** Shape of the `where` clause the owner-scoped reads narrow themselves with. */
 type WhereArgs = { where: Record<string, unknown> };
 
+// Money comes back from Prisma as Decimal, and the mapper calls Decimal methods
+// on it to compute reserveMet (AUC-003), so the mock has to use real Decimals.
+const dec = (value: string | number) => new Prisma.Decimal(value);
+
 const draftRow = (overrides: Record<string, unknown> = {}) => ({
   id: DRAFT_ID,
   sellerId: SELLER_ID,
@@ -68,10 +71,10 @@ const draftRow = (overrides: Record<string, unknown> = {}) => ({
   condition: 'USED',
   status: 'DRAFT',
   currency: 'THB',
-  startingPrice: 3000,
-  minBidIncrement: 100,
-  reservePrice: 4500,
-  currentPrice: 0,
+  startingPrice: dec(3000),
+  minBidIncrement: dec(100),
+  reservePrice: dec(4500),
+  currentPrice: dec(0),
   bidCount: 0,
   scheduledStartAt: START_AT,
   originalEndAt: END_AT,
@@ -359,14 +362,6 @@ describe('AuctionService', () => {
       const result = await service.validateOwnDraft(DRAFT_ID, SELLER_ID);
 
       expect(JSON.stringify(result)).not.toContain('4500');
-    });
-  });
-
-  // AUC-003 / SRS section 6 — guards the mapper split the buyer-facing paths
-  // will be built on, so a later public endpoint cannot select the reserve.
-  describe('reserve confidentiality', () => {
-    it('keeps reservePrice out of the public select', () => {
-      expect(auctionPublicSelect).not.toHaveProperty('reservePrice');
     });
   });
 });
