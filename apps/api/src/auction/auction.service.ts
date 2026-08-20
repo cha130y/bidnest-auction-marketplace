@@ -5,6 +5,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   auctionRowSelect,
@@ -216,21 +217,45 @@ export class AuctionService {
    * routes stop matching the moment the status changes.
    */
   async findPublicAuction(id: string, viewerId?: string) {
-    // AUC-007 — an auction past its end time is settled before it is read, so
-    // nobody is shown a result that is out of date. See settleAuction for why
-    // the read is what triggers it.
-    await this.settleAuction(id);
+    const publicStatuses = {
+      id,
+      status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
+      deletedAt: null
+    } satisfies Prisma.AuctionWhereInput;
 
-    const auction = await this.prisma.auction.findFirst({
-      where: {
-        id,
-        status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
-        deletedAt: null
-      },
+    let auction = await this.prisma.auction.findFirst({
+      where: publicStatuses,
       select: auctionRowSelect
     });
 
     if (!auction) throw new NotFoundException('Auction not found');
+
+    /**
+     * AUC-007 — read repair. AuctionLifecycleService is what normally settles
+     * auctions, but its pass runs every ten seconds, and in that window a
+     * reader would be told an auction is still ACTIVE and open for bids when
+     * it is already over. Settling here closes that window, and covers the
+     * auction that ends while the API happens to be restarting.
+     *
+     * The check comes first so the ordinary read — an auction that is
+     * scheduled, running, or long finished — costs exactly one query and never
+     * opens a transaction. Only an auction that is genuinely due pays for one.
+     *
+     * Both paths call the same settleAuction, so a reader and the timer cannot
+     * reach different verdicts, and the guarded write inside makes it safe for
+     * them to arrive together.
+     */
+    const isDue =
+      auction.status === 'ACTIVE' &&
+      auction.currentEndAt !== null &&
+      auction.currentEndAt.getTime() <= Date.now();
+
+    if (isDue && (await this.settleAuction(id))) {
+      auction = await this.prisma.auction.findFirstOrThrow({
+        where: publicStatuses,
+        select: auctionRowSelect
+      });
+    }
 
     return auction.sellerId === viewerId
       ? toOwnerAuction(auction)
