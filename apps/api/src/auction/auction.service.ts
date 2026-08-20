@@ -198,6 +198,34 @@ export class AuctionService {
     });
   }
 
+  /**
+   * AUC-005 — once published, an auction is public to look at: SCHEDULED is as
+   * visible as ACTIVE, and only bidding waits for ACTIVE (reported as
+   * `biddingOpen`). DRAFT is excluded by listing the statuses that are public
+   * rather than by excluding DRAFT, so a status added later is private until
+   * somebody decides otherwise.
+   *
+   * The seller gets their own auction back through the owner mapper, which is
+   * the only way they can still see their reserve after publishing — the draft
+   * routes stop matching the moment the status changes.
+   */
+  async findPublicAuction(id: string, viewerId?: string) {
+    const auction = await this.prisma.auction.findFirst({
+      where: {
+        id,
+        status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
+        deletedAt: null
+      },
+      select: auctionRowSelect
+    });
+
+    if (!auction) throw new NotFoundException('Auction not found');
+
+    return auction.sellerId === viewerId
+      ? toOwnerAuction(auction)
+      : toPublicAuction(auction);
+  }
+
   // ADR-0001 — auctions and products draw from the same category set, so an
   // auction may only reference a category an admin has left active.
   private async assertCategoryIsActive(categoryId: string) {

@@ -3,7 +3,7 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
-# AUC-003 reserve ซ่อน, AUC-004 preview + publish
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -389,3 +389,44 @@ Authorization: Bearer {{buyerToken}}
 
 ### AUC-004 publish — ไม่ได้ login. expect 401
 POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
+
+#=============================================================================
+# 6. ผู้ซื้อมองเห็นประมูล (AUC-005)
+#=============================================================================
+# publish แล้ว = สาธารณะทันที ตั้งแต่ SCHEDULED ไม่ต้องรอ ACTIVE
+# แต่ biddingOpen จะเป็น true ก็ต่อเมื่อเข้า ACTIVE แล้วเท่านั้น
+#
+# route นี้เป็น @Public — ยิงได้โดยไม่ต้องมี token
+# ถ้าส่ง token มาด้วยและเป็นเจ้าของ จะได้ reservePrice กลับมาเพิ่ม
+
+### AUC-005 — คนไม่ได้ login เปิดดูประมูลที่ publish แล้ว. expect 200
+# ต้องไม่มี reservePrice, มีแค่ reserveMet + biddingOpen
+GET {{baseUrl}}/auctions/{{draftId}}
+
+### AUC-005 — คนอื่นที่ login อยู่เปิดดู. expect 200 + ยังไม่เห็น reservePrice
+GET {{baseUrl}}/auctions/{{draftId}}
+Authorization: Bearer {{buyerToken}}
+
+### AUC-005 — เจ้าของเปิดดูประมูลตัวเองหลัง publish. expect 200 + เห็น reservePrice
+# หลัง publish แล้ว /auctions/drafts/:id จะหาไม่เจอ (ไม่ใช่ DRAFT แล้ว)
+# ทางนี้จึงเป็นทางเดียวที่ผู้ขายยังดู reserve ตัวเองได้
+GET {{baseUrl}}/auctions/{{draftId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-005 — ประมูลที่ ACTIVE แล้ว. expect 200 + biddingOpen: true
+GET {{baseUrl}}/auctions/{{startsNowId}}
+
+### AUC-005 — draft ที่ยังไม่ publish. expect 404
+# ต้อง 404 แม้เจ้าของเป็นคนยิงเอง — route นี้ไม่ให้บริการ DRAFT
+GET {{baseUrl}}/auctions/{{incompleteId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-005 — id ที่ไม่มีอยู่จริง. expect 404
+GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000099ff
+
+### AUC-005 — id ที่ไม่ใช่ UUID. expect 400
+GET {{baseUrl}}/auctions/not-a-uuid
+
+### AUC-005 — เช็คว่า :id ไม่กลืน path `drafts`. expect 401 (ไม่ใช่ 400/404)
+# ถ้าเผลอวาง @Get(':id') ไว้เหนือ drafts routes เคสนี้จะพัง
+GET {{baseUrl}}/auctions/drafts

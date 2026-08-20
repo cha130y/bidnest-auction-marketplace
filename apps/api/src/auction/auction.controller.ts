@@ -6,9 +6,12 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
-  Post
+  Post,
+  Req
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
@@ -75,5 +78,24 @@ export class AuctionController {
     @CurrentUser('id') sellerId: string
   ) {
     return this.auctionService.publishDraft(id, sellerId);
+  }
+
+  /**
+   * AUC-005 — the first buyer-facing route, and the reason every `drafts` path
+   * above has to stay above it: `:id` would otherwise swallow the literal
+   * segment `drafts`.
+   *
+   * Public, so a signed-out visitor can browse. AccessTokenGuard still fills in
+   * `request.user` when a token happens to be sent, which is what lets the
+   * seller's own view come back through the owner mapper. `@CurrentUser()`
+   * cannot be used here — it throws when nobody is signed in.
+   */
+  @Public()
+  @Get(':id')
+  findPublicAuction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request
+  ) {
+    return this.auctionService.findPublicAuction(id, request.user?.id);
   }
 }
