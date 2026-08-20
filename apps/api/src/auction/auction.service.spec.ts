@@ -110,6 +110,7 @@ describe('AuctionService', () => {
       findFirst: jest.Mock;
       updateMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
+      findFirstOrThrow: jest.Mock;
     };
     auctionEvent: { createMany: jest.Mock; create: jest.Mock };
     auctionImage: { deleteMany: jest.Mock; createMany: jest.Mock };
@@ -125,7 +126,8 @@ describe('AuctionService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         updateMany: jest.fn(),
-        findUniqueOrThrow: jest.fn()
+        findUniqueOrThrow: jest.fn(),
+        findFirstOrThrow: jest.fn()
       },
       auctionEvent: { createMany: jest.fn(), create: jest.fn() },
       auctionImage: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -596,14 +598,12 @@ describe('AuctionService', () => {
       draftRow({ status: 'SCHEDULED', ...overrides });
 
     /**
-     * The `where` the public lookup narrowed itself with. It is the last read,
-     * not the first: AUC-007 settles the auction before it is read, and that
-     * settlement does its own ACTIVE-scoped lookup first.
+     * The `where` the public lookup narrowed itself with — the first read. The
+     * AUC-007 read repair only runs afterwards, and only for an auction that is
+     * actually due, so an ordinary read makes this one query and no more.
      */
-    const lookupWhere = () => {
-      const calls = prisma.auction.findFirst.mock.calls as WhereArgs[][];
-      return calls[calls.length - 1][0].where;
-    };
+    const lookupWhere = () =>
+      (prisma.auction.findFirst.mock.calls as WhereArgs[][])[0][0].where;
 
     it('shows a SCHEDULED auction to a signed-out visitor', async () => {
       prisma.auction.findFirst.mockResolvedValue(publishedRow());
@@ -677,6 +677,78 @@ describe('AuctionService', () => {
       await expect(service.findPublicAuction(DRAFT_ID)).rejects.toBeInstanceOf(
         NotFoundException
       );
+    });
+
+    /**
+     * AUC-007 read repair — the timer settles auctions every ten seconds, and
+     * this closes the window in between. It must not make the ordinary read
+     * more expensive, which is what these tests hold in place.
+     */
+    describe('read repair', () => {
+      it('costs one query and no transaction for an auction that is not due', async () => {
+        prisma.auction.findFirst.mockResolvedValue(publishedRow());
+
+        await service.findPublicAuction(DRAFT_ID);
+
+        expect(prisma.auction.findFirst).toHaveBeenCalledTimes(1);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('does not settle an ACTIVE auction that is still running', async () => {
+        prisma.auction.findFirst.mockResolvedValue(
+          publishedRow({
+            status: 'ACTIVE',
+            currentEndAt: new Date(Date.now() + 60 * 60 * 1000)
+          })
+        );
+
+        await service.findPublicAuction(DRAFT_ID);
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('settles an ACTIVE auction whose end time has passed, then re-reads it', async () => {
+        const due = publishedRow({
+          status: 'ACTIVE',
+          currentEndAt: new Date(Date.now() - 60 * 1000)
+        });
+        // first: the public read. second: settleAuction's own ACTIVE lookup.
+        prisma.auction.findFirst
+          .mockResolvedValueOnce(due)
+          .mockResolvedValueOnce({
+            id: DRAFT_ID,
+            currentEndAt: new Date(Date.now() - 60 * 1000),
+            reservePrice: dec(4500)
+          });
+        prisma.bid.findFirst.mockResolvedValue(null);
+        prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+        prisma.auctionEvent.create.mockResolvedValue({});
+        prisma.auction.findFirstOrThrow.mockResolvedValue(
+          publishedRow({ status: 'UNSOLD' })
+        );
+
+        const result = await service.findPublicAuction(DRAFT_ID);
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        // the caller sees the settled result, not the stale ACTIVE row
+        expect(result.status).toBe('UNSOLD');
+      });
+
+      it('does not re-read when another reader settled it first', async () => {
+        prisma.auction.findFirst
+          .mockResolvedValueOnce(
+            publishedRow({
+              status: 'ACTIVE',
+              currentEndAt: new Date(Date.now() - 60 * 1000)
+            })
+          )
+          // settleAuction finds nothing ACTIVE left to settle
+          .mockResolvedValueOnce(null);
+
+        await service.findPublicAuction(DRAFT_ID);
+
+        expect(prisma.auction.findFirstOrThrow).not.toHaveBeenCalled();
+      });
     });
   });
 
