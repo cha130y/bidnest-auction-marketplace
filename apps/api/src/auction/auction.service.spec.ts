@@ -111,7 +111,8 @@ describe('AuctionService', () => {
       updateMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
     };
-    auctionEvent: { createMany: jest.Mock };
+    auctionEvent: { createMany: jest.Mock; create: jest.Mock };
+    auctionImage: { deleteMany: jest.Mock; createMany: jest.Mock };
     category: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -125,7 +126,8 @@ describe('AuctionService', () => {
         updateMany: jest.fn(),
         findUniqueOrThrow: jest.fn()
       },
-      auctionEvent: { createMany: jest.fn() },
+      auctionEvent: { createMany: jest.fn(), create: jest.fn() },
+      auctionImage: { deleteMany: jest.fn(), createMany: jest.fn() },
       category: { findUnique: jest.fn() },
       // Hands the callback the same mock, so assertions can read every call the
       // transaction made without a second layer of fakes.
@@ -667,6 +669,325 @@ describe('AuctionService', () => {
       await expect(service.findPublicAuction(DRAFT_ID)).rejects.toBeInstanceOf(
         NotFoundException
       );
+    });
+  });
+
+  /**
+   * AUC-006 — a seller edits or cancels only while the auction is DRAFT or
+   * SCHEDULED and nobody has bid. The guard rules themselves are covered in
+   * assert-seller-can-change.util.spec; these tests cover what the service does
+   * around them.
+   */
+  describe('updateOwnAuction (AUC-006)', () => {
+    const editableRow = (overrides: Record<string, unknown> = {}) => ({
+      status: 'DRAFT',
+      bidCount: 0,
+      ...overrides
+    });
+
+    const updateSucceeds = (row: ReturnType<typeof editableRow>) => {
+      prisma.auction.findFirst.mockResolvedValue(row);
+      prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.auction.findUniqueOrThrow.mockResolvedValue(draftRow());
+      prisma.auctionImage.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.auctionImage.createMany.mockResolvedValue({ count: 0 });
+    };
+
+    const updateArgs = () =>
+      (
+        prisma.auction.updateMany.mock.calls as {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }[][]
+      )[0][0];
+
+    it('edits a DRAFT', async () => {
+      updateSucceeds(editableRow());
+
+      await service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'Renamed' });
+
+      expect(updateArgs().data).toMatchObject({ title: 'Renamed' });
+    });
+
+    it('edits a SCHEDULED auction, re-validating it afterwards', async () => {
+      updateSucceeds(editableRow({ status: 'SCHEDULED' }));
+      prisma.auction.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          id: DRAFT_ID,
+          title: 'Renamed',
+          description: 'still fine',
+          condition: 'USED',
+          startingPrice: dec(3000),
+          minBidIncrement: dec(100),
+          reservePrice: dec(4500),
+          scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+          originalEndAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+          category: { isActive: true },
+          images: [{ id: 'image-1' }]
+        })
+        .mockResolvedValueOnce(draftRow());
+
+      await service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'Renamed' });
+
+      expect(prisma.auction.updateMany).toHaveBeenCalled();
+    });
+
+    it('rolls back an edit that would leave a published auction incomplete', async () => {
+      updateSucceeds(editableRow({ status: 'SCHEDULED' }));
+      // the re-validation read comes back with no images left
+      prisma.auction.findUniqueOrThrow.mockResolvedValueOnce({
+        id: DRAFT_ID,
+        title: 'Renamed',
+        description: 'still fine',
+        condition: 'USED',
+        startingPrice: dec(3000),
+        minBidIncrement: dec(100),
+        reservePrice: dec(4500),
+        scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+        originalEndAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+        category: { isActive: true },
+        images: []
+      });
+
+      await expect(
+        service.updateOwnAuction(DRAFT_ID, SELLER_ID, { imageUrls: [] })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('does not re-validate a DRAFT — half-finished is allowed there', async () => {
+      updateSucceeds(editableRow());
+
+      await service.updateOwnAuction(DRAFT_ID, SELLER_ID, { imageUrls: [] });
+
+      // one read only: the row that gets mapped back, no gate read
+      expect(prisma.auction.findUniqueOrThrow).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses to edit an ACTIVE auction and writes nothing', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        editableRow({ status: 'ACTIVE' })
+      );
+
+      await expect(
+        service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'Too late' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses to edit an auction that has bids', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        editableRow({ status: 'SCHEDULED', bidCount: 2 })
+      );
+
+      await expect(
+        service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'Too late' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('replaces the whole image set rather than appending to it', async () => {
+      updateSucceeds(editableRow());
+
+      await service.updateOwnAuction(DRAFT_ID, SELLER_ID, {
+        imageUrls: ['https://placehold.co/600x400?text=New']
+      });
+
+      expect(prisma.auctionImage.deleteMany).toHaveBeenCalledWith({
+        where: { auctionId: DRAFT_ID }
+      });
+      const created = (
+        prisma.auctionImage.createMany.mock.calls as {
+          data: { url: string; position: number; isPrimary: boolean }[];
+        }[][]
+      )[0][0].data;
+      expect(created).toHaveLength(1);
+      expect(created[0]).toMatchObject({ position: 0, isPrimary: true });
+    });
+
+    it('leaves the images alone when the edit does not mention them', async () => {
+      updateSucceeds(editableRow());
+
+      await service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'Renamed' });
+
+      expect(prisma.auctionImage.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('guards the write on the status and bid count it just checked', async () => {
+      updateSucceeds(editableRow({ status: 'SCHEDULED' }));
+      prisma.auction.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          id: DRAFT_ID,
+          title: 'x',
+          description: 'x',
+          condition: 'USED',
+          startingPrice: dec(3000),
+          minBidIncrement: dec(100),
+          reservePrice: null,
+          scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+          originalEndAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+          category: { isActive: true },
+          images: [{ id: 'image-1' }]
+        })
+        .mockResolvedValueOnce(draftRow());
+
+      await service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'x' });
+
+      expect(updateArgs().where).toMatchObject({
+        id: DRAFT_ID,
+        sellerId: SELLER_ID,
+        status: 'SCHEDULED',
+        bidCount: 0,
+        deletedAt: null
+      });
+    });
+
+    it('reports a conflict when the guarded write matches no row', async () => {
+      prisma.auction.findFirst.mockResolvedValue(editableRow());
+      prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.updateOwnAuction(DRAFT_ID, SELLER_ID, { title: 'Renamed' })
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('rejects a category that is not active before touching anything', async () => {
+      prisma.category.findUnique.mockResolvedValue({ isActive: false });
+
+      await expect(
+        service.updateOwnAuction(DRAFT_ID, SELLER_ID, {
+          categoryId: CATEGORY_ID
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('hides an auction owned by somebody else behind a 404', async () => {
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.updateOwnAuction(DRAFT_ID, 'another-seller', { title: 'x' })
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('cancelOwnAuction (AUC-006)', () => {
+    const cancellableRow = (overrides: Record<string, unknown> = {}) => ({
+      status: 'SCHEDULED',
+      bidCount: 0,
+      ...overrides
+    });
+
+    const cancelSucceeds = (row: ReturnType<typeof cancellableRow>) => {
+      prisma.auction.findFirst.mockResolvedValue(row);
+      prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.auctionEvent.create.mockResolvedValue({});
+      prisma.auction.findUniqueOrThrow.mockResolvedValue(
+        draftRow({ status: 'CANCELLED' })
+      );
+    };
+
+    const updateArgs = () =>
+      (
+        prisma.auction.updateMany.mock.calls as {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }[][]
+      )[0][0];
+
+    it('moves the auction to CANCELLED and stamps when it ended', async () => {
+      cancelSucceeds(cancellableRow());
+
+      await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+      const { data } = updateArgs();
+      expect(data.status).toBe('CANCELLED');
+      expect(data.endedAt).toBeInstanceOf(Date);
+    });
+
+    it('stores the reason when one is given', async () => {
+      cancelSucceeds(cancellableRow());
+
+      await service.cancelOwnAuction(DRAFT_ID, SELLER_ID, 'Item was damaged');
+
+      expect(updateArgs().data.cancellationReason).toBe('Item was damaged');
+    });
+
+    it('accepts a cancellation with no reason', async () => {
+      cancelSucceeds(cancellableRow());
+
+      await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+      expect(updateArgs().data.cancellationReason).toBeUndefined();
+    });
+
+    it('records the CANCELLED event', async () => {
+      cancelSucceeds(cancellableRow());
+
+      await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+      expect(prisma.auctionEvent.create).toHaveBeenCalledWith({
+        data: {
+          auctionId: DRAFT_ID,
+          actorUserId: SELLER_ID,
+          eventType: 'CANCELLED'
+        }
+      });
+    });
+
+    it('cancels a DRAFT as readily as a SCHEDULED one', async () => {
+      cancelSucceeds(cancellableRow({ status: 'DRAFT' }));
+
+      await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+      expect(updateArgs().data.status).toBe('CANCELLED');
+    });
+
+    it('refuses to cancel an ACTIVE auction — that is an admin action', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        cancellableRow({ status: 'ACTIVE' })
+      );
+
+      await expect(
+        service.cancelOwnAuction(DRAFT_ID, SELLER_ID)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+      expect(prisma.auctionEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to cancel one that already has bids', async () => {
+      prisma.auction.findFirst.mockResolvedValue(
+        cancellableRow({ bidCount: 1 })
+      );
+
+      await expect(
+        service.cancelOwnAuction(DRAFT_ID, SELLER_ID)
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('does the cancellation inside one transaction', async () => {
+      cancelSucceeds(cancellableRow());
+
+      await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a conflict when the guarded write matches no row', async () => {
+      prisma.auction.findFirst.mockResolvedValue(cancellableRow());
+      prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.cancelOwnAuction(DRAFT_ID, SELLER_ID)
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.auctionEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('hides an auction owned by somebody else behind a 404', async () => {
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.cancelOwnAuction(DRAFT_ID, 'another-seller')
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

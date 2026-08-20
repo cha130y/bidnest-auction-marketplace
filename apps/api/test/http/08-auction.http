@@ -3,7 +3,7 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
-# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -430,3 +430,141 @@ GET {{baseUrl}}/auctions/not-a-uuid
 ### AUC-005 — เช็คว่า :id ไม่กลืน path `drafts`. expect 401 (ไม่ใช่ 400/404)
 # ถ้าเผลอวาง @Get(':id') ไว้เหนือ drafts routes เคสนี้จะพัง
 GET {{baseUrl}}/auctions/drafts
+
+#=============================================================================
+# 7. แก้ไข / ยกเลิก (AUC-006)
+#=============================================================================
+# แก้ไขและยกเลิกได้เฉพาะตอน DRAFT หรือ SCHEDULED และต้องยังไม่มีบิด
+# พอเป็น ACTIVE แล้ว ข้อมูลหลักแตะไม่ได้อีก — ยกเลิกตอน ACTIVE เป็นงาน admin (ADM-001)
+#
+# แก้ SCHEDULED จะถูก re-validate ซ้ำด้วยเกณฑ์ AUC-002
+# เพราะประมูลที่เผยแพร่ไปแล้วห้ามกลายเป็นข้อมูลไม่ครบ
+
+### AUC-006 — สร้าง draft ไว้ทดลองแก้/ยกเลิก
+# @name draftToEdit
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของทดลองแก้ไข",
+  "description": "จะถูกแก้แล้วยกเลิกในบล็อกถัดไป",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-09-01T10:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T12:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Before"]
+}
+
+@editId = {{draftToEdit.response.body.$.id}}
+
+### AUC-006 — แก้ชื่อกับรายละเอียดตอนเป็น DRAFT. expect 200
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ชื่อใหม่หลังแก้",
+  "description": "รายละเอียดใหม่"
+}
+
+### AUC-006 — ส่ง imageUrls ใหม่ = แทนที่ทั้งชุด ไม่ใช่เพิ่มต่อท้าย. expect 200 + images มี 1 รูป
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "imageUrls": ["https://placehold.co/600x400?text=After"]
+}
+
+### AUC-006 — DRAFT แก้ให้ข้อมูลไม่ครบได้ (ลบรูปหมด). expect 200
+# draft ยังไม่เผยแพร่ จึงไม่ต้องผ่านเกณฑ์ AUC-002
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "imageUrls": []
+}
+
+### AUC-006 — ยัด field ที่ไม่มีใน DTO. expect 400
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### AUC-006 — คนอื่นสั่งแก้ประมูลเรา. expect 404
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "title": "ไม่ใช่ของฉันแต่จะแก้"
+}
+
+### AUC-006 — ไม่ได้ login. expect 401
+PATCH {{baseUrl}}/auctions/{{editId}}
+Content-Type: application/json
+
+{
+  "title": "ไม่ได้ login"
+}
+
+### AUC-006 — แก้ประมูลที่ ACTIVE แล้ว. expect 400
+# {{startsNowId}} ถูก publish เป็น ACTIVE ไปแล้วในบล็อกที่ 5
+PATCH {{baseUrl}}/auctions/{{startsNowId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "สายไปแล้ว แก้ไม่ได้"
+}
+
+### AUC-006 — ยกเลิกประมูลที่ ACTIVE. expect 400
+# ตอน ACTIVE ต้องให้ admin จัดการเท่านั้น (ADM-001)
+POST {{baseUrl}}/auctions/{{startsNowId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "reason": "ผู้ขายยกเลิกเองไม่ได้ตอน ACTIVE"
+}
+
+### AUC-006 — ยกเลิก draft พร้อมเหตุผล. expect 200 + status CANCELLED
+POST {{baseUrl}}/auctions/{{editId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "reason": "ของมีตำหนิ ขอถอนออกก่อน"
+}
+
+### AUC-006 — ยกเลิกซ้ำอันเดิม. expect 400
+POST {{baseUrl}}/auctions/{{editId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{}
+
+### AUC-006 — แก้ประมูลที่ยกเลิกไปแล้ว. expect 400
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ยกเลิกไปแล้วแก้ไม่ได้"
+}
+
+### AUC-006 — ยกเลิกโดยไม่ใส่เหตุผล. expect 200
+# ผู้ขายไม่ถูกบังคับให้บอกเหตุผล (ต่างจาก ADM-001 ที่ admin ต้องบันทึกเสมอ)
+POST {{baseUrl}}/auctions/{{incompleteId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{}
