@@ -17,6 +17,7 @@ export const DraftIssueCode = {
   START_AT_REQUIRED: 'START_AT_REQUIRED',
   END_AT_REQUIRED: 'END_AT_REQUIRED',
   END_AT_NOT_AFTER_START_AT: 'END_AT_NOT_AFTER_START_AT',
+  END_AT_IN_THE_PAST: 'END_AT_IN_THE_PAST',
   IMAGES_REQUIRED: 'IMAGES_REQUIRED',
   RESERVE_NOT_POSITIVE: 'RESERVE_NOT_POSITIVE',
   RESERVE_BELOW_STARTING_PRICE: 'RESERVE_BELOW_STARTING_PRICE'
@@ -54,8 +55,15 @@ export type DraftForPublish = {
  * The rules re-check fields the create DTO already validated: AUC-006 will let
  * a seller edit a draft after creation, and publish — not create — is the last
  * point where the whole draft is looked at as a unit.
+ *
+ * `now` is passed in rather than read here so the checklist and the publish
+ * call judge the same instant, and so the time-dependent rule can be tested
+ * without waiting for the clock.
  */
-export function validateDraftForPublish(draft: DraftForPublish): DraftIssue[] {
+export function validateDraftForPublish(
+  draft: DraftForPublish,
+  now: Date
+): DraftIssue[] {
   const issues: DraftIssue[] = [];
   const fail = (field: string, code: DraftIssueCode, message: string) => {
     issues.push({ field, code, message });
@@ -136,6 +144,18 @@ export function validateDraftForPublish(draft: DraftForPublish): DraftIssue[] {
       'scheduledEndAt',
       DraftIssueCode.END_AT_NOT_AFTER_START_AT,
       'End time must be after the start time'
+    );
+  }
+
+  // AUC-004 — a draft whose end time has already gone by would publish
+  // straight into an ACTIVE auction that is over, so the schedule has to be
+  // re-checked against the clock, not just against itself. A start time in the
+  // past is fine: that is what publishing an auction that runs now means.
+  if (draft.originalEndAt && draft.originalEndAt.getTime() <= now.getTime()) {
+    fail(
+      'scheduledEndAt',
+      DraftIssueCode.END_AT_IN_THE_PAST,
+      'End time has already passed — set a new schedule before publishing'
     );
   }
 

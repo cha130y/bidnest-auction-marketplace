@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -8,7 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   auctionRowSelect,
   auctionPublishGateSelect,
-  toOwnerAuction
+  toOwnerAuction,
+  toPublicAuction
 } from './auction.mapper';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
@@ -99,9 +101,101 @@ export class AuctionService {
 
     if (!draft) throw new NotFoundException('Auction draft not found');
 
-    const issues = validateDraftForPublish(draft);
+    const issues = validateDraftForPublish(draft, new Date());
 
     return { auctionId: draft.id, ready: issues.length === 0, issues };
+  }
+
+  /**
+   * AUC-004 — the seller sees exactly what a buyer would, built by the same
+   * mapper the public paths use, so the preview cannot drift from the real
+   * thing. It is a read: the draft keeps its status.
+   */
+  async previewOwnDraft(id: string, sellerId: string) {
+    const draft = await this.prisma.auction.findFirst({
+      where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+      select: auctionRowSelect
+    });
+
+    if (!draft) throw new NotFoundException('Auction draft not found');
+
+    return toPublicAuction(draft);
+  }
+
+  /**
+   * AUC-004 — publishing a validated draft. The landing status is decided by
+   * the schedule: an auction whose start time has arrived opens as ACTIVE,
+   * otherwise it waits as SCHEDULED (AUC-005).
+   *
+   * Everything runs inside one transaction, and the write is guarded on
+   * `status: 'DRAFT'` rather than on the row read a moment earlier — two
+   * publish clicks racing each other cannot both win, because the second one
+   * updates zero rows and is told so.
+   */
+  async publishDraft(id: string, sellerId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const draft = await tx.auction.findFirst({
+        where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+        select: auctionPublishGateSelect
+      });
+
+      if (!draft) throw new NotFoundException('Auction draft not found');
+
+      const now = new Date();
+      const issues = validateDraftForPublish(draft, now);
+
+      if (issues.length > 0) {
+        throw new BadRequestException({
+          message: 'Draft is not ready to publish',
+          issues
+        });
+      }
+
+      // Validation above guarantees the schedule is set, so the non-null
+      // assertion here is the validator's guarantee, not an assumption.
+      const startsImmediately =
+        draft.scheduledStartAt!.getTime() <= now.getTime();
+
+      const { count } = await tx.auction.updateMany({
+        where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+        data: {
+          status: startsImmediately ? 'ACTIVE' : 'SCHEDULED',
+          publishedAt: now,
+          startedAt: startsImmediately ? now : null,
+          rowVersion: { increment: 1 }
+        }
+      });
+
+      if (count !== 1) {
+        throw new ConflictException(
+          'The auction changed in the meantime — reload and try again'
+        );
+      }
+
+      await tx.auctionEvent.createMany({
+        data: [
+          { auctionId: id, actorUserId: sellerId, eventType: 'PUBLISHED' },
+          // An auction that opens straight away has started, and the event log
+          // should say so rather than leaving STARTED to be inferred later.
+          ...(startsImmediately
+            ? [
+                {
+                  auctionId: id,
+                  actorUserId: sellerId,
+                  eventType: 'STARTED' as const
+                }
+              ]
+            : [])
+        ]
+      });
+
+      const published = await tx.auction.findUniqueOrThrow({
+        where: { id },
+        select: auctionRowSelect
+      });
+
+      return toOwnerAuction(published);
+    });
   }
 
   // ADR-0001 — auctions and products draw from the same category set, so an
