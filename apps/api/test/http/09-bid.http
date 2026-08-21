@@ -3,8 +3,8 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry,
-# BID-003 broadcast realtime
-# BID-004..005 (anti-sniping, ประวัติ) จะมาต่อในไฟล์นี้
+# BID-003 broadcast realtime, BID-004 anti-sniping
+# BID-005 (ประวัติการประมูล) จะมาต่อในไฟล์นี้
 #
 # ⚠️ clientRequestId ต้องเป็น UUID และเป็น "ตัวระบุความพยายามครั้งนั้น"
 #    - ยิงซ้ำด้วย id เดิม + ค่าเดิม = retry -> ได้บิดเดิมกลับมา ไม่ใช่ error
@@ -270,3 +270,59 @@ GET {{baseUrl}}/auctions
 #   - join ห้องของ draft (ยังไม่ publish) ต้องได้ error "Auction not found"
 #   - บิดที่ถูกปฏิเสธ (400/403/409) ต้องไม่มี event เด้งเลย
 #   - retry ด้วย clientRequestId เดิม ต้องไม่ยิง event ซ้ำ
+
+#=============================================================================
+# 6. Anti-sniping (BID-004)
+#=============================================================================
+# บิดที่เข้ามาตอนเหลือ ≤ 2 นาที จะดันเวลาจบออกไปอีก 2 นาที สูงสุด 5 ครั้ง
+# และบันทึกทุกครั้งลง auction_extensions
+#
+# ⚠️ ต้องมีประมูลที่ "ใกล้จบ" ซึ่ง publish ตรงๆ ไม่ได้ (AUC-004 ไม่ให้ publish
+#    ของที่หมดเวลาแล้ว) วิธีเทสมือ: publish ปกติก่อน แล้วเปิด prisma studio
+#    ตั้ง current_end_at = now() + 1 minute จากนั้นค่อยยิงบิด
+#
+# สิ่งที่ต้องเห็นหลังบิด:
+#   - current_end_at ขยับไป +2 นาทีจากค่าเดิม (ไม่ใช่ +2 นาทีจากตอนบิด)
+#   - extension_count เพิ่มเป็น 1
+#   - auction_extensions มีแถวใหม่ ชี้ไปที่ bid ที่เพิ่งลง
+#   - auction_events มี EXTENDED ต่อจาก BID_PLACED
+#   - ถ้าเปิด socket ค้างไว้ (ดูบล็อกที่ 5) จะได้ auction:extension ตามหลัง
+#     auction:bid โดยมี extensionsRemaining บอกว่าเหลือกี่ครั้ง
+
+### BID-004 — บิดตอนใกล้จบ (ตั้ง current_end_at ให้ใกล้ก่อน). expect 201
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000001"
+}
+
+### BID-004 — เช็คว่าเวลาจบขยับ. ดู currentEndAt กับ extensionCount
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### BID-004 — บิดซ้ำทันที. expect 201 แต่ extensionCount ต้องไม่ขยับ
+# บิดแรกดันเวลาไป 2 นาที ทำให้บิดนี้อยู่นอกหน้าต่างแล้ว — กัน burst ของบิด
+# ไม่ให้ไล่ต่อเวลากันเป็นทอดๆ
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3300,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000002"
+}
+
+### BID-004 — เพดาน 5 ครั้ง
+# ตั้ง extension_count = 5 และ current_end_at = now() + 1 minute ใน prisma studio
+# แล้วยิงบล็อกนี้: บิดต้องผ่าน (201) แต่เวลาจบต้องไม่ขยับ และไม่มีแถวใน
+# auction_extensions เพิ่ม — เพดานจำกัดการต่อเวลา ไม่ได้จำกัดการบิด
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3400,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000003"
+}
