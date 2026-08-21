@@ -1589,4 +1589,283 @@ describe('Auction drafts (e2e)', () => {
       return request(app.getHttpServer()).get('/auctions?page=0').expect(400);
     });
   });
+
+  /**
+   * BID-001 — the first requirement that writes a bid through the API rather
+   * than through Prisma. Everything the auction tests had to fake — bidCount,
+   * currentPrice, the bid rows themselves — is now produced for real.
+   */
+  describe('POST /auctions/:id/bids (BID-001)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000);
+
+    /** Publishes an auction that is live right now. */
+    const liveAuction = async (overrides: Record<string, unknown> = {}) => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(-1).toISOString(),
+          scheduledEndAt: hoursFromNow(4).toISOString(),
+          ...overrides
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      return id;
+    };
+
+    const bid = (auctionId: string, userId: string, amount: number) =>
+      request(app.getHttpServer())
+        .post(`/auctions/${auctionId}/bids`)
+        .set('Authorization', authOf(userId))
+        .send({ amount, clientRequestId: randomUUID() });
+
+    const storedAuction = (id: string) =>
+      prisma.auction.findUniqueOrThrow({
+        where: { id },
+        select: { currentPrice: true, bidCount: true }
+      });
+
+    it('accepts an opening bid at the starting price', async () => {
+      const id = await liveAuction();
+
+      const response = await bid(id, buyerId, 3000).expect(201);
+
+      expect(response.body).toMatchObject({
+        auctionId: id,
+        bidderId: buyerId,
+        amount: '3000',
+        sequenceNo: 1
+      });
+    });
+
+    it('moves the auction price and count', async () => {
+      const id = await liveAuction();
+
+      await bid(id, buyerId, 3000).expect(201);
+
+      const stored = await storedAuction(id);
+      expect(stored.currentPrice.toString()).toBe('3000');
+      expect(stored.bidCount).toBe(1);
+    });
+
+    it('numbers bids in the order they are accepted', async () => {
+      const id = await liveAuction();
+
+      await bid(id, buyerId, 3000).expect(201);
+      await bid(id, strangerId, 3100).expect(201);
+      const third = await bid(id, buyerId, 3200).expect(201);
+
+      expect((third.body as { sequenceNo: number }).sequenceNo).toBe(3);
+    });
+
+    it('records a BID_PLACED event for each accepted bid', async () => {
+      const id = await liveAuction();
+
+      await bid(id, buyerId, 3000).expect(201);
+      await bid(id, strangerId, 3100).expect(201);
+
+      const events = await prisma.auctionEvent.findMany({
+        where: { auctionId: id, eventType: 'BID_PLACED' }
+      });
+      expect(events).toHaveLength(2);
+    });
+
+    describe('the amount rules', () => {
+      it('refuses an opening bid below the starting price', async () => {
+        const id = await liveAuction();
+
+        await bid(id, buyerId, 2999).expect(400);
+
+        // nothing was written
+        expect(await storedAuction(id)).toMatchObject({ bidCount: 0 });
+      });
+
+      it('refuses a later bid that does not clear the increment', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+
+        await bid(id, strangerId, 3099).expect(400);
+
+        expect((await storedAuction(id)).bidCount).toBe(1);
+      });
+
+      it('accepts a later bid at exactly the increment', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+
+        await bid(id, strangerId, 3100).expect(201);
+
+        expect((await storedAuction(id)).currentPrice.toString()).toBe('3100');
+      });
+
+      it('refuses zero and negative amounts', async () => {
+        const id = await liveAuction();
+
+        await bid(id, buyerId, 0).expect(400);
+        await bid(id, buyerId, -100).expect(400);
+      });
+    });
+
+    describe('who may bid', () => {
+      it('refuses the seller of the auction', async () => {
+        const id = await liveAuction();
+
+        await bid(id, sellerId, 5000).expect(403);
+
+        expect((await storedAuction(id)).bidCount).toBe(0);
+      });
+
+      it('refuses a signed-out visitor', async () => {
+        const id = await liveAuction();
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/bids`)
+          .send({ amount: 3000, clientRequestId: randomUUID() })
+          .expect(401);
+      });
+
+      it('refuses an admin — they moderate, they do not bid', async () => {
+        const id = await liveAuction();
+
+        await bid(id, adminId, 3000).expect(403);
+      });
+    });
+
+    describe('which auctions accept bids', () => {
+      it('refuses a scheduled auction that has not opened', async () => {
+        const created = await request(app.getHttpServer())
+          .post('/auctions/drafts')
+          .set('Authorization', authOf(sellerId))
+          .send({
+            ...draftBody(),
+            scheduledStartAt: hoursFromNow(2).toISOString(),
+            scheduledEndAt: hoursFromNow(6).toISOString()
+          })
+          .expect(201);
+        const id = (created.body as { id: string }).id;
+        await request(app.getHttpServer())
+          .post(`/auctions/drafts/${id}/publish`)
+          .set('Authorization', authOf(sellerId))
+          .expect(200);
+
+        await bid(id, buyerId, 3000).expect(409);
+      });
+
+      it('refuses an auction that has already ended', async () => {
+        const id = await liveAuction();
+        await prisma.auction.update({
+          where: { id },
+          data: { currentEndAt: hoursFromNow(-1) }
+        });
+
+        await bid(id, buyerId, 3000).expect(409);
+      });
+
+      it('refuses an auction that does not exist', () => {
+        return request(app.getHttpServer())
+          .post('/auctions/00000000-0000-4000-8000-0000000099ff/bids')
+          .set('Authorization', authOf(buyerId))
+          .send({ amount: 3000, clientRequestId: randomUUID() })
+          .expect(404);
+      });
+    });
+
+    describe('duplicate requests', () => {
+      it('refuses the same clientRequestId twice', async () => {
+        const id = await liveAuction();
+        const clientRequestId = randomUUID();
+        const body = { amount: 3000, clientRequestId };
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/bids`)
+          .set('Authorization', authOf(buyerId))
+          .send(body)
+          .expect(201);
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/bids`)
+          .set('Authorization', authOf(buyerId))
+          .send({ ...body, amount: 9000 })
+          .expect(409);
+
+        // the retry changed nothing
+        const stored = await storedAuction(id);
+        expect(stored.currentPrice.toString()).toBe('3000');
+        expect(stored.bidCount).toBe(1);
+      });
+
+      it('rejects a clientRequestId that is not a uuid', async () => {
+        const id = await liveAuction();
+
+        await request(app.getHttpServer())
+          .post(`/auctions/${id}/bids`)
+          .set('Authorization', authOf(buyerId))
+          .send({ amount: 3000, clientRequestId: 'not-a-uuid' })
+          .expect(400);
+      });
+    });
+
+    // BID-002 covers idempotency properly; this is the concurrency half
+    it('lets only one of two simultaneous bids through', async () => {
+      const id = await liveAuction();
+
+      const results = await Promise.allSettled([
+        bid(id, buyerId, 3000),
+        bid(id, strangerId, 3000)
+      ]);
+
+      const statuses = results.map((result) =>
+        result.status === 'fulfilled' ? result.value.status : 0
+      );
+      expect(statuses.filter((status) => status === 201)).toHaveLength(1);
+
+      // exactly one bid landed, and the count matches
+      const stored = await storedAuction(id);
+      expect(stored.bidCount).toBe(1);
+      const bids = await prisma.bid.findMany({ where: { auctionId: id } });
+      expect(bids).toHaveLength(1);
+    });
+
+    // the rule AUC-006 wrote but could not reach until now
+    it('stops the seller editing an auction once a bid lands', async () => {
+      const id = await liveAuction();
+      await bid(id, buyerId, 3000).expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/auctions/${id}`)
+        .set('Authorization', authOf(sellerId))
+        .send({ title: 'Too late to rename' })
+        .expect(400);
+    });
+
+    // and the settlement AUC-007 could only test with hand-written bids
+    it('settles as SOLD against a real bid that cleared the reserve', async () => {
+      const id = await liveAuction();
+      await bid(id, buyerId, 5000).expect(201);
+      await prisma.auction.update({
+        where: { id },
+        data: { currentEndAt: hoursFromNow(-1) }
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/auctions/${id}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({ status: 'SOLD' });
+      const stored = await prisma.auction.findUniqueOrThrow({
+        where: { id },
+        select: { winnerUserId: true, soldPrice: true }
+      });
+      expect(stored.winnerUserId).toBe(buyerId);
+      expect(stored.soldPrice?.toString()).toBe('5000');
+    });
+  });
 });
