@@ -3,8 +3,8 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry,
-# BID-003 broadcast realtime, BID-004 anti-sniping
-# BID-005 (ประวัติการประมูล) จะมาต่อในไฟล์นี้
+# BID-003 broadcast realtime, BID-004 anti-sniping, BID-005 ประวัติการประมูล
+# ครบทั้งกลุ่ม BID แล้ว
 #
 # ⚠️ clientRequestId ต้องเป็น UUID และเป็น "ตัวระบุความพยายามครั้งนั้น"
 #    - ยิงซ้ำด้วย id เดิม + ค่าเดิม = retry -> ได้บิดเดิมกลับมา ไม่ใช่ error
@@ -261,12 +261,13 @@ GET {{baseUrl}}/auctions
 #      {
 #        auctionId, currency, currentPrice, reserveMet, bidCount,
 #        currentEndAt, extensionCount,
-#        bid: { id, amount, sequenceNo, placedAt }
+#        bid: { id, amount, sequenceNo, placedAt, bidder: "ส***ย" }
 #      }
 #
 # สิ่งที่ต้องตรวจ:
 #   - ห้ามมี reservePrice ใน payload เด็ดขาด มีแค่ reserveMet (AUC-003)
-#   - ห้ามมี bidderId — ชื่อผู้บิดเป็นเรื่องของ BID-005
+#   - bidder ต้องเป็นชื่อปิดบังเท่านั้น ห้ามมี bidderId และห้ามมีชื่อเต็ม
+#   - label ที่ได้ต้องตรงกับที่ GET /auctions/:id/bids ให้มา (ใช้ mask ตัวเดียวกัน)
 #   - join ห้องของ draft (ยังไม่ publish) ต้องได้ error "Auction not found"
 #   - บิดที่ถูกปฏิเสธ (400/403/409) ต้องไม่มี event เด้งเลย
 #   - retry ด้วย clientRequestId เดิม ต้องไม่ยิง event ซ้ำ
@@ -326,3 +327,47 @@ Content-Type: application/json
   "amount": 3400,
   "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000003"
 }
+
+#=============================================================================
+# 7. ประวัติการประมูล (BID-005)
+#=============================================================================
+# สาธารณะเหมือนตัวประมูล — ไม่ต้อง login ก็อ่านได้
+# ส่ง token มาด้วยจะได้ isYours บอกว่าแถวไหนเป็นบิดของตัวเอง
+#
+# สิ่งที่ต้องตรวจทุกครั้ง:
+#   - ห้ามมี bidderId ในผลลัพธ์เด็ดขาด มีแค่ bidder ที่ปิดบังแล้ว (ก***ย)
+#   - ผู้ขายเจ้าของประมูลก็เห็นชื่อแบบปิดบังเหมือนคนนอก ไม่มีสิทธิ์พิเศษ
+#   - คนเดิมบิดหลายครั้ง ต้องได้ label เดียวกันทุกแถว (ตามบิดได้ว่าใครไล่ราคาใคร)
+#   - เรียงจากเก่าไปใหม่ตาม sequenceNo
+
+### BID-005 — คนไม่ได้ login อ่านประวัติ. expect 200 + items เรียงตาม sequenceNo
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+
+### BID-005 — ผู้บิดอ่านเอง. expect 200 + isYours: true เฉพาะบิดของตัวเอง
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+
+### BID-005 — ผู้ขายอ่าน. expect 200 + ชื่อยังปิดบังเหมือนเดิม
+# เจ้าของประมูลไม่มีสิทธิ์เห็นว่าใครบิด
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{sellerAToken}}
+
+### BID-005 — ขอทีละ 2 แถว. expect 200 + items ไม่เกิน 2 + meta.total ครบ
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=1&limit=2
+
+### BID-005 — หน้าที่ 2. expect 200 + ไม่ซ้ำกับหน้าแรก
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=2&limit=2
+
+### BID-005 — ประมูลที่ยังเป็น draft. expect 404
+# แม้เจ้าของยิงเอง — ประวัติต้องไม่กลายเป็นช่องอ่าน draft
+GET {{baseUrl}}/auctions/{{incompleteId}}/bids
+Authorization: Bearer {{sellerAToken}}
+
+### BID-005 — ประมูลที่ไม่มีอยู่จริง. expect 404
+GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000099ff/bids
+
+### BID-005 — limit เกินเพดาน. expect 400
+GET {{baseUrl}}/auctions/{{liveId}}/bids?limit=500
+
+### BID-005 — page เป็น 0. expect 400
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=0
