@@ -6,6 +6,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validate } from './config/env.validation';
 import { AdminModule } from './admin/admin.module';
+import { AiToolsModule } from './ai-tools/ai-tools.module';
 import { AuctionModule } from './auction/auction.module';
 import { AuthModule } from './auth/auth.module';
 import { BidModule } from './bid/bid.module';
@@ -22,6 +23,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShipmentModule } from './shipment/shipment.module';
+import { SupportChatModule } from './support-chat/support-chat.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -62,7 +64,9 @@ import { UsersModule } from './users/users.module';
     NotificationModule,
     CategoriesModule,
     AdminModule,
-    ChatModule
+    ChatModule,
+    AiToolsModule,
+    SupportChatModule
   ],
   controllers: [HealthController],
   providers: [
