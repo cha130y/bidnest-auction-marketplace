@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import {
+  ApiAcceptedResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -18,6 +19,7 @@ import {
 } from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
@@ -108,6 +110,36 @@ export class AuthController {
   @ApiNoContentResponse({ description: 'Session revoked, or nothing to do' })
   logout(@Body() dto: RefreshTokenDto): Promise<void> {
     return this.authService.logout(dto);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'AUTH-005 — mail a single-use reset link',
+    description:
+      'Always answers 202, whether or not the address has an account. The ' +
+      'SRS requires that this neither confirms nor denies that an email is ' +
+      'registered, so it cannot be used to harvest accounts.'
+  })
+  @ApiAcceptedResponse({ description: 'Handled — says nothing either way' })
+  forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'AUTH-005 — spend the link and set a new password',
+    description:
+      'The link works once and expires. On success every refresh session on ' +
+      'the account is revoked, so each device has to sign in again.'
+  })
+  @ApiNoContentResponse({ description: 'Password changed, sessions revoked' })
+  @ApiUnauthorizedResponse({ description: 'Wrong, expired or spent link' })
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
+    return this.authService.resetPassword(dto);
   }
 
   @Public()
