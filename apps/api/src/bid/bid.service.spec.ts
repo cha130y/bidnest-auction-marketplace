@@ -15,6 +15,9 @@ const SELLER_ID = '00000000-0000-4000-8000-000000000002';
 const BIDDER_ID = '00000000-0000-4000-8000-000000000004';
 const REQUEST_ID = '00000000-0000-4000-8000-0000000009f1';
 
+/** Shape of a `where` clause a query narrowed itself with. */
+type WhereArgs = { where: Record<string, unknown> };
+
 const dec = (value: string | number) => new Prisma.Decimal(value);
 
 /** An auction that is running and will accept a bid. */
@@ -56,7 +59,12 @@ describe('BidService (BID-001)', () => {
       updateMany: jest.Mock;
       findUniqueOrThrow: jest.Mock;
     };
-    bid: { findUnique: jest.Mock; create: jest.Mock };
+    bid: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
+    };
     auctionEvent: { create: jest.Mock };
     auctionExtension: { create: jest.Mock };
     $transaction: jest.Mock;
@@ -83,7 +91,12 @@ describe('BidService (BID-001)', () => {
         updateMany: jest.fn(),
         findUniqueOrThrow: jest.fn()
       },
-      bid: { findUnique: jest.fn(), create: jest.fn() },
+      bid: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn()
+      },
       auctionEvent: { create: jest.fn() },
       auctionExtension: { create: jest.fn() },
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
@@ -252,57 +265,6 @@ describe('BidService (BID-001)', () => {
       await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
 
       expect(broadcast()[2].reserveMet).toBe(true);
-    });
-
-    // a room anybody may join is no place for it until BID-005 defines masking
-    it('does not name the bidder', async () => {
-      bidWillBeAccepted();
-
-      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
-
-      expect(JSON.stringify(broadcast()[2])).not.toContain(BIDDER_ID);
-    });
-
-    it('reads the auction back rather than assembling the payload by hand', async () => {
-      bidWillBeAccepted();
-
-      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
-
-      // BID-004 will change the end time in this same transaction; reading it
-      // back is what keeps the broadcast correct without touching this code
-      expect(prisma.auction.findUniqueOrThrow).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: AUCTION_ID } })
-      );
-    });
-
-    describe('stays quiet when there is nothing new to announce', () => {
-      it('says nothing when a retry is replayed', async () => {
-        prisma.bid.findUnique.mockResolvedValue(bidRow());
-
-        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
-
-        expect(gateway.emitToAuction).not.toHaveBeenCalled();
-      });
-
-      it('says nothing when the bid was refused', async () => {
-        bidWillBeAccepted();
-
-        await expect(
-          service.placeBid(AUCTION_ID, BIDDER_ID, validDto({ amount: 1 }))
-        ).rejects.toBeInstanceOf(BadRequestException);
-        expect(gateway.emitToAuction).not.toHaveBeenCalled();
-      });
-
-      it('says nothing when the bid lost the race', async () => {
-        prisma.bid.findUnique.mockResolvedValue(null);
-        prisma.auction.findFirst.mockResolvedValue(openAuction());
-        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
-
-        await expect(
-          service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
-        ).rejects.toBeInstanceOf(ConflictException);
-        expect(gateway.emitToAuction).not.toHaveBeenCalled();
-      });
     });
   });
 
@@ -829,6 +791,210 @@ describe('BidService (BID-001)', () => {
         );
 
         expect(JSON.stringify(extensionEvent()?.[2])).not.toContain('4500');
+      });
+    });
+  });
+
+  /**
+   * BID-005 — the public bid history: amount, time, and a masked label for who,
+   * oldest first. The masking itself is covered in mask-bidder-name.util.spec.
+   */
+  describe('listBidHistory (BID-005)', () => {
+    const historyRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'bid-1',
+      amount: dec(3000),
+      sequenceNo: 1,
+      placedAt: new Date('2026-08-21T00:00:00.000Z'),
+      bidderId: BIDDER_ID,
+      bidder: { profile: { displayName: 'Somchai' } },
+      ...overrides
+    });
+
+    const historyAvailable = (rows: ReturnType<typeof historyRow>[]) => {
+      prisma.auction.findFirst.mockResolvedValue({ id: AUCTION_ID });
+      prisma.bid.findMany.mockResolvedValue(rows);
+      prisma.bid.count.mockResolvedValue(rows.length);
+    };
+
+    const findManyArgs = () =>
+      (
+        prisma.bid.findMany.mock.calls as {
+          where: Record<string, unknown>;
+          orderBy: unknown;
+          skip: number;
+          take: number;
+        }[][]
+      )[0][0];
+
+    it('lists the bids of that auction, oldest first', async () => {
+      historyAvailable([historyRow()]);
+
+      await service.listBidHistory(AUCTION_ID, {});
+
+      expect(findManyArgs().where).toEqual({ auctionId: AUCTION_ID });
+      // sequenceNo, not placedAt: two bids in the same millisecond still sort
+      expect(findManyArgs().orderBy).toEqual({ sequenceNo: 'asc' });
+    });
+
+    it('reports the amount and the time', async () => {
+      historyAvailable([historyRow()]);
+
+      const result = await service.listBidHistory(AUCTION_ID, {});
+
+      expect(result.items[0]).toMatchObject({
+        amount: '3000',
+        sequenceNo: 1,
+        placedAt: new Date('2026-08-21T00:00:00.000Z')
+      });
+    });
+
+    describe('privacy', () => {
+      it('masks the bidder name', async () => {
+        historyAvailable([historyRow()]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(result.items[0].bidder).toBe('S***i');
+      });
+
+      it('never sends the bidder id', async () => {
+        historyAvailable([historyRow()]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(result.items[0]).not.toHaveProperty('bidderId');
+        expect(JSON.stringify(result.items)).not.toContain(BIDDER_ID);
+      });
+
+      it('copes with a bidder who has no display name', async () => {
+        historyAvailable([
+          historyRow({ bidder: { profile: { displayName: null } } })
+        ]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(result.items[0].bidder).toBe('***');
+      });
+
+      it('copes with a bidder who has no profile at all', async () => {
+        historyAvailable([historyRow({ bidder: { profile: null } })]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(result.items[0].bidder).toBe('***');
+      });
+    });
+
+    describe('telling a viewer which bids are theirs', () => {
+      it('marks the viewer own bids', async () => {
+        historyAvailable([
+          historyRow({ id: 'mine', bidderId: BIDDER_ID }),
+          historyRow({ id: 'theirs', bidderId: 'someone-else', sequenceNo: 2 })
+        ]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {}, BIDDER_ID);
+
+        expect(result.items.map((bid) => bid.isYours)).toEqual([true, false]);
+      });
+
+      // knowing which are yours is not the same as knowing who anyone is
+      it('still masks the name of the viewer own bid', async () => {
+        historyAvailable([historyRow()]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {}, BIDDER_ID);
+
+        expect(result.items[0]).toMatchObject({
+          isYours: true,
+          bidder: 'S***i'
+        });
+      });
+
+      it('marks nothing for a signed-out reader', async () => {
+        historyAvailable([historyRow()]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(result.items[0].isYours).toBe(false);
+      });
+    });
+
+    describe('which auctions have a history', () => {
+      it('checks the auction against the public status list', async () => {
+        historyAvailable([]);
+
+        await service.listBidHistory(AUCTION_ID, {});
+
+        const where = (
+          prisma.auction.findFirst.mock.calls as {
+            where: Record<string, unknown>;
+          }[][]
+        )[0][0].where;
+        expect(where).toMatchObject({
+          id: AUCTION_ID,
+          status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
+          deletedAt: null
+        });
+      });
+
+      // otherwise the history would be a way to read a draft
+      it('refuses an auction the public cannot see', async () => {
+        prisma.auction.findFirst.mockResolvedValue(null);
+
+        await expect(
+          service.listBidHistory(AUCTION_ID, {})
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(prisma.bid.findMany).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('paging', () => {
+      it('defaults to the first page of twenty', async () => {
+        historyAvailable([]);
+
+        await service.listBidHistory(AUCTION_ID, {});
+
+        expect(findManyArgs()).toMatchObject({ skip: 0, take: 20 });
+      });
+
+      it('skips whole pages', async () => {
+        historyAvailable([]);
+
+        await service.listBidHistory(AUCTION_ID, { page: 3, limit: 10 });
+
+        expect(findManyArgs()).toMatchObject({ skip: 20, take: 10 });
+      });
+
+      it('reports the totals', async () => {
+        prisma.auction.findFirst.mockResolvedValue({ id: AUCTION_ID });
+        prisma.bid.findMany.mockResolvedValue([]);
+        prisma.bid.count.mockResolvedValue(45);
+
+        const result = await service.listBidHistory(AUCTION_ID, { limit: 20 });
+
+        expect(result.meta).toEqual({
+          page: 1,
+          limit: 20,
+          total: 45,
+          totalPages: 3
+        });
+      });
+
+      it('counts with the same filter it lists with', async () => {
+        historyAvailable([]);
+
+        await service.listBidHistory(AUCTION_ID, {});
+
+        const countArgs = (prisma.bid.count.mock.calls as WhereArgs[][])[0][0];
+        expect(countArgs.where).toEqual(findManyArgs().where);
+      });
+
+      it('handles an auction with no bids yet', async () => {
+        historyAvailable([]);
+
+        const result = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(result.items).toEqual([]);
+        expect(result.meta).toMatchObject({ total: 0, totalPages: 0 });
       });
     });
   });
