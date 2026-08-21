@@ -58,6 +58,7 @@ describe('BidService (BID-001)', () => {
     };
     bid: { findUnique: jest.Mock; create: jest.Mock };
     auctionEvent: { create: jest.Mock };
+    auctionExtension: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let gateway: { emitToAuction: jest.Mock };
@@ -84,6 +85,7 @@ describe('BidService (BID-001)', () => {
       },
       bid: { findUnique: jest.fn(), create: jest.fn() },
       auctionEvent: { create: jest.fn() },
+      auctionExtension: { create: jest.fn() },
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
     };
 
@@ -106,6 +108,7 @@ describe('BidService (BID-001)', () => {
     prisma.bid.create.mockResolvedValue(bidRow());
     prisma.auctionEvent.create.mockResolvedValue({});
     prisma.auction.findUniqueOrThrow.mockResolvedValue(auctionAfterBid());
+    prisma.auctionExtension.create.mockResolvedValue({});
   };
 
   const updateArgs = () =>
@@ -587,6 +590,246 @@ describe('BidService (BID-001)', () => {
       await expect(
         service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  /**
+   * BID-004 — a bid in the last two minutes buys everyone else two more, up to
+   * five times, and every extension is recorded. The window arithmetic itself
+   * is covered in calculate-anti-sniping.util.spec; these tests cover what the
+   * service writes and announces around it.
+   */
+  describe('anti-sniping (BID-004)', () => {
+    const minutes = (count: number) => count * 60 * 1000;
+
+    /** An auction that ends in `msFromNow`, with `used` extensions spent. */
+    const endingIn = (msFromNow: number, used = 0) =>
+      openAuction({
+        currentEndAt: new Date(Date.now() + msFromNow),
+        extensionCount: used,
+        bidCount: 1,
+        currentPrice: dec(3000)
+      });
+
+    const updateData = () => updateArgs().data;
+
+    const extensionRow = () =>
+      (
+        prisma.auctionExtension.create.mock.calls as {
+          data: Record<string, unknown>;
+        }[][]
+      )[0][0].data;
+
+    const eventTypes = () =>
+      (
+        prisma.auctionEvent.create.mock.calls as {
+          data: { eventType: string };
+        }[][]
+      ).map((call) => call[0].data.eventType);
+
+    describe('a bid inside the window', () => {
+      it('pushes the end time out', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(updateData().currentEndAt).toBeInstanceOf(Date);
+      });
+
+      it('counts the extension on the auction', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(updateData().extensionCount).toEqual({ increment: 1 });
+      });
+
+      it('records the extension against the bid that caused it', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(extensionRow()).toMatchObject({
+          auctionId: AUCTION_ID,
+          triggeredByBidId: 'bid-1',
+          extensionNumber: 1
+        });
+      });
+
+      it('records where the end time moved from and to', async () => {
+        const auction = endingIn(minutes(1));
+        bidWillBeAccepted(auction);
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        const row = extensionRow();
+        expect(row.previousEndAt).toEqual(auction.currentEndAt);
+        expect((row.newEndAt as Date).getTime()).toBe(
+          auction.currentEndAt.getTime() + minutes(2)
+        );
+      });
+
+      it('records an EXTENDED event alongside the BID_PLACED one', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(eventTypes()).toEqual(['BID_PLACED', 'EXTENDED']);
+      });
+
+      it('does it all in the one transaction (BID-002)', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('a bid outside the window', () => {
+      it('leaves the end time alone', async () => {
+        bidWillBeAccepted(endingIn(minutes(30)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(updateData().currentEndAt).toBeUndefined();
+        expect(updateData().extensionCount).toBeUndefined();
+      });
+
+      it('writes no extension row and no EXTENDED event', async () => {
+        bidWillBeAccepted(endingIn(minutes(30)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(prisma.auctionExtension.create).not.toHaveBeenCalled();
+        expect(eventTypes()).toEqual(['BID_PLACED']);
+      });
+    });
+
+    describe('once five extensions are spent', () => {
+      it('stops moving the end time', async () => {
+        bidWillBeAccepted(endingIn(minutes(1), 5));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(updateData().currentEndAt).toBeUndefined();
+        expect(prisma.auctionExtension.create).not.toHaveBeenCalled();
+      });
+
+      // the cap limits extensions, not bidding
+      it('still accepts the bid', async () => {
+        bidWillBeAccepted(endingIn(minutes(1), 5));
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto({ amount: 3100 }))
+        ).resolves.toMatchObject({ id: 'bid-1' });
+      });
+    });
+
+    describe('what watchers are told', () => {
+      /** The auction:extension broadcast, if there was one. */
+      const extensionEvent = () =>
+        (
+          gateway.emitToAuction.mock.calls as [
+            string,
+            string,
+            Record<string, unknown>
+          ][]
+        ).find((call) => call[1] === 'auction:extension');
+
+      it('announces the extension separately from the bid', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        const events = (
+          gateway.emitToAuction.mock.calls as [string, string, unknown][]
+        ).map((call) => call[1]);
+        // the price first, then the deadline, in the order they happened
+        expect(events).toEqual(['auction:bid', 'auction:extension']);
+      });
+
+      it('says how far the deadline moved and how many extensions are left', async () => {
+        const auction = endingIn(minutes(1));
+        bidWillBeAccepted(auction);
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(extensionEvent()?.[2]).toMatchObject({
+          auctionId: AUCTION_ID,
+          extensionNumber: 1,
+          previousEndAt: auction.currentEndAt,
+          extensionsRemaining: 4
+        });
+      });
+
+      it('says nothing about extensions when the bid was not late', async () => {
+        bidWillBeAccepted(endingIn(minutes(30)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(extensionEvent()).toBeUndefined();
+      });
+
+      it('never leaks the reserve in the extension event either', async () => {
+        bidWillBeAccepted(endingIn(minutes(1)));
+
+        await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto({ amount: 3100 })
+        );
+
+        expect(JSON.stringify(extensionEvent()?.[2])).not.toContain('4500');
+      });
     });
   });
 });

@@ -11,6 +11,10 @@ import { AuctionGateway } from '../realtime/auction.gateway';
 import { toBidAcceptedEvent } from './bid-accepted-event.mapper';
 import { bidSelect, toOwnBid } from './bid.mapper';
 import { PlaceBidDto } from './dtos/place-bid.dto';
+import {
+  calculateAntiSniping,
+  MAX_EXTENSIONS
+} from './utils/calculate-anti-sniping.util';
 import { calculateMinimumBid } from './utils/calculate-minimum-bid.util';
 
 @Injectable()
@@ -51,6 +55,16 @@ export class BidService {
       // bid was announced when it was first accepted.
       if (outcome.broadcast) {
         this.gateway.emitToAuction(auctionId, 'auction:bid', outcome.broadcast);
+      }
+
+      // BID-004 — after the bid event, so a client applies the new price and
+      // then the new deadline in the order they happened.
+      if (outcome.extension) {
+        this.gateway.emitToAuction(
+          auctionId,
+          'auction:extension',
+          outcome.extension
+        );
       }
 
       return outcome.bid;
@@ -100,6 +114,7 @@ export class BidService {
           currentPrice: true,
           bidCount: true,
           currentEndAt: true,
+          extensionCount: true,
           rowVersion: true
         }
       });
@@ -133,6 +148,16 @@ export class BidService {
         );
       }
 
+      // BID-004 — decided before the write so the new end time lands in the
+      // same update as the price, and BID-002's atomicity covers it too.
+      const extension = calculateAntiSniping(
+        {
+          currentEndAt: auction.currentEndAt,
+          extensionCount: auction.extensionCount
+        },
+        now
+      );
+
       const { count } = await tx.auction.updateMany({
         // rowVersion is the whole guard: if anything about this auction changed
         // between the read above and here — another bid, a settlement — the
@@ -148,7 +173,13 @@ export class BidService {
         data: {
           currentPrice: amount,
           bidCount: { increment: 1 },
-          rowVersion: { increment: 1 }
+          rowVersion: { increment: 1 },
+          ...(extension.extends
+            ? {
+                currentEndAt: extension.newEndAt,
+                extensionCount: { increment: 1 }
+              }
+            : {})
         }
       });
 
@@ -196,6 +227,30 @@ export class BidService {
         }
       });
 
+      // BID-004 — "recording every extension" is the criterion, so the row is
+      // written here rather than inferred later from extensionCount. It has to
+      // come after the bid exists, since it points at the bid that caused it.
+      if (extension.extends) {
+        await tx.auctionExtension.create({
+          data: {
+            auctionId,
+            triggeredByBidId: bid.id,
+            extensionNumber: extension.extensionNumber,
+            previousEndAt: extension.previousEndAt,
+            newEndAt: extension.newEndAt
+          }
+        });
+
+        await tx.auctionEvent.create({
+          data: {
+            auctionId,
+            actorUserId: bidderId,
+            bidId: bid.id,
+            eventType: 'EXTENDED'
+          }
+        });
+      }
+
       // BID-003 — read the auction back rather than assembling the payload from
       // what was written. Anything the same transaction changed and this code
       // forgot about would otherwise be broadcast stale; BID-004 is about to
@@ -215,7 +270,20 @@ export class BidService {
 
       return {
         bid: toOwnBid(bid),
-        broadcast: toBidAcceptedEvent(updated, bid)
+        broadcast: toBidAcceptedEvent(updated, bid),
+        // SRS section 5.2 lists auction:extension among the events the platform
+        // has to emit. A countdown on screen is wrong the moment the end time
+        // moves, so watchers are told separately rather than being left to
+        // notice that currentEndAt changed inside the bid event.
+        extension: extension.extends
+          ? {
+              auctionId,
+              extensionNumber: extension.extensionNumber,
+              previousEndAt: extension.previousEndAt,
+              newEndAt: extension.newEndAt,
+              extensionsRemaining: MAX_EXTENSIONS - extension.extensionNumber
+            }
+          : null
       };
     });
   }

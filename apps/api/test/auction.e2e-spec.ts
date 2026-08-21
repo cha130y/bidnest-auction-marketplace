@@ -98,7 +98,10 @@ describe('Auction drafts (e2e)', () => {
 
   afterAll(async () => {
     const userIds = [sellerId, strangerId, adminId, buyerId];
-    // bids reference auctions, so they have to go first
+    // extensions point at bids, and bids at auctions — unwind in that order
+    await prisma.auctionExtension.deleteMany({
+      where: { auction: { sellerId: { in: userIds } } }
+    });
     await prisma.bid.deleteMany({ where: { bidderId: { in: userIds } } });
     await prisma.auction.deleteMany({ where: { sellerId: { in: userIds } } });
     await prisma.category.deleteMany({
@@ -2049,6 +2052,223 @@ describe('Auction drafts (e2e)', () => {
       const bids = await prisma.bid.findMany({ where: { auctionId } });
       expect(bids).toHaveLength(1);
       expect((await storedAuction(auctionId)).bidCount).toBe(1);
+    });
+  });
+
+  /**
+   * BID-004 — a bid in the last two minutes extends the auction by two more,
+   * five times at most, and every extension is on record.
+   */
+  describe('anti-sniping (BID-004)', () => {
+    const MINUTE = 60 * 1000;
+    const minutesFromNow = (count: number) =>
+      new Date(Date.now() + count * MINUTE);
+
+    /**
+     * A live auction ending `endsInMinutes` from now, with `used` extensions
+     * already spent. Published normally, then aged into position — AUC-004
+     * refuses to publish something already at its deadline.
+     */
+    const auctionEndingSoon = async (endsInMinutes: number, used = 0) => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: minutesFromNow(-60).toISOString(),
+          scheduledEndAt: minutesFromNow(120).toISOString()
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      await prisma.auction.update({
+        where: { id },
+        data: {
+          currentEndAt: minutesFromNow(endsInMinutes),
+          extensionCount: used
+        }
+      });
+
+      return id;
+    };
+
+    const sendBid = (auctionId: string, userId: string, amount: number) =>
+      request(app.getHttpServer())
+        .post(`/auctions/${auctionId}/bids`)
+        .set('Authorization', authOf(userId))
+        .send({ amount, clientRequestId: randomUUID() });
+
+    const storedAuction = (id: string) =>
+      prisma.auction.findUniqueOrThrow({
+        where: { id },
+        select: { currentEndAt: true, extensionCount: true }
+      });
+
+    it('extends an auction when a bid lands in the last two minutes', async () => {
+      const id = await auctionEndingSoon(1);
+      const before = await storedAuction(id);
+
+      await sendBid(id, buyerId, 3000).expect(201);
+
+      const after = await storedAuction(id);
+      expect(after.extensionCount).toBe(1);
+      expect(after.currentEndAt!.getTime()).toBe(
+        before.currentEndAt!.getTime() + 2 * MINUTE
+      );
+    });
+
+    it('leaves an auction alone when there is plenty of time left', async () => {
+      const id = await auctionEndingSoon(30);
+      const before = await storedAuction(id);
+
+      await sendBid(id, buyerId, 3000).expect(201);
+
+      const after = await storedAuction(id);
+      expect(after.extensionCount).toBe(0);
+      expect(after.currentEndAt).toEqual(before.currentEndAt);
+    });
+
+    it('records every extension with the bid that caused it', async () => {
+      const id = await auctionEndingSoon(1);
+
+      const response = await sendBid(id, buyerId, 3000).expect(201);
+      const bidId = (response.body as { id: string }).id;
+
+      const extensions = await prisma.auctionExtension.findMany({
+        where: { auctionId: id }
+      });
+      expect(extensions).toHaveLength(1);
+      expect(extensions[0]).toMatchObject({
+        triggeredByBidId: bidId,
+        extensionNumber: 1
+      });
+      expect(extensions[0].newEndAt.getTime()).toBe(
+        extensions[0].previousEndAt.getTime() + 2 * MINUTE
+      );
+    });
+
+    it('records an EXTENDED event as well as BID_PLACED', async () => {
+      const id = await auctionEndingSoon(1);
+
+      await sendBid(id, buyerId, 3000).expect(201);
+
+      const events = await prisma.auctionEvent.findMany({
+        where: { auctionId: id },
+        orderBy: { id: 'asc' },
+        select: { eventType: true }
+      });
+      expect(events.map((event) => event.eventType)).toEqual([
+        'CREATED',
+        'PUBLISHED',
+        'STARTED',
+        'BID_PLACED',
+        'EXTENDED'
+      ]);
+    });
+
+    /**
+     * The first bid pushes the end from one minute out to three, which puts it
+     * back outside the two-minute window — so a bid arriving immediately after
+     * does not extend again. That is the point of measuring from the end time:
+     * a burst of bids in one second cannot ratchet the auction forward.
+     */
+    it('does not extend twice for bids arriving together', async () => {
+      const id = await auctionEndingSoon(1);
+
+      await sendBid(id, buyerId, 3000).expect(201);
+      await sendBid(id, strangerId, 3100).expect(201);
+
+      expect((await storedAuction(id)).extensionCount).toBe(1);
+    });
+
+    it('extends again once the clock has caught up, numbering them in order', async () => {
+      const id = await auctionEndingSoon(1);
+
+      await sendBid(id, buyerId, 3000).expect(201);
+      // stand in for the two minutes passing: the auction is inside the
+      // window again, with its first extension already spent
+      await prisma.auction.update({
+        where: { id },
+        data: { currentEndAt: minutesFromNow(1) }
+      });
+      await sendBid(id, strangerId, 3100).expect(201);
+
+      const extensions = await prisma.auctionExtension.findMany({
+        where: { auctionId: id },
+        orderBy: { extensionNumber: 'asc' }
+      });
+      expect(extensions.map((row) => row.extensionNumber)).toEqual([1, 2]);
+      expect((await storedAuction(id)).extensionCount).toBe(2);
+    });
+
+    describe('the cap of five', () => {
+      it('stops extending once five are spent', async () => {
+        const id = await auctionEndingSoon(1, 5);
+        const before = await storedAuction(id);
+
+        await sendBid(id, buyerId, 3000).expect(201);
+
+        const after = await storedAuction(id);
+        expect(after.extensionCount).toBe(5);
+        expect(after.currentEndAt).toEqual(before.currentEndAt);
+        expect(
+          await prisma.auctionExtension.count({ where: { auctionId: id } })
+        ).toBe(0);
+      });
+
+      // the cap limits extensions, not bidding
+      it('still accepts the bid itself', async () => {
+        const id = await auctionEndingSoon(1, 5);
+
+        await sendBid(id, buyerId, 3000).expect(201);
+
+        const stored = await prisma.auction.findUniqueOrThrow({
+          where: { id },
+          select: { currentPrice: true, bidCount: true }
+        });
+        expect(stored.currentPrice.toString()).toBe('3000');
+        expect(stored.bidCount).toBe(1);
+      });
+    });
+
+    // BID-002 — the extension rides in the same transaction as the bid
+    it('writes no extension for a bid that was refused', async () => {
+      const id = await auctionEndingSoon(1);
+
+      await sendBid(id, buyerId, 100).expect(400);
+
+      const after = await storedAuction(id);
+      expect(after.extensionCount).toBe(0);
+      expect(
+        await prisma.auctionExtension.count({ where: { auctionId: id } })
+      ).toBe(0);
+    });
+
+    it('does not extend twice for a replayed retry', async () => {
+      const id = await auctionEndingSoon(1);
+      const clientRequestId = randomUUID();
+      const body = { amount: 3000, clientRequestId };
+
+      await request(app.getHttpServer())
+        .post(`/auctions/${id}/bids`)
+        .set('Authorization', authOf(buyerId))
+        .send(body)
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/auctions/${id}/bids`)
+        .set('Authorization', authOf(buyerId))
+        .send(body)
+        .expect(201);
+
+      expect((await storedAuction(id)).extensionCount).toBe(1);
+      expect(
+        await prisma.auctionExtension.count({ where: { auctionId: id } })
+      ).toBe(1);
     });
   });
 });
