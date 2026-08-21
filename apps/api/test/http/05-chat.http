@@ -5,49 +5,54 @@
 ###############################################################################
 
 @baseUrl = http://localhost:4000
-@buyer   = 00000000-0000-4000-8000-000000000004
-@sellerA = 00000000-0000-4000-8000-000000000002
+
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
+# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+@buyerToken =
+@sellerAToken =
+
 @productA1 = 00000000-0000-4000-8000-000000000201
 
 ### CHAT-001 เปิดห้องแชทจากหน้าสินค้า. expect 201
 # ยิงซ้ำต้องได้ห้องเดิม (id เดียวกัน) ไม่ใช่สร้างห้องใหม่
 # @name openConversation
 POST {{baseUrl}}/products/{{productA1}}/conversations
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 @conversationId = {{openConversation.response.body.$.id}}
 
 ### CHAT-001 ยิงซ้ำ — ต้องได้ id เดิมกับข้างบน. expect 201
 POST {{baseUrl}}/products/{{productA1}}/conversations
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### CHAT-002 ผู้ซื้อส่งข้อความ. expect 201
 # ดู log ฝั่ง server ต้องขึ้น "[stub] message:sent -> conversation:..."
 POST {{baseUrl}}/conversations/{{conversationId}}/messages
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "body": "สนใจครับ ลดได้ถึงเท่าไหร่ครับ" }
 
 ### CHAT-002 ผู้ขายตอบกลับ. expect 201
 POST {{baseUrl}}/conversations/{{conversationId}}/messages
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "body": "ลดได้ถึง 2,000 ครับ" }
 
 ### CHAT-003 อ่านข้อความในห้อง (มุมมองผู้ซื้อ). expect 200
 GET {{baseUrl}}/conversations/{{conversationId}}/messages
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### CHAT-003 อ่านข้อความแบบแบ่งหน้า
 GET {{baseUrl}}/conversations/{{conversationId}}/messages?page=1&limit=10
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### CHAT-003 กล่องข้อความของผู้ซื้อ. expect 200
 GET {{baseUrl}}/conversations
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### CHAT-003 กล่องข้อความของผู้ขาย — ต้องเห็นห้องเดียวกัน. expect 200
 GET {{baseUrl}}/conversations
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
