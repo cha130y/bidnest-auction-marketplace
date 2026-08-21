@@ -19,10 +19,12 @@ import {
 import { AuthService } from './auth.service';
 import {
   AuthTokensResponse,
+  EmailRequiredResponse,
   PendingTwoFactorResponse
 } from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { LoginDto } from './dto/login.dto';
+import { OAuthLoginDto, VerifyOAuthDto } from './dto/oauth.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -117,6 +119,66 @@ export class AuthController {
   @ApiNoContentResponse({ description: 'Session revoked, or nothing to do' })
   logout(@Body() dto: RefreshTokenDto): Promise<void> {
     return this.authService.logout(dto);
+  }
+
+  @Public()
+  @ThrottleAuth()
+  @Post('google/callback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'AUTH-003 — sign in with Google',
+    description:
+      'Takes the ID token NextAuth obtained and verifies it with Google. ' +
+      'Nothing the caller says about themselves is trusted. No session comes ' +
+      'back here: AUTH-007 makes the emailed OTP mandatory on every login ' +
+      'path, so finish at /auth/google/verify.'
+  })
+  @ApiOkResponse({ type: PendingTwoFactorResponse })
+  @ApiUnauthorizedResponse({ description: 'Token is not valid for this app' })
+  @ApiForbiddenResponse({ description: 'Account is suspended or deactivated' })
+  googleLogin(
+    @Body() dto: OAuthLoginDto
+  ): Promise<PendingTwoFactorResponse | EmailRequiredResponse> {
+    return this.authService.oauthLogin('GOOGLE', dto);
+  }
+
+  @Public()
+  @ThrottleOtp()
+  @Post('google/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'AUTH-003 — finish Google sign-in with the code' })
+  @ApiOkResponse({ type: AuthTokensResponse })
+  googleVerify(@Body() dto: VerifyOAuthDto): Promise<AuthTokensResponse> {
+    return this.authService.verifyOAuth('GOOGLE', dto);
+  }
+
+  @Public()
+  @ThrottleAuth()
+  @Post('line/callback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'AUTH-006 — sign in with Line',
+    description:
+      'Line often releases no email, so identity hangs on the provider plus ' +
+      'the account id. A first-time user in that situation gets ' +
+      'EMAIL_REQUIRED back: post the token again with an address to finish.'
+  })
+  @ApiOkResponse({ type: PendingTwoFactorResponse })
+  @ApiUnauthorizedResponse({ description: 'Token is not valid for this app' })
+  lineLogin(
+    @Body() dto: OAuthLoginDto
+  ): Promise<PendingTwoFactorResponse | EmailRequiredResponse> {
+    return this.authService.oauthLogin('LINE', dto);
+  }
+
+  @Public()
+  @ThrottleOtp()
+  @Post('line/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'AUTH-006 — finish Line sign-in with the code' })
+  @ApiOkResponse({ type: AuthTokensResponse })
+  lineVerify(@Body() dto: VerifyOAuthDto): Promise<AuthTokensResponse> {
+    return this.authService.verifyOAuth('LINE', dto);
   }
 
   @Public()

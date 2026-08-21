@@ -4,6 +4,10 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { HashingService } from './hashing.service';
 import { PasswordResetService } from './password-reset.service';
+import { GoogleTokenVerifier } from './oauth/google-token.verifier';
+import { LineTokenVerifier } from './oauth/line-token.verifier';
+import { GOOGLE_VERIFIER, LINE_VERIFIER } from './oauth/oauth-profile';
+import { OAuthService } from './oauth/oauth.service';
 import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -17,7 +21,13 @@ import { TwoFactorService } from './two-factor.service';
     HashingService,
     TwoFactorService,
     TokenService,
-    PasswordResetService
+    PasswordResetService,
+    OAuthService,
+    // Bound through symbols so AuthService depends on the interface rather
+    // than on either concrete verifier, which is what lets the tests swap in
+    // a fake instead of calling Google and Line for real.
+    { provide: GOOGLE_VERIFIER, useClass: GoogleTokenVerifier },
+    { provide: LINE_VERIFIER, useClass: LineTokenVerifier }
   ],
   exports: [HashingService, TokenService]
 })
