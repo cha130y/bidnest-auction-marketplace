@@ -26,6 +26,13 @@ const envSchema = z.object({
   // AUTH-005 — single-use password reset link
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 
+  // AUTH-003 / AUTH-006. Only the public identifiers: the server verifies
+  // tokens rather than exchanging them, so the client secrets stay in
+  // apps/web with NextAuth. Optional so the API still boots without them —
+  // the callbacks answer 503 instead of failing at startup.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  LINE_CHANNEL_ID: z.string().optional(),
+
   // Section 6 — rate limits. The generous default is a blanket guard against
   // hammering; the auth window is the one that matters, since login and OTP
   // are the endpoints worth brute forcing.
