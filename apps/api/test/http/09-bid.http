@@ -2,8 +2,9 @@
 # BID — การประมูล (ฝั่ง Dev 4)
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
-# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry
-# BID-003..005 (realtime, anti-sniping, ประวัติ) จะมาต่อในไฟล์นี้
+# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry,
+# BID-003 broadcast realtime
+# BID-004..005 (anti-sniping, ประวัติ) จะมาต่อในไฟล์นี้
 #
 # ⚠️ clientRequestId ต้องเป็น UUID และเป็น "ตัวระบุความพยายามครั้งนั้น"
 #    - ยิงซ้ำด้วย id เดิม + ค่าเดิม = retry -> ได้บิดเดิมกลับมา ไม่ใช่ error
@@ -238,3 +239,34 @@ Content-Type: application/json
 
 ### AUC-008 — ประมูลที่มีบิดต้องขึ้นก่อนใน hot list
 GET {{baseUrl}}/auctions
+
+#=============================================================================
+# 5. Realtime broadcast (BID-003)
+#=============================================================================
+# ไฟล์ .http ยิง WebSocket ไม่ได้ — ส่วนนี้เป็นวิธีเทสมือ
+#
+# 1) เปิด browser console ที่หน้าไหนก็ได้ของ apps/web (หรือใช้ node)
+#    แล้ววาง:
+#
+#      const s = io('http://localhost:4000/auctions', { transports: ['websocket'] });
+#      s.on('connect', async () => {
+#        console.log('joined', await s.emitWithAck('auction:join', { auctionId: '<liveId>' }));
+#      });
+#      s.on('auction:bid', (e) => console.log('auction:bid', e));
+#
+# 2) ยิงบล็อก "บิดที่ผ่าน" ข้างบนอีกครั้ง (เปลี่ยน clientRequestId)
+#
+# 3) ต้องเห็น event เด้งใน console ทันที หน้าตาแบบนี้:
+#
+#      {
+#        auctionId, currency, currentPrice, reserveMet, bidCount,
+#        currentEndAt, extensionCount,
+#        bid: { id, amount, sequenceNo, placedAt }
+#      }
+#
+# สิ่งที่ต้องตรวจ:
+#   - ห้ามมี reservePrice ใน payload เด็ดขาด มีแค่ reserveMet (AUC-003)
+#   - ห้ามมี bidderId — ชื่อผู้บิดเป็นเรื่องของ BID-005
+#   - join ห้องของ draft (ยังไม่ publish) ต้องได้ error "Auction not found"
+#   - บิดที่ถูกปฏิเสธ (400/403/409) ต้องไม่มี event เด้งเลย
+#   - retry ด้วย clientRequestId เดิม ต้องไม่ยิง event ซ้ำ
