@@ -7,6 +7,7 @@ import { Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { categoryLabel } from "@/lib/category-labels"
 import { shopHref, type ShopSearch } from "@/lib/shop-search"
 import type { CategoryTree } from "@/lib/api/types"
 
@@ -91,7 +92,7 @@ export function ProductFilters({ search, categories }: ProductFiltersProps) {
                       toggleCategory(root.id, checked)
                     }
                   />
-                  {root.name}
+                  {categoryLabel(root)}
                 </label>
                 {root.children.map((child) => (
                   <label
@@ -104,7 +105,7 @@ export function ProductFilters({ search, categories }: ProductFiltersProps) {
                         toggleCategory(child.id, checked)
                       }
                     />
-                    {child.name}
+                    {categoryLabel(child)}
                   </label>
                 ))}
               </div>

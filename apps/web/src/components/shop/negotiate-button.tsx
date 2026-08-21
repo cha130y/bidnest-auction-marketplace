@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useMutation } from "@tanstack/react-query"
 import { MessagesSquare } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/cart/cart-provider"
 import { ApiError } from "@/lib/api/client"
+import { loginHref } from "@/lib/api/auth/login-redirect"
 import { startProductConversation } from "@/lib/api/products"
 
 /**
@@ -19,8 +20,8 @@ import { startProductConversation } from "@/lib/api/products"
  * (SRS §6), the buyer just gets the thread.
  */
 export function NegotiateButton({ productId }: { productId: string }) {
+  const router = useRouter()
   const { isAuthenticated, isAuthReady } = useCart()
-  const [loginHint, setLoginHint] = useState(false)
 
   const { mutate, isPending, isSuccess, error } = useMutation({
     mutationFn: () => startProductConversation(productId),
@@ -36,8 +37,9 @@ export function NegotiateButton({ productId }: { productId: string }) {
         block
         disabled={isPending || isSuccess}
         onClick={() => {
+          // Signed out: send them to log in and come straight back here
           if (needsLogin) {
-            setLoginHint(true)
+            router.push(loginHref())
             return
           }
           mutate()
@@ -47,9 +49,6 @@ export function NegotiateButton({ productId }: { productId: string }) {
         {isSuccess ? "เปิดห้องต่อรองแล้ว" : "ต่อรองราคากับผู้ขาย"}
       </Button>
 
-      {loginHint && (
-        <p className="text-xs text-red">กรุณาเข้าสู่ระบบก่อนต่อรองราคา</p>
-      )}
       {error instanceof ApiError && (
         <p className="text-xs text-red">{error.message}</p>
       )}

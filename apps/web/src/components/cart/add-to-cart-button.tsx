@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Check, ShoppingCart } from "lucide-react"
 
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
 import { addCartItem } from "@/lib/api/cart"
 import { ApiError } from "@/lib/api/client"
+import { loginHref } from "@/lib/api/auth/login-redirect"
 import { cn } from "@/lib/utils"
 
 type AddToCartButtonProps = {
@@ -36,11 +37,9 @@ export function AddToCartButton({
   block,
   className,
 }: AddToCartButtonProps) {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const { isAuthenticated, isAuthReady } = useCart()
-  // Only raised once the user actually tries — a catalog page full of red
-  // "please log in" lines is noise, the button state already says enough
-  const [loginHint, setLoginHint] = useState(false)
 
   const { mutate, isPending, isSuccess, error, reset } = useMutation({
     mutationFn: () => addCartItem(productId, quantity),
@@ -51,11 +50,6 @@ export function AddToCartButton({
   })
 
   const needsLogin = isAuthReady && !isAuthenticated
-  const message = loginHint
-    ? "กรุณาเข้าสู่ระบบก่อนเพิ่มสินค้าลงตะกร้า"
-    : error instanceof ApiError
-      ? error.message
-      : null
 
   return (
     <div className={cn("flex flex-col gap-1.5", block && "w-full", className)}>
@@ -65,8 +59,9 @@ export function AddToCartButton({
         block={block}
         disabled={disabled || isPending}
         onClick={() => {
+          // Signed out: send them to log in and come straight back here
           if (needsLogin) {
-            setLoginHint(true)
+            router.push(loginHref())
             return
           }
           reset()
@@ -76,7 +71,9 @@ export function AddToCartButton({
         {isSuccess ? <Check /> : <ShoppingCart />}
         {isSuccess ? "เพิ่มแล้ว" : label}
       </Button>
-      {message && <p className="text-xs text-red">{message}</p>}
+      {error instanceof ApiError && (
+        <p className="text-xs text-red">{error.message}</p>
+      )}
     </div>
   )
 }

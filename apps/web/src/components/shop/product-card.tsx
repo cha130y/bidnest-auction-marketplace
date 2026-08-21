@@ -3,6 +3,7 @@ import Link from "next/link"
 import { AddToCartButton } from "@/components/cart/add-to-cart-button"
 import { ProductImage } from "@/components/shop/product-image"
 import { Badge } from "@/components/ui/badge"
+import { categoryLabel } from "@/lib/category-labels"
 import { formatPercent, formatTHB } from "@/lib/format"
 import type { Product } from "@/lib/api/types"
 
@@ -33,7 +34,9 @@ export function ProductCard({ product }: { product: Product }) {
       </Link>
 
       <div className="flex flex-1 flex-col gap-1 p-4">
-        <span className="text-xs text-n-500">{product.category.name}</span>
+        <span className="text-xs text-n-500">
+          {categoryLabel(product.category)}
+        </span>
         <Link
           href={`/shop/${product.id}`}
           className="line-clamp-2 font-display text-base font-semibold text-ink transition-colors hover:text-amber-600"

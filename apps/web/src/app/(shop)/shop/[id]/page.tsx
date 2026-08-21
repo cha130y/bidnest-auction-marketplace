@@ -8,6 +8,7 @@ import { ProductPurchasePanel } from "@/components/shop/product-purchase-panel"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ApiError } from "@/lib/api/client"
+import { categoryLabel } from "@/lib/category-labels"
 import { getProduct } from "@/lib/api/products"
 import { formatDate } from "@/lib/format"
 import type { OwnerProduct, ProductCondition } from "@/lib/api/types"
@@ -64,7 +65,7 @@ export default async function ProductDetailPage({
           href={`/shop?categoryIds=${product.category.id}`}
           className="transition-colors hover:text-ink"
         >
-          {product.category.name}
+          {categoryLabel(product.category)}
         </Link>
         <ChevronRight className="size-4" />
         <span className="line-clamp-1 text-ink">{product.title}</span>
@@ -124,7 +125,7 @@ export default async function ProductDetailPage({
                 <div>
                   <dt className="text-sm text-n-500">หมวดหมู่</dt>
                   <dd className="font-semibold text-ink">
-                    {product.category.name}
+                    {categoryLabel(product.category)}
                   </dd>
                 </div>
                 <div>
