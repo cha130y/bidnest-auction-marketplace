@@ -3,6 +3,10 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "_comment_maxWorkers": "Every e2e suite talks to the same Postgres, so running them in parallel wins nothing and costs correctness: the workers compete for CPU and connections, a beforeAll that normally takes 3s overruns, and every test in that file fails on a hook timeout. Serially the whole run is also about twice as fast.",
+  "maxWorkers": 1,
+  "_comment_testTimeout": "Jest defaults to 5s, which covers a request but not booting AppModule and creating fixtures. CI machines are slower than ours, so this is the margin for that rather than a target to grow into.",
+  "testTimeout": 30000,
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },

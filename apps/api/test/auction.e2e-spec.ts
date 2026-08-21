@@ -94,7 +94,7 @@ describe('Auction drafts (e2e)', () => {
     inactiveCategoryId = inactive.id;
 
     authOf = await authRegistry(app, [sellerId, strangerId, adminId, buyerId]);
-  }, 30_000);
+  });
 
   afterAll(async () => {
     const userIds = [sellerId, strangerId, adminId, buyerId];
@@ -106,7 +106,7 @@ describe('Auction drafts (e2e)', () => {
     });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await app.close();
-  }, 30_000);
+  });
 
   describe('POST /auctions/drafts', () => {
     it('creates a DRAFT holding every field of the draft', async () => {
