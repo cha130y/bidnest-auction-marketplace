@@ -1,0 +1,117 @@
+###############################################################################
+# NOT — กระดิ่งแจ้งเตือนในแอป (NOT-005..008)
+#
+# ไฟล์นี้ "ไม่" สร้างการแจ้งเตือนเอง — แถวพวกนี้เกิดจาก flow อื่น:
+#   NOT-005 Order Placed     <- checkout สำเร็จ (03-order.http)
+#   NOT-006 Shipment Update  <- ผู้ขายขยับสถานะจัดส่ง (04-shipment.http)
+#   NOT-007 Delivered        <- ขยับถึง DELIVERED (04-shipment.http)
+#   NOT-008 New Message      <- มีข้อความใหม่ในห้องแชท (05-chat.http)
+#
+# ==> ยิง 03/04/05 ให้ผ่านก่อน ไม่งั้นไฟล์นี้จะได้ list ว่างเปล่า
+#
+# endpoint เดียวครอบทั้ง 8 type (ฝั่งประมูล NOT-001..004 ด้วย) เพราะกระดิ่ง
+# บนหน้าจอมีอันเดียว ถ้าแยก endpoint ฝั่งละอัน หน้าบ้านต้องยิงสองที่แล้ว
+# เอาเลข unread มาบวกกันเอง ซึ่งจะเพี้ยนทันทีที่ยิงสำเร็จแค่ทางเดียว
+###############################################################################
+
+@baseUrl = http://localhost:4000
+
+# AUTH-008 — ต้องมี bearer token จริง รัน seed แล้ว copy บรรทัด @xToken มาวาง
+# (token หมดอายุตาม JWT_ACCESS_TTL — พอเริ่มได้ 401 ให้ seed ใหม่)
+@buyerToken   =
+@sellerAToken =
+
+#=============================================================================
+# 1. อ่านรายการ
+#=============================================================================
+
+### NOT-005..008 รายการทั้งหมดของตัวเอง. expect 200
+# ตอบกลับมี 3 ก้อน: items, unread (เลขบนกระดิ่ง), meta (แบ่งหน้า)
+# unread นับ "ทุกแถวที่ยังไม่อ่าน" ไม่ใช่แค่ในหน้านี้หรือที่ตรงกับ filter
+# @name list
+GET {{baseUrl}}/notifications?limit=5
+Authorization: Bearer {{buyerToken}}
+
+@notificationId = {{list.response.body.$.items[0].id}}
+
+### เลขบนกระดิ่งอย่างเดียว — เบากว่าดึงทั้ง list. expect 200
+GET {{baseUrl}}/notifications/unread-count
+Authorization: Bearer {{buyerToken}}
+
+### กรองเฉพาะที่ยังไม่อ่าน. expect 200
+GET {{baseUrl}}/notifications?unreadOnly=true
+Authorization: Bearer {{buyerToken}}
+
+### กรอง type เดียว. expect 200 — ต้องได้แต่ ORDER_PLACED
+GET {{baseUrl}}/notifications?types=ORDER_PLACED
+Authorization: Bearer {{buyerToken}}
+
+### กรองหลาย type คั่นด้วย comma (ไว้ทำแท็บ "ซื้อขาย" แยกจาก "ประมูล"). expect 200
+GET {{baseUrl}}/notifications?types=ORDER_PLACED,SHIPMENT_UPDATE,DELIVERED,NEW_MESSAGE
+Authorization: Bearer {{buyerToken}}
+
+### แบ่งหน้า. expect 200
+GET {{baseUrl}}/notifications?page=2&limit=5
+Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 2. ทำเครื่องหมายว่าอ่านแล้ว
+#=============================================================================
+
+### อ่านทีละใบ. expect 200 — readAt ต้องเปลี่ยนจาก null เป็นเวลาปัจจุบัน
+PATCH {{baseUrl}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{buyerToken}}
+
+### ยิงซ้ำใบเดิม. expect 200 — readAt ต้อง "เท่าเดิม" ไม่ใช่เวลาใหม่
+# กระดิ่งควรบอกว่าผู้ใช้เห็นครั้งแรกเมื่อไหร่ ไม่ใช่ตอนกดล่าสุด
+PATCH {{baseUrl}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{buyerToken}}
+
+### เช็คว่าเลขลดลง 1. expect 200
+GET {{baseUrl}}/notifications/unread-count
+Authorization: Bearer {{buyerToken}}
+
+### อ่านทั้งหมดรวดเดียว. expect 200 + { "updated": n }
+PATCH {{baseUrl}}/notifications/read-all
+Authorization: Bearer {{buyerToken}}
+
+### ยืนยันว่าเกลี้ยง. expect 200 + unread 0
+GET {{baseUrl}}/notifications/unread-count
+Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 3. เคสที่ต้องถูกปฏิเสธ
+#=============================================================================
+
+### ไม่มี token. expect 401
+GET {{baseUrl}}/notifications
+
+### token ปลอม. expect 401
+GET {{baseUrl}}/notifications
+Authorization: Bearer not-a-real-token
+
+### ไปกดอ่านของคนอื่น. expect 404 (ไม่ใช่ 403)
+# ตอบ 404 เพื่อไม่ให้คนนอกรู้ด้วยซ้ำว่า id นี้มีอยู่จริงไหม (SRS 6)
+PATCH {{baseUrl}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{sellerAToken}}
+
+### id ไม่ใช่ UUID. expect 400
+PATCH {{baseUrl}}/notifications/abc/read
+Authorization: Bearer {{buyerToken}}
+
+### UUID ถูกรูปแบบแต่ไม่มีอยู่จริง. expect 404
+PATCH {{baseUrl}}/notifications/00000000-0000-4000-8000-999999999999/read
+Authorization: Bearer {{buyerToken}}
+
+### type ที่ไม่มีใน enum. expect 400
+GET {{baseUrl}}/notifications?types=NOPE
+Authorization: Bearer {{buyerToken}}
+
+### unreadOnly ที่ไม่ใช่ true/false. expect 400
+# ตั้งใจให้ 400 ไม่ใช่ตีเป็น false เงียบๆ ไม่งั้นหน้าบ้านจะได้ list ผิดโดยไม่รู้ตัว
+GET {{baseUrl}}/notifications?unreadOnly=yes
+Authorization: Bearer {{buyerToken}}
+
+### limit เกินเพดาน 100. expect 400
+GET {{baseUrl}}/notifications?limit=101
+Authorization: Bearer {{buyerToken}}

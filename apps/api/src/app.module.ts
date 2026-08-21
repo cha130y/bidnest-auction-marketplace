@@ -16,11 +16,13 @@ import { AccessTokenGuard } from './common/guards/access-token.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HealthController } from './health/health.controller';
 import { MailModule } from './mail/mail.module';
+import { NotificationModule } from './notification/notification.module';
 import { OrderModule } from './order/order.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShipmentModule } from './shipment/shipment.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -50,12 +52,14 @@ import { ShipmentModule } from './shipment/shipment.module';
     MailModule,
     RealtimeModule,
     AuthModule,
+    UsersModule,
     AuctionModule,
     BidModule,
     ProductModule,
     CartModule,
     OrderModule,
     ShipmentModule,
+    NotificationModule,
     CategoriesModule,
     AdminModule,
     ChatModule

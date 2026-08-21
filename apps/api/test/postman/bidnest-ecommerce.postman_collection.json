@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "BidNest — E-commerce API (dev3)",
-    "description": "ชุดทดสอบ API ฝั่ง e-commerce ของ BidNest\n\nยังไม่มี login จริง — ระบุตัวตนด้วย header `x-mock-user-id` (MockAuthGuard)\nเลือก environment 'BidNest local' ก่อนยิง แล้ว Run collection ได้ตั้งแต่โฟลเดอร์ 00 ลงไป\nโฟลเดอร์ 07 Negative ต้องรันหลัง 03/04/05 เพราะใช้ id ที่โฟลเดอร์เหล่านั้นเซฟไว้\n\nก่อนรัน: docker compose up -d, prisma migrate dev, prisma db seed, pnpm dev:api",
+    "description": "ชุดทดสอบ API ฝั่ง e-commerce ของ BidNest\n\nAUTH-008 — ทุก request ที่ไม่ใช่ @Public ต้องมี bearer token จริง\nรัน `pnpm --dir apps/api exec prisma db seed` แล้ว copy ค่า token ที่มันพิมพ์\nออกมาใส่ในตัวแปร adminToken / sellerAToken / sellerBToken / buyerToken\nของ environment 'BidNest local' (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที)\n\nเลือก environment 'BidNest local' ก่อนยิง แล้ว Run collection ได้ตั้งแต่โฟลเดอร์ 00 ลงไป\nโฟลเดอร์ 07 Negative ต้องรันหลัง 03/04/05 เพราะใช้ id ที่โฟลเดอร์เหล่านั้นเซฟไว้\n\nก่อนรัน: docker compose up -d, prisma migrate dev, prisma db seed, pnpm dev:api",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -47,8 +47,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -259,8 +259,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -298,8 +298,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -346,8 +346,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -399,8 +399,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -452,8 +452,8 @@
             "method": "DELETE",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -492,8 +492,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -526,8 +526,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -576,8 +576,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -629,8 +629,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -681,8 +681,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -730,8 +730,8 @@
             "method": "DELETE",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -771,8 +771,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -819,8 +819,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -867,8 +867,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -906,7 +906,6 @@
                   "});",
                   "",
                   "if (pm.response.code < 400) pm.collectionVariables.set('orderId', pm.response.json().orders[0].id);",
-                  "if (pm.response.code < 400) pm.collectionVariables.set('orderSellerId', pm.response.json().orders[0].sellerId);",
                   "",
                   "pm.test('จ่ายเงินสำเร็จ', function () {",
                   "  pm.expect(pm.response.json().paymentStatus).to.eql('SUCCEEDED');",
@@ -925,8 +924,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -963,8 +962,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -997,8 +996,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1045,8 +1044,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -1068,7 +1067,8 @@
                 "exec": [
                   "pm.test('status is 200', function () {",
                   "  pm.expect([200]).to.include(pm.response.code);",
-                  "});"
+                  "});",
+                  "if (pm.response.code < 400) pm.collectionVariables.set('sellerOrderId', pm.response.json().items[0].id);"
                 ]
               }
             }
@@ -1080,8 +1080,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1115,18 +1115,18 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{orderSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/orders/{{orderId}}",
+              "raw": "{{baseUrl}}/orders/{{sellerOrderId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "orders",
-                "{{orderId}}"
+                "{{sellerOrderId}}"
               ]
             }
           },
@@ -1155,8 +1155,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1203,8 +1203,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1241,8 +1241,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "if (pm.response.code < 400) pm.collectionVariables.set('shipOrderId', pm.response.json().orders[0].id);",
-                  "if (pm.response.code < 400) pm.collectionVariables.set('shipSellerId', pm.response.json().orders[0].sellerId);"
+                  "if (pm.response.code < 400) pm.collectionVariables.set('shipOrderId', pm.response.json().orders[0].id);"
                 ]
               }
             }
@@ -1254,8 +1253,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1296,8 +1295,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{shipSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1349,8 +1348,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{shipSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1398,8 +1397,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{shipSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1451,8 +1450,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1493,8 +1492,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1541,8 +1540,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1579,8 +1578,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "if (pm.response.code < 400) pm.collectionVariables.set('cancelOrderId', pm.response.json().orders[0].id);",
-                  "if (pm.response.code < 400) pm.collectionVariables.set('cancelSellerId', pm.response.json().orders[0].sellerId);"
+                  "if (pm.response.code < 400) pm.collectionVariables.set('cancelOrderId', pm.response.json().orders[0].id);"
                 ]
               }
             }
@@ -1592,8 +1590,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{cancelSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1641,8 +1639,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1685,8 +1683,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1723,8 +1721,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1763,8 +1761,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1812,8 +1810,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -1861,8 +1859,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1907,8 +1905,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -1941,8 +1939,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -1980,8 +1978,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -2015,8 +2013,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -2064,8 +2062,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2148,8 +2146,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -2183,8 +2181,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2237,7 +2235,7 @@
       "name": "07 Negative",
       "item": [
         {
-          "name": "401 — ไม่ส่ง x-mock-user-id",
+          "name": "401 — ไม่ส่ง Authorization",
           "request": {
             "method": "GET",
             "header": [],
@@ -2271,8 +2269,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "00000000-0000-4000-8000-000000009999"
+                "key": "Authorization",
+                "value": "Bearer not-a-real-token"
               }
             ],
             "url": {
@@ -2305,8 +2303,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -2339,8 +2337,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2387,8 +2385,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               }
             ],
             "url": {
@@ -2422,8 +2420,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2470,8 +2468,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2518,8 +2516,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -2554,8 +2552,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2602,8 +2600,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2680,8 +2678,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2727,8 +2725,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2813,8 +2811,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2861,8 +2859,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerB}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerBToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2910,8 +2908,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -2962,8 +2960,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -3016,8 +3014,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerA}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               }
             ],
             "url": {
@@ -3054,8 +3052,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{cancelSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -3103,8 +3101,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -3152,8 +3150,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{orderSellerId}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerAToken}}"
               },
               {
                 "key": "Content-Type",
@@ -3201,8 +3199,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerB}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerBToken}}"
               }
             ],
             "url": {
@@ -3236,8 +3234,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{sellerB}}"
+                "key": "Authorization",
+                "value": "Bearer {{sellerBToken}}"
               }
             ],
             "url": {
@@ -3272,8 +3270,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{admin}}"
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -3308,8 +3306,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "x-mock-user-id",
-                "value": "{{buyer}}"
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
               },
               {
                 "key": "Content-Type",
@@ -3368,23 +3366,11 @@
       "value": ""
     },
     {
-      "key": "orderSellerId",
-      "value": ""
-    },
-    {
       "key": "shipOrderId",
       "value": ""
     },
     {
-      "key": "shipSellerId",
-      "value": ""
-    },
-    {
       "key": "cancelOrderId",
-      "value": ""
-    },
-    {
-      "key": "cancelSellerId",
       "value": ""
     },
     {
@@ -3393,6 +3379,10 @@
     },
     {
       "key": "declineProductId",
+      "value": ""
+    },
+    {
+      "key": "sellerOrderId",
       "value": ""
     }
   ]
