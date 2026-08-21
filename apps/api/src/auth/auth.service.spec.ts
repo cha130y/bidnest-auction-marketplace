@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { HashingService } from './hashing.service';
+import { PasswordResetService } from './password-reset.service';
 import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -56,6 +57,7 @@ describe('AuthService', () => {
     issue: jest.Mock;
     consume: jest.Mock;
   };
+  let passwordReset: { issue: jest.Mock; consume: jest.Mock };
   let tokens: {
     issue: jest.Mock;
     lookupRefreshToken: jest.Mock;
@@ -90,13 +92,19 @@ describe('AuthService', () => {
       revokeAllSessions: jest.fn().mockResolvedValue(undefined)
     };
 
+    passwordReset = {
+      issue: jest.fn().mockResolvedValue(undefined),
+      consume: jest.fn()
+    };
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
         HashingService,
         { provide: PrismaService, useValue: prisma },
         { provide: TwoFactorService, useValue: twoFactor },
-        { provide: TokenService, useValue: tokens }
+        { provide: TokenService, useValue: tokens },
+        { provide: PasswordResetService, useValue: passwordReset }
       ]
     }).compile();
 
@@ -478,6 +486,55 @@ describe('AuthService', () => {
 
       await expect(service.logout(dto)).resolves.toBeUndefined();
       expect(tokens.revokeSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forgotPassword (AUTH-005)', () => {
+    it('asks for a link and says nothing back', async () => {
+      await expect(
+        service.forgotPassword({ email: 'somchai@example.com' })
+      ).resolves.toBeUndefined();
+      expect(passwordReset.issue).toHaveBeenCalledWith('somchai@example.com');
+    });
+
+    it('answers the same way for an address with no account', async () => {
+      // issue() stays silent for unknown addresses, so the caller cannot tell.
+      passwordReset.issue.mockResolvedValue(undefined);
+
+      await expect(
+        service.forgotPassword({ email: 'nobody@example.com' })
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('resetPassword (AUTH-005)', () => {
+    const dto = { token: 'a-reset-token-long-enough', password: 'N3wPassw0rd' };
+
+    it('stores a new hash and cuts every session', async () => {
+      passwordReset.consume.mockResolvedValue({ tokenId: 't1', userId: 'u1' });
+      prisma.user.update.mockResolvedValue(createdRow);
+
+      await service.resetPassword(dto);
+
+      const [updateArg] = (
+        prisma.user.update.mock.calls as [
+          { where: { id: string }; data: { passwordHash: string } }
+        ][]
+      )[0];
+      expect(updateArg.where).toEqual({ id: 'u1' });
+      expect(updateArg.data.passwordHash).not.toBe(dto.password);
+      expect(updateArg.data.passwordHash).toMatch(/^\$2[aby]\$/);
+      expect(tokens.revokeAllSessions).toHaveBeenCalledWith('u1');
+    });
+
+    it('rejects a token the service refused to spend', async () => {
+      passwordReset.consume.mockResolvedValue(null);
+
+      await expect(service.resetPassword(dto)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(tokens.revokeAllSessions).not.toHaveBeenCalled();
     });
   });
 });
