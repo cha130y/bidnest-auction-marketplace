@@ -1,8 +1,6 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:6666';
+import { authHeader } from '@/lib/api/auth/token';
 
-const MOCK_USER_ID =
-  process.env.NEXT_PUBLIC_MOCK_USER_ID ??
-  '00000000-0000-4000-8000-000000000004';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export interface ChatMessage {
   id: string;
@@ -40,5 +38,38 @@ export async function sendSupportChatMessage(
   message: string,
   sessionId?: string,
 ): Promise<SendMessageResponse> {
-  const response = await fetch(`${API_BASE_URL}/support/chat`, );
+  const response = await fetch(`${API_BASE_URL}/support/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader(),
+    },
+    body: JSON.stringify({ message, sessionId }),
+  });
+
+  if (!response.ok) {
+    throw new SupportChatError(
+      response.status,
+      await parseErrorMessage(response),
+    );
+  }
+
+  return response.json();
+}
+
+export async function fetchSupportChatHistory(
+  sessionId: string,
+): Promise<ChatMessage[]> {
+  const response = await fetch(`${API_BASE_URL}/support/chat/${sessionId}`, {
+    headers: authHeader(),
+  });
+
+  if (!response.ok) {
+    throw new SupportChatError(
+      response.status,
+      await parseErrorMessage(response),
+    );
+  }
+
+  return response.json();
 }
