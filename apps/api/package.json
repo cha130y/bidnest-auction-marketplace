@@ -13,6 +13,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "seed:mock": "nest build && node dist/prisma/seed-mock.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "jest --passWithNoTests",

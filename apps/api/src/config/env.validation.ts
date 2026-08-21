@@ -26,6 +26,14 @@ const envSchema = z.object({
   // AUTH-005 — single-use password reset link
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 
+  // Section 6 — rate limits. The generous default is a blanket guard against
+  // hammering; the auth window is the one that matters, since login and OTP
+  // are the endpoints worth brute forcing.
+  THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
+  AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(5),
+  OTP_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
+
   // Maildev in development, real SMTP relay in production (SRS section 3)
   MAIL_HOST: z.string().default('localhost'),
   MAIL_PORT: z.coerce.number().int().max(65535).min(0).default(1025),

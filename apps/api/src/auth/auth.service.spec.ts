@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { HashingService } from './hashing.service';
+import { PasswordResetService } from './password-reset.service';
 import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -56,7 +57,14 @@ describe('AuthService', () => {
     issue: jest.Mock;
     consume: jest.Mock;
   };
-  let tokens: { issue: jest.Mock };
+  let passwordReset: { issue: jest.Mock; consume: jest.Mock };
+  let tokens: {
+    issue: jest.Mock;
+    lookupRefreshToken: jest.Mock;
+    rotate: jest.Mock;
+    revokeSession: jest.Mock;
+    revokeAllSessions: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -74,7 +82,19 @@ describe('AuthService', () => {
     tokens = {
       issue: jest
         .fn()
-        .mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' })
+        .mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' }),
+      lookupRefreshToken: jest.fn(),
+      rotate: jest.fn().mockResolvedValue({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh'
+      }),
+      revokeSession: jest.fn().mockResolvedValue(undefined),
+      revokeAllSessions: jest.fn().mockResolvedValue(undefined)
+    };
+
+    passwordReset = {
+      issue: jest.fn().mockResolvedValue(undefined),
+      consume: jest.fn()
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -83,7 +103,8 @@ describe('AuthService', () => {
         HashingService,
         { provide: PrismaService, useValue: prisma },
         { provide: TwoFactorService, useValue: twoFactor },
-        { provide: TokenService, useValue: tokens }
+        { provide: TokenService, useValue: tokens },
+        { provide: PasswordResetService, useValue: passwordReset }
       ]
     }).compile();
 
@@ -357,6 +378,163 @@ describe('AuthService', () => {
         status: 429
       });
       expect(twoFactor.issue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refresh (AUTH-004)', () => {
+    const dto = { refreshToken: 'a-refresh-token-long-enough' };
+    const owner = {
+      id: createdRow.id,
+      email: createdRow.email,
+      role: 'USER',
+      status: 'ACTIVE'
+    };
+
+    it('rotates the session and returns a different token', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({
+        outcome: 'VALID',
+        sessionId: 's1',
+        user: owner
+      });
+      prisma.user.findUnique.mockResolvedValue(createdRow);
+
+      const result = await service.refresh(dto);
+
+      expect(tokens.rotate).toHaveBeenCalledWith('s1', owner);
+      expect(result.refreshToken).toBe('new-refresh');
+      expect(result.refreshToken).not.toBe(dto.refreshToken);
+    });
+
+    it('cuts every session when a spent token is replayed', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({
+        outcome: 'REPLAYED',
+        sessionId: 's1',
+        user: owner
+      });
+
+      await expect(service.refresh(dto)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(tokens.revokeAllSessions).toHaveBeenCalledWith(owner.id);
+      expect(tokens.rotate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown token without touching any session', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({ outcome: 'UNKNOWN' });
+
+      await expect(service.refresh(dto)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(tokens.revokeAllSessions).not.toHaveBeenCalled();
+      expect(tokens.rotate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expired token the same way as an unknown one', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({
+        outcome: 'EXPIRED',
+        sessionId: 's1'
+      });
+
+      await expect(service.refresh(dto)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(tokens.rotate).not.toHaveBeenCalled();
+    });
+
+    it('refuses to refresh a suspended account', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({
+        outcome: 'VALID',
+        sessionId: 's1',
+        user: { ...owner, status: 'SUSPENDED' }
+      });
+
+      await expect(service.refresh(dto)).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
+      expect(tokens.rotate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('logout (AUTH-004)', () => {
+    const dto = { refreshToken: 'a-refresh-token-long-enough' };
+
+    it('revokes the matching session', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({
+        outcome: 'VALID',
+        sessionId: 's1',
+        user: { id: 'u1', email: 'a@b.c', role: 'USER', status: 'ACTIVE' }
+      });
+
+      await service.logout(dto);
+
+      expect(tokens.revokeSession).toHaveBeenCalledWith('s1');
+    });
+
+    it('still revokes a session whose token had expired', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({
+        outcome: 'EXPIRED',
+        sessionId: 's1'
+      });
+
+      await service.logout(dto);
+
+      expect(tokens.revokeSession).toHaveBeenCalledWith('s1');
+    });
+
+    it('stays quiet for a token that never existed', async () => {
+      tokens.lookupRefreshToken.mockResolvedValue({ outcome: 'UNKNOWN' });
+
+      await expect(service.logout(dto)).resolves.toBeUndefined();
+      expect(tokens.revokeSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forgotPassword (AUTH-005)', () => {
+    it('asks for a link and says nothing back', async () => {
+      await expect(
+        service.forgotPassword({ email: 'somchai@example.com' })
+      ).resolves.toBeUndefined();
+      expect(passwordReset.issue).toHaveBeenCalledWith('somchai@example.com');
+    });
+
+    it('answers the same way for an address with no account', async () => {
+      // issue() stays silent for unknown addresses, so the caller cannot tell.
+      passwordReset.issue.mockResolvedValue(undefined);
+
+      await expect(
+        service.forgotPassword({ email: 'nobody@example.com' })
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('resetPassword (AUTH-005)', () => {
+    const dto = { token: 'a-reset-token-long-enough', password: 'N3wPassw0rd' };
+
+    it('stores a new hash and cuts every session', async () => {
+      passwordReset.consume.mockResolvedValue({ tokenId: 't1', userId: 'u1' });
+      prisma.user.update.mockResolvedValue(createdRow);
+
+      await service.resetPassword(dto);
+
+      const [updateArg] = (
+        prisma.user.update.mock.calls as [
+          { where: { id: string }; data: { passwordHash: string } }
+        ][]
+      )[0];
+      expect(updateArg.where).toEqual({ id: 'u1' });
+      expect(updateArg.data.passwordHash).not.toBe(dto.password);
+      expect(updateArg.data.passwordHash).toMatch(/^\$2[aby]\$/);
+      expect(tokens.revokeAllSessions).toHaveBeenCalledWith('u1');
+    });
+
+    it('rejects a token the service refused to spend', async () => {
+      passwordReset.consume.mockResolvedValue(null);
+
+      await expect(service.resetPassword(dto)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(tokens.revokeAllSessions).not.toHaveBeenCalled();
     });
   });
 });

@@ -4,12 +4,61 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * BidNest — Warm design tokens
+ * Source of truth: ui_component_design.html (Figma import)
+ * Amber is the one brand accent; neutrals stay warm/soft; radius is generous.
+ */
+@theme {
+  --color-amber-50: #fff8ec;
+  --color-amber-100: #feefd2;
+  --color-amber-200: #fadfb0;
+  --color-amber-400: #fbb94a;
+  --color-amber-500: #f5a524;
+  --color-amber-600: #e28e0c;
+
+  --color-ink: #20242e;
+  --color-n-50: #fafafb;
+  --color-n-100: #f4f5f7;
+  --color-n-200: #e8eaee;
+  --color-n-300: #d7dae0;
+  --color-n-400: #aab0ba;
+  --color-n-500: #8a8f9a;
+  --color-n-600: #545a66;
+  --color-n-700: #3b4150;
+
+  --color-red: #ef4a3c;
+  --color-red-50: #feedeb;
+  --color-green: #1fa971;
+  --color-green-50: #e7f7f0;
+
+  /* Radius scale — buttons/chips use r1-r2, inputs/tiles r3, cards r4-r5 */
+  --radius-r1: 8px;
+  --radius-r2: 12px;
+  --radius-r3: 16px;
+  --radius-r4: 20px;
+  --radius-r5: 28px;
+
+  /* Elevation */
+  --shadow-sh1:
+    0 1px 2px rgba(32, 36, 46, 0.05), 0 4px 10px rgba(32, 36, 46, 0.06);
+  --shadow-sh2:
+    0 2px 6px rgba(32, 36, 46, 0.06), 0 16px 36px rgba(32, 36, 46, 0.13);
+  --shadow-sh3:
+    0 4px 10px rgba(32, 36, 46, 0.07), 0 30px 60px rgba(32, 36, 46, 0.18);
+  --shadow-amber:
+    0 2px 8px rgba(226, 142, 12, 0.25), 0 12px 28px rgba(245, 165, 36, 0.42);
+  --shadow-focus: 0 0 0 4px rgba(245, 165, 36, 0.28);
+  --shadow-well:
+    inset 0 2px 5px rgba(32, 36, 46, 0.1), inset 0 1px 1px rgba(32, 36, 46, 0.06);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-jakarta);
+  --font-display: var(--font-poppins);
+  --font-heading: var(--font-poppins);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,31 +97,32 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Light theme only for now — no reference design provides a dark variant yet */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #ffffff;
+  --foreground: var(--color-ink);
+  --card: #ffffff;
+  --card-foreground: var(--color-ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-amber-500);
+  --primary-foreground: var(--color-ink);
+  --secondary: #ffffff;
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-n-100);
+  --muted-foreground: var(--color-n-500);
+  --accent: var(--color-amber-50);
+  --accent-foreground: var(--color-amber-600);
+  --destructive: var(--color-red);
+  --border: var(--color-n-200);
+  --input: var(--color-n-200);
+  --ring: var(--color-amber-500);
+  --radius: 12px;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);

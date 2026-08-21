@@ -1,16 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  UseGuards,
-  UsePipes
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UsePipes } from '@nestjs/common';
 import { SupportChatService } from './support-chat.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.type';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { ApiResponse } from '@nestjs/swagger';
 import { SanitizePromptPipe } from '../common/pipes/sanitize-prompt.pipe';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -30,7 +22,9 @@ export class SupportChatController {
   }
 
   @ApiResponse({ status: 201, type: SendMessageResponseDto })
-  @UseGuards(ThrottlerGuard)
+  // ThrottlerGuard is a global APP_GUARD now (see app.module.ts) — @Throttle
+  // here overrides the blanket per-IP limit for this route only, no
+  // @UseGuards needed (adding it back would run the guard twice per request)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UsePipes(SanitizePromptPipe)
   @Post()
