@@ -44,7 +44,15 @@ const envSchema = z.object({
   // Maildev in development, real SMTP relay in production (SRS section 3)
   MAIL_HOST: z.string().default('localhost'),
   MAIL_PORT: z.coerce.number().int().max(65535).min(0).default(1025),
-  MAIL_FROM: z.string().default('BidNest <no-reply@bidnest.local>')
+  MAIL_FROM: z.string().default('BidNest <no-reply@bidnest.local>'),
+
+  // AI-001 (Customer Service Chatbot) — Dev 5
+  GEMINI_API_KEY: z.string().min(1),
+  // AI-003 (Negotiator accept token) — Dev 5, Optional
+  AI_NEGOTIATOR_JWT_SECRET: z
+    .string()
+    .min(1)
+    .default('dev-negotiator-secret-change-me')
 });
 
 export function validate(config: Record<string, any>) {

@@ -89,13 +89,15 @@ description: ทำ requirement ฝั่ง E-Commerce ของ Dev 3 ที�
 
 ออกแบบให้ **สลับเป็นของจริงแล้ว controller ไม่ต้องแก้เลย**
 
-| Mock | รอใคร | วิธีสลับ |
-|---|---|---|
-| `MockAuthGuard` (`common/guards/`) | Dev 2 — AUTH-008 | เปลี่ยน `useClass` ใน `app.module.ts` จุดเดียว · ระบุตัวตนด้วย header `x-mock-user-id` ไปก่อน |
-| `RealtimeService` (`realtime/`) | Dev 4 — WebSocket gateway | เปลี่ยนแค่ body ของ 3 method ให้เรียก `server.to(room).emit(...)` |
-| `MockPaymentProvider` (`payment/`) | **ไม่ต้องรอใคร** | เป็น mock ถาวรตาม SRS §1.2 — V1 ไม่ต่อ payment gateway จริง |
+| Mock | รอใคร | วิธีสลับ | สถานะ |
+|---|---|---|---|
+| ~~`MockAuthGuard`~~ | Dev 2 — AUTH-008 | เปลี่ยน `useClass` ใน `app.module.ts` จุดเดียว | ✅ **สลับแล้ว** เป็น `AccessTokenGuard` · controller ไม่ต้องแก้สักไฟล์ |
+| `RealtimeService` (`realtime/`) | Dev 4 — WebSocket gateway | เปลี่ยนแค่ body ของ 3 method ให้เรียก `server.to(room).emit(...)` | ⏳ ยัง stub — ตอนนี้แค่ log ลง console |
+| `MockPaymentProvider` (`payment/`) | **ไม่ต้องรอใคร** | — | ♾️ mock ถาวรตาม SRS §1.2 — V1 ไม่ต่อ payment gateway จริง |
 
-⚠️ `MockAuthGuard` ลงทะเบียนเป็น **global `APP_GUARD`** แปลว่า route ใหม่ทุกตัวต้องมี `@Public()` กำกับถ้าต้องการให้เข้าถึงโดยไม่ล็อกอิน ไม่งั้นจะได้ 401
+⚠️ guard ตัวจริงลงทะเบียนเป็น **global `APP_GUARD`** เหมือนเดิม แปลว่า route ใหม่ทุกตัวต้องมี `@Public()` กำกับถ้าต้องการให้เข้าถึงโดยไม่ล็อกอิน ไม่งั้นจะได้ 401
+
+**บทเรียนจากรอบที่สลับจริง:** โค้ด controller/service ไม่ต้องแก้เลยเพราะอ่าน identity ผ่าน `@CurrentUser()` อย่างเดียว — แต่**ของนอกโค้ดต้องตามแก้ทั้งหมด** ทั้งไฟล์ `.http` 7 ไฟล์ (82 จุด), Postman collection (67 จุด), README และคอมเมนต์ที่อ้างชื่อ guard เก่า ตอนวางแผน mock ครั้งหน้าให้นับพวกนี้เข้าไปในต้นทุนการสลับด้วย
 
 ## เมื่อจบแต่ละ requirement — หยุดก่อน
 

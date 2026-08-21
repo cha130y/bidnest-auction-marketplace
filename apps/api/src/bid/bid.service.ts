@@ -7,13 +7,18 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
+import { toBidAcceptedEvent } from './bid-accepted-event.mapper';
 import { bidSelect, toOwnBid } from './bid.mapper';
 import { PlaceBidDto } from './dtos/place-bid.dto';
 import { calculateMinimumBid } from './utils/calculate-minimum-bid.util';
 
 @Injectable()
 export class BidService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: AuctionGateway
+  ) {}
 
   /**
    * BID-001 — accepts a bid, or explains why it will not.
@@ -32,10 +37,23 @@ export class BidService {
     const now = new Date();
 
     try {
-      return await this.placeBidInTransaction(auctionId, bidderId, dto, {
-        amount,
-        now
-      });
+      const outcome = await this.placeBidInTransaction(
+        auctionId,
+        bidderId,
+        dto,
+        { amount, now }
+      );
+
+      // BID-003 / SRS section 6 — the broadcast happens here, outside the
+      // transaction, because it is only true once the write has committed.
+      // Announcing from inside would publish a bid a rollback could undo, and
+      // there is no unsending it. A replayed retry rebroadcasts nothing: that
+      // bid was announced when it was first accepted.
+      if (outcome.broadcast) {
+        this.gateway.emitToAuction(auctionId, 'auction:bid', outcome.broadcast);
+      }
+
+      return outcome.bid;
     } catch (error: unknown) {
       // BID-002 — two copies of the same retry can both get past the lookup
       // and reach the insert together. The unique index stops the second one,
@@ -68,7 +86,7 @@ export class BidService {
       // which returning an error could not do: they cannot tell a rejected
       // bid from an accepted one they simply did not hear about.
       if (existing) {
-        return replayOrRefuse(existing, auctionId, amount);
+        return { bid: replayOrRefuse(existing, auctionId, amount) };
       }
 
       const auction = await tx.auction.findFirst({
@@ -145,7 +163,9 @@ export class BidService {
           select: bidSelect
         });
 
-        if (winner) return replayOrRefuse(winner, auctionId, amount);
+        if (winner) {
+          return { bid: replayOrRefuse(winner, auctionId, amount) };
+        }
 
         throw new ConflictException(
           'Somebody bid first — reload and try again'
@@ -176,7 +196,27 @@ export class BidService {
         }
       });
 
-      return toOwnBid(bid);
+      // BID-003 — read the auction back rather than assembling the payload from
+      // what was written. Anything the same transaction changed and this code
+      // forgot about would otherwise be broadcast stale; BID-004 is about to
+      // change the end time here, and this stays correct without being touched.
+      const updated = await tx.auction.findUniqueOrThrow({
+        where: { id: auctionId },
+        select: {
+          id: true,
+          currency: true,
+          currentPrice: true,
+          reservePrice: true,
+          bidCount: true,
+          currentEndAt: true,
+          extensionCount: true
+        }
+      });
+
+      return {
+        bid: toOwnBid(bid),
+        broadcast: toBidAcceptedEvent(updated, bid)
+      };
     });
   }
 

@@ -7,6 +7,7 @@ import {
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
 import { BidService } from './bid.service';
 
 const AUCTION_ID = '00000000-0000-4000-8000-000000000301';
@@ -50,22 +51,48 @@ const validDto = (overrides: Record<string, unknown> = {}) => ({
 describe('BidService (BID-001)', () => {
   let service: BidService;
   let prisma: {
-    auction: { findFirst: jest.Mock; updateMany: jest.Mock };
+    auction: {
+      findFirst: jest.Mock;
+      updateMany: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+    };
     bid: { findUnique: jest.Mock; create: jest.Mock };
     auctionEvent: { create: jest.Mock };
     $transaction: jest.Mock;
   };
+  let gateway: { emitToAuction: jest.Mock };
+
+  /** The auction as it stands after the bid, used to build the broadcast. */
+  const auctionAfterBid = (overrides: Record<string, unknown> = {}) => ({
+    id: AUCTION_ID,
+    currency: 'THB',
+    currentPrice: dec(3000),
+    reservePrice: dec(4500),
+    bidCount: 1,
+    currentEndAt: new Date('2026-09-01T12:00:00.000Z'),
+    extensionCount: 0,
+    ...overrides
+  });
 
   beforeEach(async () => {
+    gateway = { emitToAuction: jest.fn() };
     prisma = {
-      auction: { findFirst: jest.fn(), updateMany: jest.fn() },
+      auction: {
+        findFirst: jest.fn(),
+        updateMany: jest.fn(),
+        findUniqueOrThrow: jest.fn()
+      },
       bid: { findUnique: jest.fn(), create: jest.fn() },
       auctionEvent: { create: jest.fn() },
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
     };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [BidService, { provide: PrismaService, useValue: prisma }]
+      providers: [
+        BidService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AuctionGateway, useValue: gateway }
+      ]
     }).compile();
 
     service = moduleRef.get(BidService);
@@ -78,6 +105,7 @@ describe('BidService (BID-001)', () => {
     prisma.auction.updateMany.mockResolvedValue({ count: 1 });
     prisma.bid.create.mockResolvedValue(bidRow());
     prisma.auctionEvent.create.mockResolvedValue({});
+    prisma.auction.findUniqueOrThrow.mockResolvedValue(auctionAfterBid());
   };
 
   const updateArgs = () =>
@@ -154,6 +182,124 @@ describe('BidService (BID-001)', () => {
       await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * BID-003 — an accepted bid is announced to the auction's room with the
+   * public state and the computed reserve status, and never the reserve.
+   */
+  describe('the broadcast (BID-003)', () => {
+    /** The payload handed to the gateway. */
+    const broadcast = () =>
+      (
+        gateway.emitToAuction.mock.calls as [
+          string,
+          string,
+          Record<string, unknown>
+        ][]
+      )[0];
+
+    it('announces the bid on the auction room', async () => {
+      bidWillBeAccepted();
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      const [auctionId, event] = broadcast();
+      expect(auctionId).toBe(AUCTION_ID);
+      expect(event).toBe('auction:bid');
+    });
+
+    it('carries the public state after the bid', async () => {
+      bidWillBeAccepted();
+      prisma.auction.findUniqueOrThrow.mockResolvedValue(
+        auctionAfterBid({ currentPrice: dec(5000), bidCount: 3 })
+      );
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(broadcast()[2]).toMatchObject({
+        auctionId: AUCTION_ID,
+        currency: 'THB',
+        currentPrice: '5000',
+        bidCount: 3
+      });
+    });
+
+    it('sends reserveMet, never the reserve itself', async () => {
+      bidWillBeAccepted();
+      prisma.auction.findUniqueOrThrow.mockResolvedValue(
+        auctionAfterBid({ currentPrice: dec(3000), reservePrice: dec(4500) })
+      );
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      const payload = broadcast()[2];
+      expect(payload.reserveMet).toBe(false);
+      expect(payload).not.toHaveProperty('reservePrice');
+      expect(JSON.stringify(payload)).not.toContain('4500');
+    });
+
+    it('reports reserveMet true once the price clears the reserve', async () => {
+      bidWillBeAccepted();
+      prisma.auction.findUniqueOrThrow.mockResolvedValue(
+        auctionAfterBid({ currentPrice: dec(5000), reservePrice: dec(4500) })
+      );
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(broadcast()[2].reserveMet).toBe(true);
+    });
+
+    // a room anybody may join is no place for it until BID-005 defines masking
+    it('does not name the bidder', async () => {
+      bidWillBeAccepted();
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(JSON.stringify(broadcast()[2])).not.toContain(BIDDER_ID);
+    });
+
+    it('reads the auction back rather than assembling the payload by hand', async () => {
+      bidWillBeAccepted();
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      // BID-004 will change the end time in this same transaction; reading it
+      // back is what keeps the broadcast correct without touching this code
+      expect(prisma.auction.findUniqueOrThrow).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: AUCTION_ID } })
+      );
+    });
+
+    describe('stays quiet when there is nothing new to announce', () => {
+      it('says nothing when a retry is replayed', async () => {
+        prisma.bid.findUnique.mockResolvedValue(bidRow());
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      it('says nothing when the bid was refused', async () => {
+        bidWillBeAccepted();
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto({ amount: 1 }))
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      it('says nothing when the bid lost the race', async () => {
+        prisma.bid.findUnique.mockResolvedValue(null);
+        prisma.auction.findFirst.mockResolvedValue(openAuction());
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
     });
   });
 
