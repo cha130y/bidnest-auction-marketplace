@@ -42,6 +42,8 @@ const bidRow = (overrides: Record<string, unknown> = {}) => ({
   sequenceNo: 1,
   clientRequestId: REQUEST_ID,
   placedAt: new Date('2026-08-21T00:00:00.000Z'),
+  // BID-003 reads the profile to mask a name for the broadcast (BID-005)
+  bidder: { profile: { displayName: 'Somchai' } },
   ...overrides
 });
 
@@ -112,6 +114,23 @@ describe('BidService (BID-001)', () => {
 
     service = moduleRef.get(BidService);
   });
+
+  /** Makes listBidHistory return one row built from `overrides`. */
+  const historyOf = (overrides: Record<string, unknown> = {}) => {
+    prisma.auction.findFirst.mockResolvedValue({ id: AUCTION_ID });
+    prisma.bid.findMany.mockResolvedValue([
+      {
+        id: 'bid-1',
+        amount: dec(3000),
+        sequenceNo: 1,
+        placedAt: new Date('2026-08-21T00:00:00.000Z'),
+        bidderId: BIDDER_ID,
+        bidder: { profile: { displayName: 'Somchai' } },
+        ...overrides
+      }
+    ]);
+    prisma.bid.count.mockResolvedValue(1);
+  };
 
   /** Sets the mocks up so a bid on `auction` will be accepted. */
   const bidWillBeAccepted = (auction = openAuction()) => {
@@ -265,6 +284,116 @@ describe('BidService (BID-001)', () => {
       await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
 
       expect(broadcast()[2].reserveMet).toBe(true);
+    });
+
+    /**
+     * BID-005 — the bidder appears as the masked label, produced by the same
+     * function the history uses, so the two channels can never disagree about
+     * how a name is hidden.
+     */
+    describe('naming the bidder', () => {
+      it('sends the masked label, not the name', async () => {
+        bidWillBeAccepted();
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+        const payload = broadcast()[2] as { bid: { bidder: string } };
+        expect(payload.bid.bidder).toBe('S***i');
+        expect(JSON.stringify(payload)).not.toContain('Somchai');
+      });
+
+      it('never sends the bidder id', async () => {
+        bidWillBeAccepted();
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+        const payload = broadcast()[2] as { bid: Record<string, unknown> };
+        expect(payload.bid).not.toHaveProperty('bidderId');
+        expect(JSON.stringify(payload)).not.toContain(BIDDER_ID);
+      });
+
+      it('copes with a bidder who has no display name', async () => {
+        bidWillBeAccepted();
+        prisma.bid.create.mockResolvedValue(
+          bidRow({ bidder: { profile: { displayName: null } } })
+        );
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+        const payload = broadcast()[2] as { bid: { bidder: string } };
+        expect(payload.bid.bidder).toBe('***');
+      });
+
+      it('copes with a bidder who has no profile at all', async () => {
+        bidWillBeAccepted();
+        prisma.bid.create.mockResolvedValue(
+          bidRow({ bidder: { profile: null } })
+        );
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+        const payload = broadcast()[2] as { bid: { bidder: string } };
+        expect(payload.bid.bidder).toBe('***');
+      });
+
+      // the history and the broadcast have to agree, or a row would change
+      // label the moment the page refreshed
+      it('masks exactly as the history does', async () => {
+        bidWillBeAccepted();
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+        const broadcastLabel = (broadcast()[2] as { bid: { bidder: string } })
+          .bid.bidder;
+
+        // set up the history read only now: it reuses auction.findFirst, and
+        // pointing that at a bare row earlier would break the bid above
+        historyOf();
+        const history = await service.listBidHistory(AUCTION_ID, {});
+
+        expect(history.items[0].bidder).toBe(broadcastLabel);
+      });
+    });
+
+    it('reads the auction back rather than assembling the payload by hand', async () => {
+      bidWillBeAccepted();
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      // BID-004 will change the end time in this same transaction; reading it
+      // back is what keeps the broadcast correct without touching this code
+      expect(prisma.auction.findUniqueOrThrow).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: AUCTION_ID } })
+      );
+    });
+
+    describe('stays quiet when there is nothing new to announce', () => {
+      it('says nothing when a retry is replayed', async () => {
+        prisma.bid.findUnique.mockResolvedValue(bidRow());
+
+        await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      it('says nothing when the bid was refused', async () => {
+        bidWillBeAccepted();
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto({ amount: 1 }))
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      it('says nothing when the bid lost the race', async () => {
+        prisma.bid.findUnique.mockResolvedValue(null);
+        prisma.auction.findFirst.mockResolvedValue(openAuction());
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
     });
   });
 

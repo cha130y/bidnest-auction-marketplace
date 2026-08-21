@@ -11,7 +11,7 @@ import { PUBLIC_AUCTION_STATUSES } from '../auction/constants/public-auction-sta
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { toBidAcceptedEvent } from './bid-accepted-event.mapper';
 import { bidHistorySelect, toPublicBid } from './bid-history.mapper';
-import { bidSelect, toOwnBid } from './bid.mapper';
+import { bidSelect, bidWithBidderSelect, toOwnBid } from './bid.mapper';
 import { ListBidHistoryDto } from './dtos/list-bid-history.dto';
 import { PlaceBidDto } from './dtos/place-bid.dto';
 import {
@@ -270,7 +270,7 @@ export class BidService {
           clientRequestId: dto.clientRequestId,
           placedAt: now
         },
-        select: bidSelect
+        select: bidWithBidderSelect
       });
 
       await tx.auctionEvent.create({
