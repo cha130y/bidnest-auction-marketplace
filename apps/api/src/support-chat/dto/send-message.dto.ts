@@ -3,7 +3,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
-  MinLength,
+  MinLength
 } from 'class-validator';
 
 export class SendMessageDto {

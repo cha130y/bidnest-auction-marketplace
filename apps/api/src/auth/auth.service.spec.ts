@@ -9,6 +9,8 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { HashingService } from './hashing.service';
 import { PasswordResetService } from './password-reset.service';
+import { GOOGLE_VERIFIER, LINE_VERIFIER } from './oauth/oauth-profile';
+import { OAuthService } from './oauth/oauth.service';
 import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -104,7 +106,10 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: TwoFactorService, useValue: twoFactor },
         { provide: TokenService, useValue: tokens },
-        { provide: PasswordResetService, useValue: passwordReset }
+        { provide: PasswordResetService, useValue: passwordReset },
+        { provide: OAuthService, useValue: { resolveAccount: jest.fn() } },
+        { provide: GOOGLE_VERIFIER, useValue: { verify: jest.fn() } },
+        { provide: LINE_VERIFIER, useValue: { verify: jest.fn() } }
       ]
     }).compile();
 
