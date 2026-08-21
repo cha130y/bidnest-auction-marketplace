@@ -6,26 +6,36 @@
 ###############################################################################
 
 @baseUrl = http://localhost:4000
-@admin   = 00000000-0000-4000-8000-000000000001
-@sellerA = 00000000-0000-4000-8000-000000000002
-@sellerB = 00000000-0000-4000-8000-000000000003
-@buyer   = 00000000-0000-4000-8000-000000000004
+
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
+# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+@adminToken =
+@buyerToken =
+@sellerAToken =
+@sellerBToken =
+
 @catElectronics = 00000000-0000-4000-8000-000000000101
 @productA1 = 00000000-0000-4000-8000-000000000201
 @productB2 = 00000000-0000-4000-8000-000000000204
 
 #=============================================================================
-# 1. ยืนยันตัวตน (MockAuthGuard)
+# 1. ยืนยันตัวตน (AccessTokenGuard — AUTH-008)
 #=============================================================================
 
-### ไม่ส่ง x-mock-user-id ไปที่ route ที่ไม่ public. expect 401
+### ไม่ส่ง Authorization ไปที่ route ที่ไม่ public. expect 401
 GET {{baseUrl}}/cart
 
-### ส่ง user id ที่ไม่มีในระบบ. expect 401
+### token ที่ไม่ใช่ JWT เลย. expect 401
 GET {{baseUrl}}/cart
-x-mock-user-id: 00000000-0000-4000-8000-000000009999
+Authorization: Bearer not-a-real-token
 
-### route ที่เป็น @Public ยิงได้แม้ไม่มี header. expect 200
+### JWT ที่เซ็นด้วย secret อื่น. expect 401
+# guard ตอบ 401 เหมือนกันทั้ง token หมดอายุและ token ปลอม — ไม่บอกว่าอันไหน
+GET {{baseUrl}}/cart
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDQifQ.this-signature-is-not-valid
+
+### route ที่เป็น @Public ยิงได้แม้ไม่มี token. expect 200
 GET {{baseUrl}}/products
 
 #=============================================================================
@@ -34,11 +44,11 @@ GET {{baseUrl}}/products
 
 ### แอดมินซื้อของไม่ได้ — ตะกร้าเป็นของ role USER เท่านั้น. expect 403
 GET {{baseUrl}}/cart
-x-mock-user-id: {{admin}}
+Authorization: Bearer {{adminToken}}
 
 ### แอดมิน checkout ไม่ได้. expect 403
 POST {{baseUrl}}/orders/checkout
-x-mock-user-id: {{admin}}
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
@@ -54,7 +64,7 @@ Content-Type: application/json
 
 ### แอดมินลงขายสินค้าไม่ได้. expect 403
 POST {{baseUrl}}/products
-x-mock-user-id: {{admin}}
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
@@ -69,11 +79,11 @@ Content-Type: application/json
 
 ### user ธรรมดายิง endpoint แอดมินไม่ได้. expect 403
 GET {{baseUrl}}/admin/orders
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 ### user ธรรมดาปิดประกาศสินค้าคนอื่นไม่ได้. expect 403
 PATCH {{baseUrl}}/admin/products/{{productA1}}/deactivate
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "reason": "ไม่มีสิทธิ์" }
@@ -84,25 +94,25 @@ Content-Type: application/json
 
 ### แก้สินค้าที่ไม่ใช่ของตัวเองไม่ได้. expect 403
 PATCH {{baseUrl}}/products/{{productA1}}
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "price": 1 }
 
 ### ลบสินค้าที่ไม่ใช่ของตัวเองไม่ได้ (seller B ลบของ seller A). expect 403
 DELETE {{baseUrl}}/products/{{productA1}}
-x-mock-user-id: {{sellerB}}
+Authorization: Bearer {{sellerBToken}}
 
 ### CART-001 ผู้ขายซื้อของตัวเองไม่ได้. expect 403
 POST {{baseUrl}}/cart/items
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 1 }
 
 ### CHAT-001 ผู้ขายเปิดแชทกับประกาศตัวเองไม่ได้. expect 403
 POST {{baseUrl}}/products/{{productA1}}/conversations
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 #=============================================================================
 # 4. ข้อมูลไม่ถูกต้อง (ValidationPipe: whitelist + forbidNonWhitelisted)
@@ -110,14 +120,14 @@ x-mock-user-id: {{sellerA}}
 
 ### ส่ง field แปลกปลอมที่ไม่มีใน DTO. expect 400
 POST {{baseUrl}}/cart/items
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 1, "hackerField": "boom" }
 
 ### จำนวนต้องเป็นจำนวนเต็ม >= 1. expect 400
 POST {{baseUrl}}/cart/items
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 0 }
@@ -127,7 +137,7 @@ GET {{baseUrl}}/products/not-a-uuid
 
 ### PROD-001 ลงขายโดยไม่แนบรูปสักใบ. expect 400
 POST {{baseUrl}}/products
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -142,7 +152,7 @@ Content-Type: application/json
 
 ### PROD-007 ตั้งส่วนลดมาครึ่งเดียว (มี minQty แต่ไม่มี percent). expect 400
 POST {{baseUrl}}/products
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -165,7 +175,7 @@ GET {{baseUrl}}/products?minPrice=5000&maxPrice=100
 
 ### CART-001 ใส่ตะกร้าเกินจำนวนที่มี (figurine เหลือ 1). expect 400
 POST {{baseUrl}}/cart/items
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productB2}}", "quantity": 99 }
@@ -173,7 +183,7 @@ Content-Type: application/json
 ### CART-004 checkout ตอนตะกร้าว่าง. expect 400 "Cart is empty"
 # หมายเหตุ: ยิงได้ผลก็ต่อเมื่อตะกร้าของ buyer ว่างจริง
 POST {{baseUrl}}/orders/checkout
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
@@ -197,12 +207,12 @@ Content-Type: application/json
 
 ### เช็คก่อน — ตะกร้าของ seller A ต้องว่าง (ถ้าไม่ว่างให้ลบทิ้งก่อน)
 GET {{baseUrl}}/cart
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### setup — seller B ลงขายของราคา 666.00. expect 201
 # @name declineProduct
 POST {{baseUrl}}/products
-x-mock-user-id: {{sellerB}}
+Authorization: Bearer {{sellerBToken}}
 Content-Type: application/json
 
 {
@@ -219,7 +229,7 @@ Content-Type: application/json
 
 ### setup — seller A ใส่ตะกร้า 1 ชิ้น (ยอดรวม = 666.00). expect 201
 POST {{baseUrl}}/cart/items
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "productId": "{{declineProductId}}", "quantity": 1 }
@@ -228,7 +238,7 @@ Content-Type: application/json
 # ผลข้างเคียงที่ต้องเป็นจริง: ไม่มีออเดอร์เกิดขึ้น + ของยังอยู่ในตะกร้าครบ
 # แต่ยังมีแถวใน payment_transactions สถานะ FAILED ไว้กระทบยอด
 POST {{baseUrl}}/orders/checkout
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -244,7 +254,7 @@ Content-Type: application/json
 
 ### ตรวจผล — ของต้องยังอยู่ในตะกร้าเหมือนเดิม
 GET {{baseUrl}}/cart
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 #=============================================================================
 # 6. การจัดส่ง — ต้องมีออเดอร์จริงก่อน
@@ -252,7 +262,7 @@ x-mock-user-id: {{sellerA}}
 
 ### setup — buyer ซื้อของ seller A
 POST {{baseUrl}}/cart/items
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 1 }
@@ -260,7 +270,7 @@ Content-Type: application/json
 ### setup — checkout
 # @name checkout
 POST {{baseUrl}}/orders/checkout
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
@@ -275,25 +285,24 @@ Content-Type: application/json
 }
 
 @orderId = {{checkout.response.body.$.orders[0].id}}
-@seller  = {{checkout.response.body.$.orders[0].sellerId}}
 
 ### SHIP-001 ข้ามสถานะ PROCESSING -> DELIVERED ตรงๆ ไม่ได้. expect 400
 PATCH {{baseUrl}}/orders/{{orderId}}/shipment
-x-mock-user-id: {{seller}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "DELIVERED" }
 
 ### SHIP-001 ผู้ซื้อเลื่อนสถานะเองไม่ได้. expect 403
 PATCH {{baseUrl}}/orders/{{orderId}}/shipment
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "status": "SHIPPED" }
 
 ### SHIP-001 สถานะที่ไม่มีใน enum. expect 400
 PATCH {{baseUrl}}/orders/{{orderId}}/shipment
-x-mock-user-id: {{seller}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "TELEPORTED" }
@@ -305,30 +314,30 @@ Content-Type: application/json
 
 ### คนนอกเปิดดูออเดอร์ของคนอื่น. expect 404
 GET {{baseUrl}}/orders/{{orderId}}
-x-mock-user-id: {{sellerB}}
+Authorization: Bearer {{sellerBToken}}
 
 ### คนนอกดูไทม์ไลน์การจัดส่งของคนอื่น. expect 404
 GET {{baseUrl}}/orders/{{orderId}}/shipment
-x-mock-user-id: {{sellerB}}
+Authorization: Bearer {{sellerBToken}}
 
 ### setup — buyer เปิดแชทกับ seller A
 # @name conversation
 POST {{baseUrl}}/products/{{productA1}}/conversations
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 
 @conversationId = {{conversation.response.body.$.id}}
 
 ### คนนอกอ่านแชทของคนอื่น. expect 404
 GET {{baseUrl}}/conversations/{{conversationId}}/messages
-x-mock-user-id: {{sellerB}}
+Authorization: Bearer {{sellerBToken}}
 
 ### แอดมินก็อ่านแชทไม่ได้ (ติด RolesGuard ก่อน). expect 403
 GET {{baseUrl}}/conversations/{{conversationId}}/messages
-x-mock-user-id: {{admin}}
+Authorization: Bearer {{adminToken}}
 
 ### CHAT-002 ส่งข้อความว่าง. expect 400
 POST {{baseUrl}}/conversations/{{conversationId}}/messages
-x-mock-user-id: {{buyer}}
+Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "body": "   " }

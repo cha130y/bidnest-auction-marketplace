@@ -634,6 +634,121 @@ describe('E-commerce (e2e)', () => {
     });
   });
 
+  describe('NOT-005..008 — the bell only ever shows your own', () => {
+    let foreignNotificationId: string;
+
+    beforeAll(async () => {
+      // A row owned by somebody else, so the ownership checks aim at something
+      // real rather than an invented id that would 404 for the wrong reason.
+      const foreign = await prisma.notification.create({
+        data: {
+          userId: strangerId,
+          type: 'ORDER_PLACED',
+          title: 'Not yours',
+          message: 'This one belongs to another account'
+        },
+        select: { id: true }
+      });
+      foreignNotificationId = foreign.id;
+    });
+
+    const listFor = (userId: string, query = '') =>
+      request(app.getHttpServer())
+        .get(`/notifications${query}`)
+        .set('Authorization', authOf(userId))
+        .expect(200);
+
+    it('shows the caller only their own rows', async () => {
+      const mine = await listFor(buyerId, '?limit=100');
+      const body = mine.body as {
+        items: { id: string; type: string }[];
+        unread: number;
+        meta: { total: number };
+      };
+
+      // The earlier checkouts and shipment moves left this buyer a trail.
+      expect(body.meta.total).toBeGreaterThan(0);
+      expect(body.items.some((item) => item.type === 'ORDER_PLACED')).toBe(
+        true
+      );
+      expect(body.items.map((item) => item.id)).not.toContain(
+        foreignNotificationId
+      );
+
+      // The stranger only ever got the one row seeded above.
+      const theirs = await listFor(strangerId);
+      expect((theirs.body as { meta: { total: number } }).meta.total).toBe(1);
+    });
+
+    it('narrows by type and by unread state', async () => {
+      const filtered = await listFor(buyerId, '?types=ORDER_PLACED&limit=100');
+      const types = (filtered.body as { items: { type: string }[] }).items.map(
+        (item) => item.type
+      );
+      expect(types.length).toBeGreaterThan(0);
+      expect(new Set(types)).toEqual(new Set(['ORDER_PLACED']));
+
+      const unread = await listFor(buyerId, '?unreadOnly=true&limit=100');
+      const rows = (unread.body as { items: { readAt: string | null }[] })
+        .items;
+      expect(rows.every((row) => row.readAt === null)).toBe(true);
+
+      // A value that is neither true nor false is a mistake, not a "false".
+      await request(app.getHttpServer())
+        .get('/notifications?unreadOnly=yes')
+        .set('Authorization', authOf(buyerId))
+        .expect(400);
+    });
+
+    it('marks one read and keeps that timestamp on a repeat', async () => {
+      const before = await listFor(buyerId, '?unreadOnly=true&limit=1');
+      const target = (before.body as { items: { id: string }[] }).items[0];
+      const badgeBefore = (before.body as { unread: number }).unread;
+
+      const first = await request(app.getHttpServer())
+        .patch(`/notifications/${target.id}/read`)
+        .set('Authorization', authOf(buyerId))
+        .expect(200);
+      const readAt = (first.body as { readAt: string }).readAt;
+      expect(readAt).not.toBeNull();
+
+      const count = await request(app.getHttpServer())
+        .get('/notifications/unread-count')
+        .set('Authorization', authOf(buyerId))
+        .expect(200);
+      expect((count.body as { unread: number }).unread).toBe(badgeBefore - 1);
+
+      // Tapping it again must not rewrite when the user first saw it.
+      const second = await request(app.getHttpServer())
+        .patch(`/notifications/${target.id}/read`)
+        .set('Authorization', authOf(buyerId))
+        .expect(200);
+      expect((second.body as { readAt: string }).readAt).toBe(readAt);
+    });
+
+    it('will not touch a row belonging to someone else (SRS 6)', () =>
+      // Not-found, not forbidden: the caller learns nothing either way.
+      request(app.getHttpServer())
+        .patch(`/notifications/${foreignNotificationId}/read`)
+        .set('Authorization', authOf(buyerId))
+        .expect(404));
+
+    it('clears the whole badge at once', async () => {
+      const response = await request(app.getHttpServer())
+        .patch('/notifications/read-all')
+        .set('Authorization', authOf(buyerId))
+        .expect(200);
+      expect((response.body as { updated: number }).updated).toBeGreaterThan(0);
+
+      const after = await listFor(buyerId);
+      expect((after.body as { unread: number }).unread).toBe(0);
+
+      // The stranger's row is untouched — read-all is scoped to the caller.
+      const theirs = await listFor(strangerId);
+      expect((theirs.body as { unread: number }).unread).toBe(1);
+    });
+  });
+
   describe('SRS 2 — an admin account cannot shop', () => {
     it('cannot list a product, fill a cart, or check out', async () => {
       await request(app.getHttpServer())
