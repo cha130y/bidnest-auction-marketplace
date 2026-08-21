@@ -31,16 +31,44 @@ export class BidService {
     const amount = new Prisma.Decimal(dto.amount);
     const now = new Date();
 
+    try {
+      return await this.placeBidInTransaction(auctionId, bidderId, dto, {
+        amount,
+        now
+      });
+    } catch (error: unknown) {
+      // BID-002 — two copies of the same retry can both get past the lookup
+      // and reach the insert together. The unique index stops the second one,
+      // and the first has by then committed a bid this caller can be given.
+      if (isUniqueViolation(error, 'client_request_id')) {
+        return this.replayExistingBid(dto.clientRequestId, auctionId, amount);
+      }
+
+      throw error;
+    }
+  }
+
+  private async placeBidInTransaction(
+    auctionId: string,
+    bidderId: string,
+    dto: PlaceBidDto,
+    context: { amount: Prisma.Decimal; now: Date }
+  ) {
+    const { amount, now } = context;
+
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.bid.findUnique({
         where: { clientRequestId: dto.clientRequestId },
-        select: { id: true }
+        select: bidSelect
       });
 
-      // BID-002 will turn this into a replay of the original result. Refusing
-      // it is already enough to stop a retry being counted twice.
+      // BID-002 — a retry after a dropped connection is the same bid, not a
+      // new one. Handing back what was already recorded means a caller who
+      // never saw the first answer ends up in the right state either way,
+      // which returning an error could not do: they cannot tell a rejected
+      // bid from an accepted one they simply did not hear about.
       if (existing) {
-        throw new ConflictException('This bid has already been placed');
+        return replayOrRefuse(existing, auctionId, amount);
       }
 
       const auction = await tx.auction.findFirst({
@@ -107,6 +135,18 @@ export class BidService {
       });
 
       if (count !== 1) {
+        // BID-002 — losing this race does not always mean somebody else bid.
+        // Two copies of the same retry get here together, and only one can
+        // win. The update above waited on the winner's row lock, so by now
+        // that transaction has committed and its bid is readable: if this
+        // request id already has one, this is that same bid arriving twice.
+        const winner = await tx.bid.findUnique({
+          where: { clientRequestId: dto.clientRequestId },
+          select: bidSelect
+        });
+
+        if (winner) return replayOrRefuse(winner, auctionId, amount);
+
         throw new ConflictException(
           'Somebody bid first — reload and try again'
         );
@@ -139,4 +179,72 @@ export class BidService {
       return toOwnBid(bid);
     });
   }
+
+  /**
+   * BID-002 — reads back the bid that won the race on the unique index. It is
+   * committed by the time the loser lands here, so this is a plain read.
+   */
+  private async replayExistingBid(
+    clientRequestId: string,
+    auctionId: string,
+    amount: Prisma.Decimal
+  ) {
+    const existing = await this.prisma.bid.findUnique({
+      where: { clientRequestId },
+      select: bidSelect
+    });
+
+    // The row is gone again, which should not happen: the violation says it
+    // was there. Refusing beats inventing an answer.
+    if (!existing) {
+      throw new ConflictException(
+        'This bid could not be confirmed — try again'
+      );
+    }
+
+    return replayOrRefuse(existing, auctionId, amount);
+  }
+}
+
+/**
+ * BID-002 — decides whether a repeated clientRequestId is a retry of the same
+ * bid or a different bid wearing the same id.
+ *
+ * A retry gets its original result. Anything else is a caller reusing an id it
+ * should not, and quietly returning the earlier bid would tell them their new
+ * amount was accepted when it never was.
+ */
+function replayOrRefuse(
+  existing: Prisma.BidGetPayload<{ select: typeof bidSelect }>,
+  auctionId: string,
+  amount: Prisma.Decimal
+) {
+  if (existing.auctionId !== auctionId) {
+    throw new ConflictException(
+      'This request id was already used on another auction'
+    );
+  }
+
+  if (!existing.amount.equals(amount)) {
+    throw new ConflictException(
+      'This request id was already used for a different amount'
+    );
+  }
+
+  return toOwnBid(existing);
+}
+
+/** True when Prisma refused a write because `column` already holds that value. */
+function isUniqueViolation(error: unknown, column: string): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== 'P2002') return false;
+
+  const target = error.meta?.target;
+
+  // The target is usually the column list, but Prisma has been known to report
+  // the constraint name instead, so both spellings are accepted.
+  if (Array.isArray(target)) return target.includes(column);
+  if (typeof target === 'string') return target.includes(column);
+
+  return false;
 }
