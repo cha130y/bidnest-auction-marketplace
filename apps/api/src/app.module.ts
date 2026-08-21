@@ -9,6 +9,7 @@ import { AdminModule } from './admin/admin.module';
 import { AiToolsModule } from './ai-tools/ai-tools.module';
 import { AuctionModule } from './auction/auction.module';
 import { AuthModule } from './auth/auth.module';
+import { BidModule } from './bid/bid.module';
 import { CartModule } from './cart/cart.module';
 import { CategoriesModule } from './categories/categories.module';
 import { ChatModule } from './chat/chat.module';
@@ -45,6 +46,7 @@ import { SupportChatModule } from './support-chat/support-chat.module';
     RealtimeModule,
     AuthModule,
     AuctionModule,
+    BidModule,
     ProductModule,
     CartModule,
     OrderModule,
