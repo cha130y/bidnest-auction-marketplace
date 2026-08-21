@@ -1,71 +1,126 @@
-import { Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post
+} from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiTags
+} from '@nestjs/swagger';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CategoriesService } from './categories.service';
+import { CreateCategoryDto, UpdateCategoryDto } from './dtos/category.dto';
 
 /**
  * ADM-003 — Category management (owner: Dev 2)
  *
- * ชุดหมวดหมู่เดียวใช้ร่วมกันทั้ง Auction และ E-commerce (SRS §1.1, §4.4, §5.1)
- * ห้ามเพิ่ม field `scope` แยกตามโมดูล — ดู docs/architecture/adr/0001.
+ * One set of categories serves both Auction and E-commerce (SRS 1.1, 4.4,
+ * 5.1). Never add a per-module `scope` field — see ADR-0001.
  *
- * โมดูลนี้อยู่นอก `admin/` เพราะ `GET /categories` เป็น endpoint สาธารณะที่
- * guest ใช้กรองแคตตาล็อก (PROD-003) และผู้ขายใช้ตอนสร้าง draft (AUC-001)
- * จึงใส่ guard เป็นราย endpoint แทนการ guard ทั้ง controller
- *
- * TODO(Dev 2): เมื่อ AUTH-008 พร้อม ให้ใส่
- *   `@UseGuards(AccessTokenGuard, RolesGuard)` + `@Roles(UserRole.ADMIN)`
- *   ในทุก endpoint ที่ทำเครื่องหมาย ADMIN ไว้ด้านล่าง (findAllForAdmin, create,
- *   update, activate, deactivate) — `findAll` ต้องไม่มี guard
- * TODO(Dev 2): เพิ่ม DTO + `class-validator` ตาม SRS §3 และ `@nestjs/swagger` ตาม §5.2
+ * This module sits outside `admin/` because `GET /categories` is public:
+ * guests filter the catalogue with it (PROD-003) and sellers pick from it when
+ * drafting an auction (AUC-001). Guards are therefore per endpoint rather than
+ * on the whole controller.
  */
+@ApiTags('Categories')
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
-  /** public — คืนเฉพาะหมวดหมู่ที่ isActive = true (2 ระดับ: root + children) */
+  @Public()
   @Get()
+  @ApiOperation({
+    summary: 'Active category tree',
+    description:
+      'Public: a signed-out visitor browsing the catalogue needs this, so it ' +
+      'carries @Public() and returns active roots with their active children.'
+  })
   findAll() {
     return this.categoriesService.findActiveTree();
   }
 
-  /** ADMIN — คืนทั้ง tree รวมหมวดหมู่ที่ถูกปิดใช้งานแล้ว */
+  @Roles('ADMIN')
   @Get('admin')
+  @ApiOperation({
+    summary: 'ADM-003 — full tree, deactivated branches included'
+  })
   findAllForAdmin() {
     return this.categoriesService.findAdminTree();
   }
 
-  /**
-   * ADMIN — สร้างหมวดหมู่ใหม่
-   * body: { name: string; description?: string; parentId?: string }
-   * - slug สร้างจาก name อัตโนมัติ และต้อง unique
-   * - ถ้าส่ง parentId มา: parent ต้องมีอยู่จริง, ต้องเป็น root (parentId === null)
-   *   และต้อง isActive — บังคับความลึกไม่เกิน 2 ระดับที่ service layer
-   */
+  @Roles('ADMIN')
   @Post()
-  create() {
-    return this.categoriesService.createCategory();
+  @ApiOperation({
+    summary: 'ADM-003 — create a category',
+    description:
+      'The slug is derived from the name and must be unique. A parent, if ' +
+      'given, must itself be a root and active.'
+  })
+  @ApiConflictResponse({ description: 'Slug already taken' })
+  @ApiBadRequestResponse({ description: 'Unusable name or parent' })
+  create(
+    @Body() dto: CreateCategoryDto,
+    @CurrentUser('id') adminUserId: string
+  ) {
+    return this.categoriesService.createCategory(dto, adminUserId);
   }
 
-  /**
-   * ADMIN — แก้ไขหมวดหมู่
-   * body: { name?: string; description?: string } (ต้องมีอย่างน้อย 1 field)
-   */
+  @Roles('ADMIN')
   @Patch(':categoryId')
-  update(@Param('categoryId') categoryId: string) {
-    return this.categoriesService.updateCategory(categoryId);
+  @ApiOperation({ summary: 'ADM-003 — rename or re-describe a category' })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  update(
+    @Param('categoryId', ParseUUIDPipe) categoryId: string,
+    @Body() dto: UpdateCategoryDto,
+    @CurrentUser('id') adminUserId: string
+  ) {
+    return this.categoriesService.updateCategory(categoryId, dto, adminUserId);
   }
 
-  /** ADMIN — เปิดใช้งานหมวดหมู่ (parent ต้อง active ก่อนจึงจะเปิด child ได้) */
+  @Roles('ADMIN')
   @Patch(':categoryId/activate')
-  activate(@Param('categoryId') categoryId: string) {
-    return this.categoriesService.setCategoryActivation(categoryId, true);
+  @ApiOperation({
+    summary: 'ADM-003 — activate a category',
+    description: 'A child cannot come back while its parent is deactivated.'
+  })
+  @ApiBadRequestResponse({ description: 'Parent is still deactivated' })
+  activate(
+    @Param('categoryId', ParseUUIDPipe) categoryId: string,
+    @CurrentUser('id') adminUserId: string
+  ) {
+    return this.categoriesService.setCategoryActivation(
+      categoryId,
+      true,
+      adminUserId
+    );
   }
 
-  /**
-   * ADMIN — ปิดใช้งานหมวดหมู่
-   * ADM-003 ระบุว่า "ปิดใช้งาน ไม่ใช่ลบทิ้งถาวร" จึงไม่มี DELETE endpoint
-   */
+  @Roles('ADMIN')
   @Patch(':categoryId/deactivate')
-  deactivate(@Param('categoryId') categoryId: string) {
-    return this.categoriesService.setCategoryActivation(categoryId, false);
+  @ApiOperation({
+    summary: 'ADM-003 — deactivate a category',
+    description:
+      'ADM-003 says a category in use is deactivated, never deleted, which is ' +
+      'why this module has no DELETE at all. Deactivating a root takes its ' +
+      'children down with it.'
+  })
+  deactivate(
+    @Param('categoryId', ParseUUIDPipe) categoryId: string,
+    @CurrentUser('id') adminUserId: string
+  ) {
+    return this.categoriesService.setCategoryActivation(
+      categoryId,
+      false,
+      adminUserId
+    );
   }
 }

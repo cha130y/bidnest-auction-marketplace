@@ -23,6 +23,7 @@ import { ProductModule } from './product/product.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { SupportChatModule } from './support-chat/support-chat.module';
     MailModule,
     RealtimeModule,
     AuthModule,
+    UsersModule,
     AuctionModule,
     BidModule,
     ProductModule,
