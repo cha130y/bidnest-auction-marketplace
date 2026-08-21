@@ -36,3 +36,19 @@ export class AuthTokensResponse {
   @ApiProperty({ type: AuthUserResponse })
   user: AuthUserResponse;
 }
+
+/**
+ * AUTH-006 — a first-time Line sign-in where Line released no address.
+ *
+ * AUTH-007 makes an emailed OTP mandatory on every login path and users.email
+ * is NOT NULL, so the account cannot be opened until the client collects one.
+ * Inventing a placeholder would satisfy the column and then quietly break the
+ * OTP that guards the login.
+ */
+export class EmailRequiredResponse {
+  @ApiProperty({ example: 'EMAIL_REQUIRED' })
+  status: 'EMAIL_REQUIRED';
+
+  @ApiProperty()
+  message: string;
+}
