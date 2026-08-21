@@ -52,8 +52,8 @@ Do NOT add "Co-Authored-By: Claude" or "Claude-Session:" trailer to commit messa
 - Database schema: `apps\api\prisma\schema.prisma`
 - ADR (บันทึกการตัดสินใจเชิงสถาปัตยกรรม): `docs\architecture\adr\`
 - Kickoff Guide: `docs\KICKOFF_GUIDE.md` (ชื่อ branch แต่ละคน, ขั้นตอน setup, CI/CD)
-- Figma: coming soon
+- Figma: https://www.figma.com/design/XjSmZZgT0IBPc8do84WaRa/Bidnest?node-id=57-6305&t=7Q2cpzBvbxZK0oHj-1
 
 ## ระยะเวลาทำโปรเจค 14 วัน
 
-- มีการใช้ Jira ในการควบคุมการทำงานในทีม (Coming soon)
+- มีการใช้ Jira ในการควบคุมการทำงานในทีม : https://pitchayauds.atlassian.net/jira/software/projects/BN/boards/2?filter=&groupBy=none&atlOrigin=eyJpIjoiMzQzMmE4NDkzMWU4NGUwYWEwYzRmYWU0ZGJlZDlhYTIiLCJwIjoiaiJ9
