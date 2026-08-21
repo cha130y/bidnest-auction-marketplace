@@ -7,15 +7,21 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PUBLIC_AUCTION_STATUSES } from '../auction/constants/public-auction-status.constant';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { toBidAcceptedEvent } from './bid-accepted-event.mapper';
-import { bidSelect, toOwnBid } from './bid.mapper';
+import { bidHistorySelect, toPublicBid } from './bid-history.mapper';
+import { bidSelect, bidWithBidderSelect, toOwnBid } from './bid.mapper';
+import { ListBidHistoryDto } from './dtos/list-bid-history.dto';
 import { PlaceBidDto } from './dtos/place-bid.dto';
 import {
   calculateAntiSniping,
   MAX_EXTENSIONS
 } from './utils/calculate-anti-sniping.util';
 import { calculateMinimumBid } from './utils/calculate-minimum-bid.util';
+
+/** Matches the auction list and the product catalogue, so all three page alike. */
+const DEFAULT_HISTORY_PAGE_SIZE = 20;
 
 @Injectable()
 export class BidService {
@@ -78,6 +84,55 @@ export class BidService {
 
       throw error;
     }
+  }
+
+  /**
+   * BID-005 — the public bid history: how much, when, and a masked label for
+   * who, oldest first.
+   *
+   * Only auctions the public may see have a history, checked against the same
+   * status list the REST lookup and the realtime room use — otherwise the
+   * history would be a way to read a draft nobody was meant to see.
+   *
+   * `viewerId` is optional: a signed-out visitor reads the same list, just
+   * without knowing which rows are theirs.
+   */
+  async listBidHistory(
+    auctionId: string,
+    dto: ListBidHistoryDto,
+    viewerId?: string
+  ) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? DEFAULT_HISTORY_PAGE_SIZE;
+
+    const auction = await this.prisma.auction.findFirst({
+      where: {
+        id: auctionId,
+        status: { in: PUBLIC_AUCTION_STATUSES },
+        deletedAt: null
+      },
+      select: { id: true }
+    });
+
+    if (!auction) throw new NotFoundException('Auction not found');
+
+    const [items, total] = await Promise.all([
+      this.prisma.bid.findMany({
+        where: { auctionId },
+        select: bidHistorySelect,
+        // sequenceNo is the order bids were accepted in, and unlike placedAt it
+        // cannot tie: two bids in the same millisecond still sort apart.
+        orderBy: { sequenceNo: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      this.prisma.bid.count({ where: { auctionId } })
+    ]);
+
+    return {
+      items: items.map((bid) => toPublicBid(bid, viewerId)),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
   }
 
   private async placeBidInTransaction(
@@ -215,7 +270,7 @@ export class BidService {
           clientRequestId: dto.clientRequestId,
           placedAt: now
         },
-        select: bidSelect
+        select: bidWithBidderSelect
       });
 
       await tx.auctionEvent.create({

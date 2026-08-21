@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
 import { authRegistry } from './helpers/auth';
+import { expectNoReserve } from './helpers/reserve';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 /**
@@ -443,7 +444,7 @@ describe('Auction drafts (e2e)', () => {
       const draftId = await createDraft({ reservePrice: 4500 });
 
       const validation = await validationOf(draftId);
-      expect(JSON.stringify(validation)).not.toContain('4500');
+      expectNoReserve(validation, 4500);
     });
 
     it('hides the checklist of a draft owned by somebody else', async () => {
@@ -556,7 +557,7 @@ describe('Auction drafts (e2e)', () => {
           .expect(200);
 
         expect(response.body).not.toHaveProperty('reservePrice');
-        expect(JSON.stringify(response.body)).not.toContain('4500');
+        expectNoReserve(response.body, 4500);
         expect(response.body).toMatchObject({
           id: draftId,
           reserveMet: false,
@@ -831,7 +832,7 @@ describe('Auction drafts (e2e)', () => {
 
       for (const response of [anonymous, stranger]) {
         expect(response.body).not.toHaveProperty('reservePrice');
-        expect(JSON.stringify(response.body)).not.toContain('4500');
+        expectNoReserve(response.body, 4500);
         expect(response.body).toMatchObject({ reserveMet: false });
       }
     });
@@ -1401,7 +1402,7 @@ describe('Auction drafts (e2e)', () => {
         .expect(200);
 
       expect(response.body).not.toHaveProperty('reservePrice');
-      expect(JSON.stringify(response.body)).not.toContain('4500');
+      expectNoReserve(response.body, 4500);
       expect(response.body).toMatchObject({
         status: 'UNSOLD',
         reserveMet: false
@@ -1446,7 +1447,16 @@ describe('Auction drafts (e2e)', () => {
     };
 
     /** Ids from the hot list, in the order the API returned them. */
-    const hotIds = async (query = '') => {
+    /**
+     * Ids from the hot list, in the order the API returned them.
+     *
+     * Asks for the maximum page unless a test is specifically about paging.
+     * The list is shared with every other auction in the database, and the
+     * default page of twenty is easily filled by leftovers from an earlier run
+     * that never reached its teardown — a test looking for its own auction
+     * would then fail for reasons that have nothing to do with the ranking.
+     */
+    const hotIds = async (query = '?limit=100') => {
       const response = await request(app.getHttpServer())
         .get(`/auctions${query}`)
         .expect(200);
@@ -1552,7 +1562,7 @@ describe('Auction drafts (e2e)', () => {
 
       const body = response.body as { items: Record<string, unknown>[] };
       expect(body.items.every((item) => !('reservePrice' in item))).toBe(true);
-      expect(JSON.stringify(body.items)).not.toContain('4500');
+      expectNoReserve(body.items, 4500);
     });
 
     it('pages without repeating or skipping an auction', async () => {
@@ -2269,6 +2279,274 @@ describe('Auction drafts (e2e)', () => {
       expect(
         await prisma.auctionExtension.count({ where: { auctionId: id } })
       ).toBe(1);
+    });
+  });
+
+  /**
+   * BID-005 — the public bid history. Amount and time in full, the bidder only
+   * as a masked label, oldest first.
+   */
+  describe('GET /auctions/:id/bids (BID-005)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000);
+
+    const liveAuction = async () => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(-1).toISOString(),
+          scheduledEndAt: hoursFromNow(4).toISOString()
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      return id;
+    };
+
+    const bid = (auctionId: string, userId: string, amount: number) =>
+      request(app.getHttpServer())
+        .post(`/auctions/${auctionId}/bids`)
+        .set('Authorization', authOf(userId))
+        .send({ amount, clientRequestId: randomUUID() });
+
+    type PublicBid = {
+      id: string;
+      amount: string;
+      sequenceNo: number;
+      placedAt: string;
+      bidder: string;
+      isYours: boolean;
+    };
+
+    const history = async (auctionId: string, userId?: string, query = '') => {
+      const call = request(app.getHttpServer()).get(
+        `/auctions/${auctionId}/bids${query}`
+      );
+      if (userId) call.set('Authorization', authOf(userId));
+
+      const response = await call.expect(200);
+      return response.body as {
+        items: PublicBid[];
+        meta: Record<string, number>;
+      };
+    };
+
+    it('is readable by a signed-out visitor', async () => {
+      const id = await liveAuction();
+      await bid(id, buyerId, 3000).expect(201);
+
+      const body = await history(id);
+
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0]).toMatchObject({ amount: '3000', sequenceNo: 1 });
+    });
+
+    it('lists bids oldest first', async () => {
+      const id = await liveAuction();
+      await bid(id, buyerId, 3000).expect(201);
+      await bid(id, strangerId, 3100).expect(201);
+      await bid(id, buyerId, 3200).expect(201);
+
+      const body = await history(id);
+
+      expect(body.items.map((entry) => entry.amount)).toEqual([
+        '3000',
+        '3100',
+        '3200'
+      ]);
+      expect(body.items.map((entry) => entry.sequenceNo)).toEqual([1, 2, 3]);
+    });
+
+    it('reports when each bid was placed', async () => {
+      const id = await liveAuction();
+      await bid(id, buyerId, 3000).expect(201);
+
+      const body = await history(id);
+
+      expect(Number.isNaN(Date.parse(body.items[0].placedAt))).toBe(false);
+    });
+
+    describe('privacy', () => {
+      it('masks the bidder name', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+
+        const body = await history(id);
+
+        // the buyer's display name is `e2e-auction-buyer-…@example.com`
+        expect(body.items[0].bidder).toMatch(/^e\*\*\*.$/);
+      });
+
+      it('never sends a bidder id to anyone', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+
+        for (const viewer of [undefined, buyerId, sellerId, adminId]) {
+          const body = await history(id, viewer);
+          expect(body.items[0]).not.toHaveProperty('bidderId');
+          expect(JSON.stringify(body.items)).not.toContain(buyerId);
+        }
+      });
+
+      // not even the seller of the auction gets to see who is bidding
+      it('masks the same way for the seller as for a stranger', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+
+        const asSeller = await history(id, sellerId);
+        const asStranger = await history(id, strangerId);
+
+        expect(asSeller.items[0].bidder).toBe(asStranger.items[0].bidder);
+      });
+
+      it('gives the same bidder the same label on every row', async () => {
+        // The suite's default display names are email addresses, so they all
+        // mask to e***m; real profiles carry a person's name (USR-001).
+        await prisma.userProfile.update({
+          where: { userId: buyerId },
+          data: { displayName: 'Somchai' }
+        });
+        await prisma.userProfile.update({
+          where: { userId: strangerId },
+          data: { displayName: 'Pranee' }
+        });
+
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+        await bid(id, strangerId, 3100).expect(201);
+        await bid(id, buyerId, 3200).expect(201);
+
+        const body = await history(id);
+
+        expect(body.items[0].bidder).toBe('S***i');
+        expect(body.items[1].bidder).toBe('P***e');
+        // one person's two bids read as the same person
+        expect(body.items[0].bidder).toBe(body.items[2].bidder);
+      });
+
+      /**
+       * The masking is deliberately lossy, and this is the cost: two names that
+       * begin and end alike are indistinguishable. It is recorded here rather
+       * than left for somebody to discover — the history exists to follow the
+       * bidding, not to identify anyone.
+       */
+      it('cannot tell apart two names that begin and end alike', async () => {
+        await prisma.userProfile.update({
+          where: { userId: buyerId },
+          data: { displayName: 'Somchai' }
+        });
+        await prisma.userProfile.update({
+          where: { userId: strangerId },
+          data: { displayName: 'Suchari' }
+        });
+
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+        await bid(id, strangerId, 3100).expect(201);
+
+        const body = await history(id);
+
+        expect(body.items[0].bidder).toBe(body.items[1].bidder);
+      });
+    });
+
+    describe('telling a viewer which bids are theirs', () => {
+      it('marks the reader own bids and nobody else', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+        await bid(id, strangerId, 3100).expect(201);
+
+        const body = await history(id, buyerId);
+
+        expect(body.items.map((entry) => entry.isYours)).toEqual([true, false]);
+      });
+
+      it('marks nothing for a signed-out reader', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+
+        const body = await history(id);
+
+        expect(body.items.every((entry) => !entry.isYours)).toBe(true);
+      });
+    });
+
+    describe('which auctions have a history', () => {
+      // otherwise the history is a way to read a draft nobody may see
+      it('refuses a draft, even to its own seller', async () => {
+        const created = await request(app.getHttpServer())
+          .post('/auctions/drafts')
+          .set('Authorization', authOf(sellerId))
+          .send(draftBody())
+          .expect(201);
+        const draftId = (created.body as { id: string }).id;
+
+        await request(app.getHttpServer())
+          .get(`/auctions/${draftId}/bids`)
+          .set('Authorization', authOf(sellerId))
+          .expect(404);
+      });
+
+      it('answers 404 for an auction that does not exist', () => {
+        return request(app.getHttpServer())
+          .get('/auctions/00000000-0000-4000-8000-0000000099ff/bids')
+          .expect(404);
+      });
+
+      it('answers 400 for an id that is not a uuid', () => {
+        return request(app.getHttpServer())
+          .get('/auctions/not-a-uuid/bids')
+          .expect(400);
+      });
+
+      it('returns an empty list for an auction nobody has bid on', async () => {
+        const id = await liveAuction();
+
+        const body = await history(id);
+
+        expect(body.items).toEqual([]);
+        expect(body.meta).toMatchObject({ total: 0, totalPages: 0 });
+      });
+    });
+
+    describe('paging', () => {
+      it('pages without repeating or skipping a bid', async () => {
+        const id = await liveAuction();
+        await bid(id, buyerId, 3000).expect(201);
+        await bid(id, strangerId, 3100).expect(201);
+        await bid(id, buyerId, 3200).expect(201);
+        await bid(id, strangerId, 3300).expect(201);
+
+        const first = await history(id, undefined, '?page=1&limit=2');
+        const second = await history(id, undefined, '?page=2&limit=2');
+
+        expect(first.items.map((entry) => entry.sequenceNo)).toEqual([1, 2]);
+        expect(second.items.map((entry) => entry.sequenceNo)).toEqual([3, 4]);
+        expect(first.meta.total).toBe(4);
+      });
+
+      it('rejects a limit past the cap', async () => {
+        const id = await liveAuction();
+
+        await request(app.getHttpServer())
+          .get(`/auctions/${id}/bids?limit=500`)
+          .expect(400);
+      });
+
+      it('rejects a page that is not a positive number', async () => {
+        const id = await liveAuction();
+
+        await request(app.getHttpServer())
+          .get(`/auctions/${id}/bids?page=0`)
+          .expect(400);
+      });
     });
   });
 });
