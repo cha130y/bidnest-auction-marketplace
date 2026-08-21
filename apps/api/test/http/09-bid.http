@@ -2,11 +2,13 @@
 # BID — การประมูล (ฝั่ง Dev 4)
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
-# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง
-# BID-002..005 (idempotency, realtime, anti-sniping, ประวัติ) จะมาต่อในไฟล์นี้
+# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry
+# BID-003..005 (realtime, anti-sniping, ประวัติ) จะมาต่อในไฟล์นี้
 #
-# ⚠️ clientRequestId ต้องเป็น UUID และห้ามซ้ำ — ยิงซ้ำ id เดิมจะได้ 409
-#    เปลี่ยนตัวเลขท้ายทุกครั้งที่ยิงใหม่ หรือ gen UUID ใหม่
+# ⚠️ clientRequestId ต้องเป็น UUID และเป็น "ตัวระบุความพยายามครั้งนั้น"
+#    - ยิงซ้ำด้วย id เดิม + ค่าเดิม = retry -> ได้บิดเดิมกลับมา ไม่ใช่ error
+#    - ยิงซ้ำด้วย id เดิม + ค่าต่าง = ใช้ id ผิด -> 409
+#    ถ้าต้องการบิดใหม่จริงๆ ให้เปลี่ยนตัวเลขท้าย หรือ gen UUID ใหม่
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -130,8 +132,26 @@ Content-Type: application/json
   "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000007"
 }
 
-### ซ้ำ — clientRequestId เดิมที่เคยใช้แล้ว. expect 409
-# ต้องไม่เปลี่ยนราคาและไม่เพิ่ม bidCount
+### BID-002 — retry: clientRequestId เดิม + amount เดิม. expect 201 + บิดเดิมเป๊ะ
+# ต้องได้ id/sequenceNo/placedAt ชุดเดิมกลับมา ไม่ใช่ error
+# เหตุผล: client ที่ retry เพราะเน็ตหลุด แยกไม่ออกว่า 409 แปลว่า
+# "ซ้ำเพราะสำเร็จไปแล้ว" หรือ "บิดไม่ผ่าน" — การคืนผลเดิมตอบได้ชัดกว่า
+# ยิงกี่ครั้งก็ได้ ราคากับ bidCount ต้องไม่ขยับ
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
+}
+
+### BID-002 — เช็คว่าราคายังเท่าเดิม. expect currentPrice 3100, bidCount 2
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### BID-002 — clientRequestId เดิมแต่ amount ต่าง. expect 409
+# ไม่ใช่ retry แต่เป็นการใช้ id ซ้ำผิดวัตถุประสงค์ — ถ้าคืนบิดเดิมไปเงียบๆ
+# client จะเข้าใจว่า 8000 ถูกรับแล้ว ทั้งที่ไม่เคยถูกรับ
 POST {{baseUrl}}/auctions/{{liveId}}/bids
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
@@ -141,8 +161,16 @@ Content-Type: application/json
   "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
 }
 
-### ซ้ำ — เช็คว่าราคายังเท่าเดิม. expect currentPrice 3100, bidCount 2
-GET {{baseUrl}}/auctions/{{liveId}}
+### BID-002 — clientRequestId เดิมแต่ยิงไปประมูลอื่น. expect 409
+# ใช้ {{startsNowId}} จาก 08-auction.http (ประมูลคนละตัวที่ ACTIVE อยู่)
+POST {{baseUrl}}/auctions/{{startsNowId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
+}
 
 ### validation — clientRequestId ไม่ใช่ UUID. expect 400
 POST {{baseUrl}}/auctions/{{liveId}}/bids
