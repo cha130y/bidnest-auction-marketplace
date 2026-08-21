@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   UnauthorizedException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +14,7 @@ import {
 } from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { HashingService } from './hashing.service';
@@ -58,6 +60,8 @@ type Account = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly hashing: HashingService,
@@ -176,6 +180,67 @@ export class AuthService {
       expiresInMinutes: this.twoFactor.ttlMinutes,
       resendAfterSeconds: this.twoFactor.cooldownSeconds
     };
+  }
+
+  /**
+   * AUTH-004 — trade a refresh token for a fresh pair. The old token is spent
+   * in the same transaction that opens the new session, so a client always
+   * holds exactly one live refresh token.
+   */
+  async refresh(dto: RefreshTokenDto): Promise<AuthTokensResponse> {
+    const lookup = await this.tokens.lookupRefreshToken(dto.refreshToken);
+
+    if (lookup.outcome === 'REPLAYED') {
+      // The token was already spent, so either it leaked or a stale client
+      // retried. Cheap to cut every session and make them sign in again;
+      // expensive to be wrong about a stolen one.
+      this.logger.warn(
+        `Refresh token replayed for user ${lookup.user.id} — revoking all sessions`
+      );
+      await this.tokens.revokeAllSessions(lookup.user.id);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (lookup.outcome !== 'VALID') {
+      // Unknown and expired are one answer: never confirm a token existed.
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (lookup.user.status !== 'ACTIVE') {
+      throw new ForbiddenException('Account is not active');
+    }
+
+    return {
+      ...(await this.tokens.rotate(lookup.sessionId, lookup.user)),
+      user: await this.currentUser(lookup.user.id)
+    };
+  }
+
+  /**
+   * AUTH-004 — logout. Answers the same way whether or not the token matched,
+   * so it cannot be used to probe which tokens are live, and it stays safe to
+   * call twice.
+   */
+  async logout(dto: RefreshTokenDto): Promise<void> {
+    const lookup = await this.tokens.lookupRefreshToken(dto.refreshToken);
+
+    if (lookup.outcome === 'VALID' || lookup.outcome === 'EXPIRED') {
+      await this.tokens.revokeSession(lookup.sessionId);
+    }
+  }
+
+  /** Re-reads the profile so the refreshed response matches the register one. */
+  private async currentUser(userId: string): Promise<AuthUserResponse> {
+    const account = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: accountSelect
+    });
+
+    if (!account) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    return this.toAuthUser(account);
   }
 
   /**

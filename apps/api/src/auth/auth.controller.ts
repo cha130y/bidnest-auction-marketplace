@@ -3,6 +3,7 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -17,6 +18,7 @@ import {
 } from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 
@@ -74,6 +76,38 @@ export class AuthController {
     @Body() dto: VerifyTwoFactorDto
   ): Promise<AuthTokensResponse> {
     return this.authService.verifyTwoFactor(dto);
+  }
+
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'AUTH-004 — trade a refresh token for a fresh pair',
+    description:
+      'Public because the refresh token is the credential: an expired access ' +
+      'token must not stop a client from renewing. The old refresh token is ' +
+      'spent as the new one is issued, so replaying it later revokes every ' +
+      'session on the account.'
+  })
+  @ApiOkResponse({ type: AuthTokensResponse })
+  @ApiUnauthorizedResponse({ description: 'Unknown, expired or spent token' })
+  @ApiForbiddenResponse({ description: 'Account is suspended or deactivated' })
+  refresh(@Body() dto: RefreshTokenDto): Promise<AuthTokensResponse> {
+    return this.authService.refresh(dto);
+  }
+
+  @Public()
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'AUTH-004 — revoke the refresh session',
+    description:
+      'Always answers 204, whether or not the token matched, so it cannot be ' +
+      'used to probe which tokens are live and stays safe to call twice.'
+  })
+  @ApiNoContentResponse({ description: 'Session revoked, or nothing to do' })
+  logout(@Body() dto: RefreshTokenDto): Promise<void> {
+    return this.authService.logout(dto);
   }
 
   @Public()
