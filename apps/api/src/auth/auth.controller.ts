@@ -12,6 +12,10 @@ import {
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
+import {
+  ThrottleAuth,
+  ThrottleOtp
+} from '../common/decorators/throttle-auth.decorator';
 import { AuthService } from './auth.service';
 import {
   AuthTokensResponse,
@@ -30,6 +34,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @ThrottleAuth()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -46,6 +51,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleAuth()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -63,6 +69,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleOtp()
   @Post('2fa/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -113,6 +120,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleAuth()
   @Post('forgot-password')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
@@ -128,6 +136,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleAuth()
   @Post('reset-password')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
@@ -143,6 +152,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleAuth()
   @Post('2fa/resend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
