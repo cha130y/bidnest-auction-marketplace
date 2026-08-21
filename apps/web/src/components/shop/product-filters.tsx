@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search } from "lucide-react"
+import { ChevronDown, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { categoryLabel } from "@/lib/category-labels"
 import { shopHref, type ShopSearch } from "@/lib/shop-search"
+import { cn } from "@/lib/utils"
 import type { CategoryTree } from "@/lib/api/types"
 
 type ProductFiltersProps = {
@@ -31,9 +32,27 @@ export function ProductFilters({ search, categories }: ProductFiltersProps) {
   const [maxPrice, setMaxPrice] = useState(search.maxPrice?.toString() ?? "")
   const [categoryIds, setCategoryIds] = useState<string[]>(search.categoryIds)
 
+  // Collapsed by default so the panel is scannable at a glance; a group that
+  // already has something selected opens, otherwise that selection is hidden
+  const [expandedIds, setExpandedIds] = useState<string[]>(() =>
+    categories
+      .filter((root) =>
+        root.children.some((child) => search.categoryIds.includes(child.id))
+      )
+      .map((root) => root.id)
+  )
+
   const toggleCategory = (id: string, checked: boolean) => {
     setCategoryIds((current) =>
       checked ? [...current, id] : current.filter((value) => value !== id)
+    )
+  }
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id]
     )
   }
 
@@ -81,35 +100,74 @@ export function ProductFilters({ search, categories }: ProductFiltersProps) {
 
       {categories.length > 0 && (
         <div>
-          <h2 className="font-display text-base font-bold text-ink">หมวดหมู่</h2>
-          <div className="mt-3 flex flex-col gap-3">
-            {categories.map((root) => (
-              <div key={root.id} className="flex flex-col gap-2">
-                <label className="flex items-center gap-3 text-sm font-semibold text-ink">
-                  <Checkbox
-                    checked={categoryIds.includes(root.id)}
-                    onCheckedChange={(checked) =>
-                      toggleCategory(root.id, checked)
-                    }
-                  />
-                  {categoryLabel(root)}
-                </label>
-                {root.children.map((child) => (
-                  <label
-                    key={child.id}
-                    className="flex items-center gap-3 pl-6 text-sm text-n-600"
-                  >
-                    <Checkbox
-                      checked={categoryIds.includes(child.id)}
-                      onCheckedChange={(checked) =>
-                        toggleCategory(child.id, checked)
-                      }
-                    />
-                    {categoryLabel(child)}
-                  </label>
-                ))}
-              </div>
-            ))}
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-ink">
+              หมวดหมู่
+            </h2>
+            {categoryIds.length > 0 && (
+              <button
+                type="button"
+                className="text-xs font-semibold text-amber-600 hover:underline"
+                onClick={() => setCategoryIds([])}
+              >
+                ล้าง {categoryIds.length}
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-col">
+            {categories.map((root) => {
+              const isOpen = expandedIds.includes(root.id)
+
+              return (
+                <div key={root.id} className="border-b border-n-200 last:border-0">
+                  <div className="flex items-center gap-2 py-1">
+                    <label className="flex flex-1 cursor-pointer items-center gap-3 py-1.5 text-sm font-semibold text-ink">
+                      <Checkbox
+                        checked={categoryIds.includes(root.id)}
+                        onCheckedChange={(checked) =>
+                          toggleCategory(root.id, checked)
+                        }
+                      />
+                      {categoryLabel(root)}
+                    </label>
+
+                    {root.children.length > 0 && (
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? "ซ่อน" : "แสดง"}หมวดย่อยของ${categoryLabel(root)}`}
+                        onClick={() => toggleExpanded(root.id)}
+                        className="flex size-7 shrink-0 items-center justify-center rounded-r1 text-n-500 transition-colors hover:bg-n-100 hover:text-ink"
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 transition-transform",
+                            isOpen && "rotate-180"
+                          )}
+                        />
+                      </button>
+                    )}
+                  </div>
+
+                  {isOpen &&
+                    root.children.map((child) => (
+                      <label
+                        key={child.id}
+                        className="flex cursor-pointer items-center gap-3 py-1.5 pl-6 text-sm text-n-600"
+                      >
+                        <Checkbox
+                          checked={categoryIds.includes(child.id)}
+                          onCheckedChange={(checked) =>
+                            toggleCategory(child.id, checked)
+                          }
+                        />
+                        {categoryLabel(child)}
+                      </label>
+                    ))}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

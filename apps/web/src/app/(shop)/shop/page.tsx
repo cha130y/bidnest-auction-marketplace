@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { ActiveFilters } from "@/components/shop/active-filters"
 import { CatalogPagination } from "@/components/shop/catalog-pagination"
 import { ProductCard } from "@/components/shop/product-card"
 import { ProductFilters } from "@/components/shop/product-filters"
@@ -78,6 +79,8 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
             </span>
             <ProductSortSelect search={search} />
           </div>
+
+          <ActiveFilters search={search} categories={categories} />
 
           {error && <CatalogError error={error} />}
 
