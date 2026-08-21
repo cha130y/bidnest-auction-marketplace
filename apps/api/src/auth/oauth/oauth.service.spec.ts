@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { OAuthProfile } from './oauth-profile';
-import { OAuthService } from './oauth.service';
+import { clampName, nameFromEmail, OAuthService } from './oauth.service';
 
 const googleProfile = (over: Partial<OAuthProfile> = {}): OAuthProfile => ({
   provider: 'GOOGLE',
@@ -180,6 +180,90 @@ describe('OAuthService (AUTH-003 / AUTH-006)', () => {
         prisma.user.create.mock.calls as [{ data: { email: string } }][]
       )[0][0];
       expect(data.email).toBe('somchai@example.com');
+    });
+  });
+
+  describe('the name a new account starts with', () => {
+    beforeEach(() => {
+      prisma.authAccount.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue(activeUser);
+    });
+
+    const createdProfile = () =>
+      (
+        prisma.user.create.mock.calls as [
+          {
+            data: {
+              profile: {
+                create: { firstName: string; displayName: string };
+              };
+            };
+          }
+        ][]
+      )[0][0].data.profile.create;
+
+    it('uses the name the provider sent', async () => {
+      await service.resolveAccount(googleProfile({ displayName: 'Somchai G' }));
+
+      expect(createdProfile()).toEqual({
+        firstName: 'Somchai G',
+        displayName: 'Somchai G'
+      });
+    });
+
+    it('falls back to the email when the provider sent none', async () => {
+      // USR-001 puts displayName on every public auction and listing, so this
+      // is a name strangers read — it has to mean something.
+      await service.resolveAccount(googleProfile({ displayName: undefined }));
+
+      expect(createdProfile()).toEqual({
+        firstName: 'somchai',
+        displayName: 'somchai'
+      });
+    });
+
+    it('treats a whitespace-only name as none at all', async () => {
+      await service.resolveAccount(googleProfile({ displayName: '   ' }));
+
+      expect(createdProfile().displayName).toBe('somchai');
+    });
+
+    it('cuts a name too long for the column', async () => {
+      // user_profiles.display_name is VarChar(100); a longer one would fail
+      // the insert rather than sign the user in.
+      await service.resolveAccount(
+        googleProfile({ displayName: 'x'.repeat(150) })
+      );
+
+      expect(createdProfile().displayName).toHaveLength(100);
+    });
+  });
+
+  describe('nameFromEmail', () => {
+    it('takes the part before the @', () => {
+      expect(nameFromEmail('somchai@example.com')).toBe('somchai');
+      expect(nameFromEmail('nuttapun.code@gmail.com')).toBe('nuttapun.code');
+    });
+
+    it('cuts one longer than the column', () => {
+      expect(nameFromEmail(`${'x'.repeat(150)}@example.com`)).toHaveLength(100);
+    });
+
+    it('has something to fall back on for an odd address', () => {
+      expect(nameFromEmail('@example.com')).toBe('BidNest user');
+    });
+  });
+
+  describe('clampName', () => {
+    it('returns undefined for nothing usable', () => {
+      expect(clampName(undefined)).toBeUndefined();
+      expect(clampName('   ')).toBeUndefined();
+    });
+
+    it('trims and cuts', () => {
+      expect(clampName('  Somchai  ')).toBe('Somchai');
+      expect(clampName('y'.repeat(150))).toHaveLength(100);
     });
   });
 });

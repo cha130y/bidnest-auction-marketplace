@@ -27,6 +27,32 @@ export type AccountResolution =
   | { outcome: 'RESOLVED'; user: ResolvedAccount }
   | { outcome: 'EMAIL_REQUIRED' };
 
+/** Longest a display name may be, matching user_profiles.display_name. */
+const DISPLAY_NAME_MAX = 100;
+
+/**
+ * A readable stand-in for when a provider sends no name at all. Both profile
+ * name columns are NOT NULL, and USR-001 puts `displayName` on every public
+ * auction and listing, so the fallback is something a stranger will read —
+ * `somchai@example.com` reads far better as "somchai" than as a timestamp.
+ */
+export function nameFromEmail(email: string): string {
+  const local = email.split('@')[0]?.trim() ?? '';
+  // Addresses are validated before they get here, so an empty local part means
+  // something very odd; "BidNest user" is still better than an empty column.
+  return local === '' ? 'BidNest user' : local.slice(0, DISPLAY_NAME_MAX);
+}
+
+/**
+ * Providers are not bound by our column widths, so a long name has to be cut
+ * rather than allowed to fail the insert. Returns undefined for a blank one so
+ * the caller can fall through to the email.
+ */
+export function clampName(name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed.slice(0, DISPLAY_NAME_MAX) : undefined;
+}
+
 @Injectable()
 export class OAuthService {
   private readonly logger = new Logger(OAuthService.name);
@@ -113,6 +139,8 @@ export class OAuthService {
       return this.asResolved(existing);
     }
 
+    const providerName = clampName(profile.displayName);
+
     const created = await this.prisma.user.create({
       data: {
         email,
@@ -127,8 +155,8 @@ export class OAuthService {
         },
         profile: {
           create: {
-            firstName: profile.displayName?.trim() || 'BidNest user',
-            displayName: profile.displayName?.trim() || `user-${Date.now()}`
+            firstName: providerName ?? nameFromEmail(email),
+            displayName: providerName ?? nameFromEmail(email)
           }
         }
       },
