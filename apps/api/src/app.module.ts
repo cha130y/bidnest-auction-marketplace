@@ -15,6 +15,7 @@ import { AccessTokenGuard } from './common/guards/access-token.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HealthController } from './health/health.controller';
 import { MailModule } from './mail/mail.module';
+import { NotificationModule } from './notification/notification.module';
 import { OrderModule } from './order/order.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module';
@@ -46,6 +47,7 @@ import { ShipmentModule } from './shipment/shipment.module';
     CartModule,
     OrderModule,
     ShipmentModule,
+    NotificationModule,
     CategoriesModule,
     AdminModule,
     ChatModule
