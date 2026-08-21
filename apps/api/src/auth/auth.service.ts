@@ -14,10 +14,12 @@ import {
 } from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { HashingService } from './hashing.service';
+import { PasswordResetService } from './password-reset.service';
 import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -66,7 +68,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly hashing: HashingService,
     private readonly twoFactor: TwoFactorService,
-    private readonly tokens: TokenService
+    private readonly tokens: TokenService,
+    private readonly passwordReset: PasswordResetService
   ) {}
 
   /**
@@ -227,6 +230,42 @@ export class AuthService {
     if (lookup.outcome === 'VALID' || lookup.outcome === 'EXPIRED') {
       await this.tokens.revokeSession(lookup.sessionId);
     }
+  }
+
+  /**
+   * AUTH-005 — ask for a reset link. Returns nothing either way: the SRS is
+   * explicit that this must not confirm or deny that an address is registered,
+   * so a caller cannot use it to harvest accounts.
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
+    await this.passwordReset.issue(dto.email);
+  }
+
+  /**
+   * AUTH-005 — spend the link and set the new password. Every refresh session
+   * on the account is revoked in the process, which is what forces a fresh
+   * login on every device the SRS asks for.
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const owner = await this.passwordReset.consume(dto.token);
+
+    if (!owner) {
+      // Wrong, expired and already-spent links answer identically.
+      throw new UnauthorizedException('Invalid or expired reset link');
+    }
+
+    const passwordHash = await this.hashing.hash(dto.password);
+
+    await this.prisma.user.update({
+      where: { id: owner.userId },
+      data: { passwordHash }
+    });
+
+    await this.tokens.revokeAllSessions(owner.userId);
+
+    this.logger.log(
+      `Password reset completed for user ${owner.userId} — all sessions revoked`
+    );
   }
 
   /** Re-reads the profile so the refreshed response matches the register one. */
