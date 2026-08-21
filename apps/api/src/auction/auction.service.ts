@@ -14,6 +14,7 @@ import {
   toPublicAuction
 } from './auction.mapper';
 import { HOT_AUCTION_ORDER } from './constants/hot-auction-order.constant';
+import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
@@ -224,7 +225,7 @@ export class AuctionService {
   async findPublicAuction(id: string, viewerId?: string) {
     const publicStatuses = {
       id,
-      status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
+      status: { in: PUBLIC_AUCTION_STATUSES },
       deletedAt: null
     } satisfies Prisma.AuctionWhereInput;
 
