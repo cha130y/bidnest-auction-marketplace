@@ -254,15 +254,64 @@ describe('BidService (BID-001)', () => {
     });
   });
 
-  describe('duplicate requests', () => {
-    it('refuses a clientRequestId that has already been used', async () => {
-      prisma.bid.findUnique.mockResolvedValue({ id: 'bid-existing' });
+  /**
+   * BID-002 — a retry is the same bid arriving twice, so it gets the same
+   * answer. Only a request id being reused for something else is refused.
+   */
+  describe('retries and duplicate requests (BID-002)', () => {
+    it('replays the original bid instead of failing', async () => {
+      prisma.bid.findUnique.mockResolvedValue(bidRow());
+
+      const result = await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(result).toMatchObject({ id: 'bid-1', amount: '3000' });
+    });
+
+    it('writes nothing at all on a replay', async () => {
+      prisma.bid.findUnique.mockResolvedValue(bidRow());
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
+      expect(prisma.bid.create).not.toHaveBeenCalled();
+      expect(prisma.auctionEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('does not even look at the auction on a replay', async () => {
+      prisma.bid.findUnique.mockResolvedValue(bidRow());
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(prisma.auction.findFirst).not.toHaveBeenCalled();
+    });
+
+    // reusing an id for a different bid is a caller bug, not a retry
+    it('refuses a request id already used on another auction', async () => {
+      prisma.bid.findUnique.mockResolvedValue(
+        bidRow({ auctionId: 'a-different-auction' })
+      );
 
       await expect(
         service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
       ).rejects.toBeInstanceOf(ConflictException);
-      expect(prisma.auction.updateMany).not.toHaveBeenCalled();
-      expect(prisma.bid.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a request id already used for a different amount', async () => {
+      prisma.bid.findUnique.mockResolvedValue(bidRow({ amount: dec(9999) }));
+
+      await expect(
+        service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('treats the same amount written differently as the same bid', async () => {
+      prisma.bid.findUnique.mockResolvedValue(
+        bidRow({ amount: dec('3000.00') })
+      );
+
+      await expect(
+        service.placeBid(AUCTION_ID, BIDDER_ID, validDto({ amount: 3000 }))
+      ).resolves.toMatchObject({ id: 'bid-1' });
     });
 
     it('stores the request id with the bid so the next retry is caught', async () => {
@@ -271,6 +320,67 @@ describe('BidService (BID-001)', () => {
       await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
 
       expect(createdBid().clientRequestId).toBe(REQUEST_ID);
+    });
+
+    describe('when two copies of a retry race each other', () => {
+      /** Prisma's answer when the unique index rejects the second insert. */
+      const uniqueViolation = () =>
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: ['client_request_id'] }
+        });
+
+      it('replays the bid that won rather than surfacing the violation', async () => {
+        prisma.bid.findUnique
+          // inside the transaction: not there yet
+          .mockResolvedValueOnce(null)
+          // after the violation: the winner has committed
+          .mockResolvedValueOnce(bidRow());
+        prisma.auction.findFirst.mockResolvedValue(openAuction());
+        prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+        prisma.bid.create.mockRejectedValue(uniqueViolation());
+
+        const result = await service.placeBid(
+          AUCTION_ID,
+          BIDDER_ID,
+          validDto()
+        );
+
+        expect(result).toMatchObject({ id: 'bid-1', amount: '3000' });
+      });
+
+      it('still refuses if the winning bid was for something else', async () => {
+        prisma.bid.findUnique
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(bidRow({ amount: dec(9999) }));
+        prisma.auction.findFirst.mockResolvedValue(openAuction());
+        prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+        prisma.bid.create.mockRejectedValue(uniqueViolation());
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
+        ).rejects.toBeInstanceOf(ConflictException);
+      });
+
+      it('lets an unrelated unique violation through untouched', async () => {
+        const otherViolation = new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed',
+          {
+            code: 'P2002',
+            clientVersion: 'test',
+            meta: { target: ['auction_id', 'sequence_no'] }
+          }
+        );
+        prisma.bid.findUnique.mockResolvedValue(null);
+        prisma.auction.findFirst.mockResolvedValue(openAuction());
+        prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+        prisma.bid.create.mockRejectedValue(otherViolation);
+
+        await expect(
+          service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
+        ).rejects.toBe(otherViolation);
+      });
     });
   });
 
@@ -289,6 +399,7 @@ describe('BidService (BID-001)', () => {
     });
 
     it('refuses the bid that lost the race, writing nothing', async () => {
+      // nothing under this request id, so losing means somebody else bid
       prisma.bid.findUnique.mockResolvedValue(null);
       prisma.auction.findFirst.mockResolvedValue(openAuction());
       prisma.auction.updateMany.mockResolvedValue({ count: 0 });
@@ -298,6 +409,38 @@ describe('BidService (BID-001)', () => {
       ).rejects.toBeInstanceOf(ConflictException);
       expect(prisma.bid.create).not.toHaveBeenCalled();
       expect(prisma.auctionEvent.create).not.toHaveBeenCalled();
+    });
+
+    /**
+     * BID-002 — the rowVersion guard fires before the unique index ever can,
+     * so two copies of one retry racing each other land here rather than on a
+     * constraint violation. Losing the race is not the same as being refused.
+     */
+    it('replays instead of refusing when the winner was this same retry', async () => {
+      prisma.bid.findUnique
+        // inside the transaction, before the update: nothing yet
+        .mockResolvedValueOnce(null)
+        // after losing the race: the winner has committed and is readable
+        .mockResolvedValueOnce(bidRow());
+      prisma.auction.findFirst.mockResolvedValue(openAuction());
+      prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(result).toMatchObject({ id: 'bid-1', amount: '3000' });
+      expect(prisma.bid.create).not.toHaveBeenCalled();
+    });
+
+    it('still refuses when the winner was a different bid entirely', async () => {
+      prisma.bid.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(bidRow({ amount: dec(9999) }));
+      prisma.auction.findFirst.mockResolvedValue(openAuction());
+      prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.placeBid(AUCTION_ID, BIDDER_ID, validDto())
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 });

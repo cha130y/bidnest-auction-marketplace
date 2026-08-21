@@ -1868,4 +1868,187 @@ describe('Auction drafts (e2e)', () => {
       expect(stored.soldPrice?.toString()).toBe('5000');
     });
   });
+
+  /**
+   * BID-002 — a retry is the same bid arriving twice and gets the same answer,
+   * so a caller who never saw the first response ends up in the right state
+   * either way. Only a request id reused for a different bid is refused.
+   */
+  describe('bid retries (BID-002)', () => {
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 60 * 60 * 1000);
+
+    const liveAuction = async () => {
+      const created = await request(app.getHttpServer())
+        .post('/auctions/drafts')
+        .set('Authorization', authOf(sellerId))
+        .send({
+          ...draftBody(),
+          scheduledStartAt: hoursFromNow(-1).toISOString(),
+          scheduledEndAt: hoursFromNow(4).toISOString()
+        })
+        .expect(201);
+      const id = (created.body as { id: string }).id;
+
+      await request(app.getHttpServer())
+        .post(`/auctions/drafts/${id}/publish`)
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      return id;
+    };
+
+    const sendBid = (
+      auctionId: string,
+      userId: string,
+      amount: number,
+      clientRequestId: string
+    ) =>
+      request(app.getHttpServer())
+        .post(`/auctions/${auctionId}/bids`)
+        .set('Authorization', authOf(userId))
+        .send({ amount, clientRequestId });
+
+    const storedAuction = (id: string) =>
+      prisma.auction.findUniqueOrThrow({
+        where: { id },
+        select: { currentPrice: true, bidCount: true }
+      });
+
+    it('gives a retry the original bid back rather than an error', async () => {
+      const auctionId = await liveAuction();
+      const clientRequestId = randomUUID();
+
+      const first = await sendBid(
+        auctionId,
+        buyerId,
+        3000,
+        clientRequestId
+      ).expect(201);
+      const retry = await sendBid(
+        auctionId,
+        buyerId,
+        3000,
+        clientRequestId
+      ).expect(201);
+
+      expect(retry.body).toEqual(first.body);
+    });
+
+    it('counts the bid once however many times the retry arrives', async () => {
+      const auctionId = await liveAuction();
+      const clientRequestId = randomUUID();
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await sendBid(auctionId, buyerId, 3000, clientRequestId).expect(201);
+      }
+
+      const stored = await storedAuction(auctionId);
+      expect(stored.bidCount).toBe(1);
+      expect(stored.currentPrice.toString()).toBe('3000');
+
+      const bids = await prisma.bid.findMany({ where: { auctionId } });
+      expect(bids).toHaveLength(1);
+
+      const events = await prisma.auctionEvent.findMany({
+        where: { auctionId, eventType: 'BID_PLACED' }
+      });
+      expect(events).toHaveLength(1);
+    });
+
+    it('replays even after somebody else has bid higher', async () => {
+      const auctionId = await liveAuction();
+      const clientRequestId = randomUUID();
+
+      const first = await sendBid(
+        auctionId,
+        buyerId,
+        3000,
+        clientRequestId
+      ).expect(201);
+      await sendBid(auctionId, strangerId, 3100, randomUUID()).expect(201);
+
+      // the retry is answered from what was recorded, not re-judged against
+      // a price that has moved on since
+      const retry = await sendBid(
+        auctionId,
+        buyerId,
+        3000,
+        clientRequestId
+      ).expect(201);
+      expect(retry.body).toEqual(first.body);
+    });
+
+    it('replays even once the auction has ended', async () => {
+      const auctionId = await liveAuction();
+      const clientRequestId = randomUUID();
+
+      const first = await sendBid(
+        auctionId,
+        buyerId,
+        5000,
+        clientRequestId
+      ).expect(201);
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { status: 'SOLD', endedAt: new Date() }
+      });
+
+      const retry = await sendBid(
+        auctionId,
+        buyerId,
+        5000,
+        clientRequestId
+      ).expect(201);
+      expect(retry.body).toEqual(first.body);
+    });
+
+    describe('a request id reused for something else', () => {
+      it('is refused when the amount differs', async () => {
+        const auctionId = await liveAuction();
+        const clientRequestId = randomUUID();
+
+        await sendBid(auctionId, buyerId, 3000, clientRequestId).expect(201);
+        await sendBid(auctionId, buyerId, 9000, clientRequestId).expect(409);
+
+        // and the auction is untouched by the attempt
+        expect((await storedAuction(auctionId)).currentPrice.toString()).toBe(
+          '3000'
+        );
+      });
+
+      it('is refused when it points at another auction', async () => {
+        const first = await liveAuction();
+        const second = await liveAuction();
+        const clientRequestId = randomUUID();
+
+        await sendBid(first, buyerId, 3000, clientRequestId).expect(201);
+        await sendBid(second, buyerId, 3000, clientRequestId).expect(409);
+
+        expect((await storedAuction(second)).bidCount).toBe(0);
+      });
+    });
+
+    // the case the unique index exists for: both copies get past the lookup
+    it('lets simultaneous copies of one retry through as a single bid', async () => {
+      const auctionId = await liveAuction();
+      const clientRequestId = randomUUID();
+
+      const results = await Promise.all([
+        sendBid(auctionId, buyerId, 3000, clientRequestId),
+        sendBid(auctionId, buyerId, 3000, clientRequestId),
+        sendBid(auctionId, buyerId, 3000, clientRequestId)
+      ]);
+
+      // every caller is told the same thing
+      expect(results.map((result) => result.status)).toEqual([201, 201, 201]);
+      const ids = results.map((result) => (result.body as { id: string }).id);
+      expect(new Set(ids).size).toBe(1);
+
+      // and only one bid exists
+      const bids = await prisma.bid.findMany({ where: { auctionId } });
+      expect(bids).toHaveLength(1);
+      expect((await storedAuction(auctionId)).bidCount).toBe(1);
+    });
+  });
 });
