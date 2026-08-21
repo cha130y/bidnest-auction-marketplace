@@ -1,4 +1,13 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AdminActionType } from '../../generated/prisma/enums';
+import type { UserStatus } from '../../generated/prisma/enums';
+import { PrismaService } from '../prisma/prisma.service';
+
+interface ListUsersQuery {
+  cursor?: string;
+  limit?: number;
+  status?: UserStatus;
+}
 
 /**
  * ADM-002 — User management (owner: Dev 5)
@@ -13,13 +22,69 @@ import { Injectable, NotImplementedException } from '@nestjs/common';
  */
 @Injectable()
 export class AdminUsersService {
-  listUsers(): never {
-    throw new NotImplementedException('ADM-002 listUsers');
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listUsers(query: ListUsersQuery = {}) {
+    const limit = query.limit ?? 20;
+
+    return this.prisma.user.findMany({
+      where: query.status ? { status: query.status } : undefined,
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        createdAt: true
+        // ห้าม select passwordHash เด็ดขาด
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {})
+    });
   }
 
-  changeUserStatus(targetUserId: string, targetStatus: string): never {
-    throw new NotImplementedException(
-      `ADM-002 changeUserStatus (targetUserId=${targetUserId}, targetStatus=${targetStatus})`
-    );
+  async changeUserStatus(
+    adminUserId: string,
+    targetUserId: string,
+    targetStatus: Extract<UserStatus, 'SUSPENDED' | 'ACTIVE'>,
+    note?: string
+  ) {
+    if (adminUserId === targetUserId) {
+      throw new ForbiddenException('ไม่สามารถระงับ/คืนสิทธิ์บัญชีตัวเองได้');
+    }
+
+    const existing = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true }
+    });
+    if (!existing) throw new NotFoundException('User not found');
+
+    const actionType =
+      targetStatus === 'SUSPENDED'
+        ? AdminActionType.SUSPEND_USER
+        : AdminActionType.REACTIVATE_USER;
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id: targetUserId },
+        data: { status: targetStatus },
+        select: { id: true, email: true, role: true, status: true, createdAt: true }
+      });
+
+      // เขียน audit log ในทรานแซคชันเดียวกับการเปลี่ยนสถานะ (ตาม ADR-0001)
+      await tx.adminAction.create({
+        data: { adminUserId, actionType, targetUserId, note }
+      });
+
+      if (targetStatus === 'SUSPENDED') {
+        // เพิกถอน session ที่ยังไม่หมดอายุ กัน access token เดิมใช้ต่อได้จนหมดอายุ
+        await tx.userSession.updateMany({
+          where: { userId: targetUserId, revokedAt: null, expiresAt: { gt: new Date() } },
+          data: { revokedAt: new Date() }
+        });
+      }
+
+      return user;
+    });
   }
 }

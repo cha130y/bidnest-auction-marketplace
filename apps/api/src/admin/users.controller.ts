@@ -1,4 +1,8 @@
-import { Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
+import type { UserStatus } from '../../generated/prisma/enums';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { ChangeUserStatusDto } from './dtos/change-user-status.dto';
 import { AdminUsersService } from './users.service';
 
 /**
@@ -8,31 +12,43 @@ import { AdminUsersService } from './users.service';
  * เพิ่มลงตะกร้าไม่ได้ และ checkout ไม่ได้ — การบังคับใช้กระจายอยู่ในโมดูลของ
  * Dev 2 (AUTH), Dev 3 (PROD/CART) และ Dev 4 (AUC/BID) โดยเช็คจาก
  * `users.status = ACTIVE` ไม่ใช่เช็คที่ controller นี้
- *
- * TODO(Dev 5): เมื่อ AUTH-008 พร้อม ใส่ guard ที่ระดับ class
- *   `@UseGuards(AccessTokenGuard, RolesGuard)` + `@Roles(UserRole.ADMIN)`
- *   (admin-only ทั้ง controller ต่างจาก CategoriesController ที่มี route สาธารณะ)
- * TODO(Dev 5): รับ adminUserId จาก `@CurrentUser()` ไม่ใช่จาก body
  */
+@Roles('ADMIN')
 @Controller('admin/users')
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
   /** query: cursor?, limit?, status? (ACTIVE | SUSPENDED | DEACTIVATED) */
   @Get()
-  listUsers() {
-    return this.adminUsersService.listUsers();
+  listUsers(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: UserStatus
+  ) {
+    return this.adminUsersService.listUsers({
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+      status
+    });
   }
 
   /** body: { note?: string } → users.status = SUSPENDED */
   @Patch(':userId/suspend')
-  suspendUser(@Param('userId') userId: string) {
-    return this.adminUsersService.changeUserStatus(userId, 'SUSPENDED');
+  suspendUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto?: ChangeUserStatusDto
+  ) {
+    return this.adminUsersService.changeUserStatus(adminId, userId, 'SUSPENDED', dto?.note);
   }
 
   /** body: { note?: string } → users.status = ACTIVE */
   @Patch(':userId/reactivate')
-  reactivateUser(@Param('userId') userId: string) {
-    return this.adminUsersService.changeUserStatus(userId, 'ACTIVE');
+  reactivateUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto?: ChangeUserStatusDto
+  ) {
+    return this.adminUsersService.changeUserStatus(adminId, userId, 'ACTIVE', dto?.note);
   }
 }
