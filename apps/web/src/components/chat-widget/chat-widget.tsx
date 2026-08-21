@@ -1,3 +1,5 @@
+'use client';
+
 import MessageList from '@/components/chat-widget/message-list';
 import {
   ChatMessage,
