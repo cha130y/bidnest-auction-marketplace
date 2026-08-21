@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
 import { authRegistry } from './helpers/auth';
+import { expectNoReserve } from './helpers/reserve';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 /**
@@ -443,7 +444,7 @@ describe('Auction drafts (e2e)', () => {
       const draftId = await createDraft({ reservePrice: 4500 });
 
       const validation = await validationOf(draftId);
-      expect(JSON.stringify(validation)).not.toContain('4500');
+      expectNoReserve(validation, 4500);
     });
 
     it('hides the checklist of a draft owned by somebody else', async () => {
@@ -556,7 +557,7 @@ describe('Auction drafts (e2e)', () => {
           .expect(200);
 
         expect(response.body).not.toHaveProperty('reservePrice');
-        expect(JSON.stringify(response.body)).not.toContain('4500');
+        expectNoReserve(response.body, 4500);
         expect(response.body).toMatchObject({
           id: draftId,
           reserveMet: false,
@@ -831,7 +832,7 @@ describe('Auction drafts (e2e)', () => {
 
       for (const response of [anonymous, stranger]) {
         expect(response.body).not.toHaveProperty('reservePrice');
-        expect(JSON.stringify(response.body)).not.toContain('4500');
+        expectNoReserve(response.body, 4500);
         expect(response.body).toMatchObject({ reserveMet: false });
       }
     });
@@ -1401,7 +1402,7 @@ describe('Auction drafts (e2e)', () => {
         .expect(200);
 
       expect(response.body).not.toHaveProperty('reservePrice');
-      expect(JSON.stringify(response.body)).not.toContain('4500');
+      expectNoReserve(response.body, 4500);
       expect(response.body).toMatchObject({
         status: 'UNSOLD',
         reserveMet: false
@@ -1446,7 +1447,16 @@ describe('Auction drafts (e2e)', () => {
     };
 
     /** Ids from the hot list, in the order the API returned them. */
-    const hotIds = async (query = '') => {
+    /**
+     * Ids from the hot list, in the order the API returned them.
+     *
+     * Asks for the maximum page unless a test is specifically about paging.
+     * The list is shared with every other auction in the database, and the
+     * default page of twenty is easily filled by leftovers from an earlier run
+     * that never reached its teardown — a test looking for its own auction
+     * would then fail for reasons that have nothing to do with the ranking.
+     */
+    const hotIds = async (query = '?limit=100') => {
       const response = await request(app.getHttpServer())
         .get(`/auctions${query}`)
         .expect(200);
@@ -1552,7 +1562,7 @@ describe('Auction drafts (e2e)', () => {
 
       const body = response.body as { items: Record<string, unknown>[] };
       expect(body.items.every((item) => !('reservePrice' in item))).toBe(true);
-      expect(JSON.stringify(body.items)).not.toContain('4500');
+      expectNoReserve(body.items, 4500);
     });
 
     it('pages without repeating or skipping an auction', async () => {
