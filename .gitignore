@@ -15,3 +15,7 @@ skills-lock.json
 
 # Editor settings ส่วนตัวของแต่ละคน — ไม่ต้อง sync เข้าทีม
 .vscode/
+
+# lockfile ต้องมีตัวเดียวที่ root เท่านั้น (pnpm workspace)
+apps/*/pnpm-lock.yaml
+packages/*/pnpm-lock.yaml
