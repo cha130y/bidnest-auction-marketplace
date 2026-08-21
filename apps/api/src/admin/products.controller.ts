@@ -21,8 +21,9 @@ import { AdminProductsService } from './products.service';
  * state machine เต็มและกฎที่ต้อง implement ทุกข้อดูที่ ADR-0002
  *
  * `@Roles('ADMIN')` ทำงานผ่าน RolesGuard ที่ลงทะเบียนเป็น APP_GUARD ใน AppModule
- * ตัวตนผู้เรียกมาจาก MockAuthGuard (ยืนแทน AUTH-008 ของ Dev 2) เปลี่ยนเป็น JWT
- * จริงแล้ว controller นี้ไม่ต้องแก้อะไร
+ * ตัวตนผู้เรียกมาจาก AccessTokenGuard (AUTH-008) — ตอนสลับจาก MockAuthGuard มา
+ * ใช้ JWT จริง controller นี้ไม่ต้องแก้อะไรเลย เพราะอ่าน identity ผ่าน
+ * `@CurrentUser()` อย่างเดียว
  */
 @Roles('ADMIN')
 @Controller('admin/products')

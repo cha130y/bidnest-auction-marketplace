@@ -4,8 +4,12 @@
 ###############################################################################
 
 @baseUrl = http://localhost:4000
-@sellerA = 00000000-0000-4000-8000-000000000002
-@buyer   = 00000000-0000-4000-8000-000000000004
+
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
+# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+@sellerAToken =
+
 @catElectronics = 00000000-0000-4000-8000-000000000101
 @productA1 = 00000000-0000-4000-8000-000000000201
 
@@ -14,7 +18,7 @@
 # -> response ต้องมี warnings[] ติดมาด้วย (PROD-007)
 # @name createProduct
 POST {{baseUrl}}/products
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -55,15 +59,15 @@ GET {{baseUrl}}/products/{{productA1}}
 
 ### PROD-006 detail — มุมมองเจ้าของ (seller A): ต้องเห็น negotiationFloor. expect 200
 GET {{baseUrl}}/products/{{productA1}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### PROD-004 detail — สินค้าที่เพิ่งสร้าง
 GET {{baseUrl}}/products/{{newProductId}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### PROD-003 update — แก้ราคา/คำอธิบาย. expect 200
 PATCH {{baseUrl}}/products/{{newProductId}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
@@ -73,28 +77,28 @@ Content-Type: application/json
 
 ### PROD-005 stock — ตั้งจำนวนคงเหลือใหม่. expect 200
 PATCH {{baseUrl}}/products/{{newProductId}}/stock
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "stockQty": 3 }
 
 ### PROD-005 stock — ตั้งเป็น 0 แล้วสถานะควรกลายเป็น OUT_OF_STOCK. expect 200
 PATCH {{baseUrl}}/products/{{newProductId}}/stock
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "stockQty": 0 }
 
 ### PROD-005 stock — เติมของกลับ สถานะควรกลับมา ACTIVE. expect 200
 PATCH {{baseUrl}}/products/{{newProductId}}/stock
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "stockQty": 7 }
 
 ### PROD-002 status — ผู้ขายพักการขายเอง (status -> INACTIVE). expect 200
 PATCH {{baseUrl}}/products/{{newProductId}}/status
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
@@ -104,25 +108,25 @@ GET {{baseUrl}}/products?q=Headphone
 
 ### ตรวจผล — แต่เจ้าของยังเปิดดูได้. expect 200
 GET {{baseUrl}}/products/{{newProductId}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### PROD-002 status — เปิดขายกลับเอง (stock > 0 จึงกลับเป็น ACTIVE). expect 200
 PATCH {{baseUrl}}/products/{{newProductId}}/status
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "ACTIVE" }
 
 ### PROD-002 status — ค่าที่ไม่ใช่ ACTIVE/INACTIVE ต้องถูกปฏิเสธ. expect 400
 PATCH {{baseUrl}}/products/{{newProductId}}/status
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "SUSPENDED" }
 
 ### PROD-003 delete — soft delete (status -> REMOVED). expect 200
 DELETE {{baseUrl}}/products/{{newProductId}}
-x-mock-user-id: {{sellerA}}
+Authorization: Bearer {{sellerAToken}}
 
 ### ตรวจซ้ำ — ของที่ถูกลบต้องไม่โผล่ในผลค้นหา
 GET {{baseUrl}}/products?q=Headphone
