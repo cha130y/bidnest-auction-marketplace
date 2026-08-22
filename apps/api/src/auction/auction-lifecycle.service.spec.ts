@@ -1,11 +1,13 @@
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
 import { AuctionLifecycleService } from './auction-lifecycle.service';
 import { AuctionService } from './auction.service';
 
 const AUCTION_A = '00000000-0000-4000-8000-0000000004a1';
 const AUCTION_B = '00000000-0000-4000-8000-0000000004b2';
+const END_AT = new Date('2026-09-01T12:00:00.000Z');
 
 /**
  * AUC-005 / AUC-007 — the two clock-driven transitions. The settlement rules
@@ -20,6 +22,7 @@ describe('AuctionLifecycleService', () => {
     $transaction: jest.Mock;
   };
   let auctionService: { settleAuction: jest.Mock };
+  let gateway: { emitToAuction: jest.Mock };
 
   beforeEach(async () => {
     // One test deliberately makes a pass throw; the service is meant to log it
@@ -33,12 +36,14 @@ describe('AuctionLifecycleService', () => {
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
     };
     auctionService = { settleAuction: jest.fn() };
+    gateway = { emitToAuction: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuctionLifecycleService,
         { provide: PrismaService, useValue: prisma },
-        { provide: AuctionService, useValue: auctionService }
+        { provide: AuctionService, useValue: auctionService },
+        { provide: AuctionGateway, useValue: gateway }
       ]
     }).compile();
 
@@ -51,7 +56,7 @@ describe('AuctionLifecycleService', () => {
   /** `due` are ready to start, `expired` are ready to settle. */
   const workWaiting = (due: string[], expired: string[]) => {
     prisma.auction.findMany
-      .mockResolvedValueOnce(due.map((id) => ({ id })))
+      .mockResolvedValueOnce(due.map((id) => ({ id, currentEndAt: END_AT })))
       .mockResolvedValueOnce(expired.map((id) => ({ id })));
   };
 
@@ -106,6 +111,49 @@ describe('AuctionLifecycleService', () => {
       await service.reconcileLifecycle();
 
       expect(prisma.auctionEvent.create).not.toHaveBeenCalled();
+    });
+
+    // LIV-001 — the lobby flips to the arena on this event, not on a poll
+    describe('announcing the start (LIV-001)', () => {
+      it('broadcasts auction:started with the new deadline', async () => {
+        workWaiting([AUCTION_A], []);
+        prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+
+        await service.reconcileLifecycle();
+
+        expect(gateway.emitToAuction).toHaveBeenCalledWith(
+          AUCTION_A,
+          'auction:started',
+          expect.objectContaining({
+            auctionId: AUCTION_A,
+            status: 'ACTIVE',
+            endsAt: END_AT
+          })
+        );
+      });
+
+      // SRS section 6 — a rollback would take the auction back, and there is
+      // no unsending an announcement
+      it('announces nothing when the guarded update matched nothing', async () => {
+        workWaiting([AUCTION_A], []);
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+        await service.reconcileLifecycle();
+
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      it('announces each auction to its own room', async () => {
+        workWaiting([AUCTION_A, AUCTION_B], []);
+        prisma.auction.updateMany.mockResolvedValue({ count: 1 });
+
+        await service.reconcileLifecycle();
+
+        const rooms = (gateway.emitToAuction.mock.calls as string[][]).map(
+          ([auctionId]) => auctionId
+        );
+        expect(rooms).toEqual([AUCTION_A, AUCTION_B]);
+      });
     });
 
     it('only looks at auctions that already have an end time', async () => {

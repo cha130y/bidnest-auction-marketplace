@@ -1,0 +1,193 @@
+###############################################################################
+# LIVE — Lobby ก่อนเริ่มประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: LIV-001 Lobby — ข้อมูลประมูล, จำนวนผู้เข้าร่วมแบบเรียลไทม์,
+# เวลานับถอยหลัง, สถานะการเข้าร่วม และการเปลี่ยนสถานะเริ่มประมูลอัตโนมัติ
+#
+# 💡 เวลานับถอยหลังส่งมาสองแบบคู่กัน ตั้งใจให้ซ้ำ:
+#    - startsAt / endsAt = เวลาจริง ใช้ได้ถ้านาฬิกาเครื่อง client ตรง
+#    - msUntilStart / msUntilEnd = เหลืออีกกี่ ms นับจาก serverTime
+#    เครื่องที่นาฬิกาเพี้ยนให้ใช้ค่าที่สอง จะได้ไม่นับถอยหลังผิด
+#
+# 💡 การเข้าร่วม (participants) ไม่ใช่การบิด — ผู้ขายเข้าห้องประมูลตัวเองได้
+#    (แต่บิดไม่ได้ ตาม BID-001) ส่วน admin เข้าไม่ได้เลย (SRS ข้อ 2)
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# AUTH-008 — วาง token จาก `pnpm --filter api exec prisma db seed`
+@adminToken   =
+@sellerAToken =
+@buyerToken   =
+
+#=============================================================================
+# 1. เตรียมประมูลที่ยังไม่เริ่ม (SCHEDULED) — คือสถานะที่ lobby มีไว้ให้
+#=============================================================================
+
+### สร้าง draft ที่เริ่มในอนาคต
+# @name lobbyDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบ lobby",
+  "description": "ยังไม่เริ่ม รอเวลานับถอยหลัง",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-12-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Lobby"]
+}
+
+@lobbyId = {{lobbyDraft.response.body.$.id}}
+
+### draft ยังไม่ publish — lobby ต้องยังไม่มี. expect 404
+# ตอบ 404 ไม่ใช่ 403 เพราะ 403 = ยอมรับว่ามี draft นี้อยู่จริง
+GET {{baseUrl}}/auctions/{{lobbyId}}/lobby
+Authorization: Bearer {{sellerAToken}}
+
+### publish ให้เป็น SCHEDULED. expect 200 + status SCHEDULED
+POST {{baseUrl}}/auctions/drafts/{{lobbyId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 2. อ่าน lobby (LIV-001)
+#=============================================================================
+
+### LIV-001 — คนที่ไม่ได้ login ก็ดูได้. expect 200
+# ตรวจ: auction.status = SCHEDULED, participantCount = 0, you = null,
+#       countdown.msUntilStart > 0, countdown.serverTime มีค่า
+# ⚠️ ต้องไม่มี reservePrice (4500) โผล่ที่ไหนเลยในคำตอบ (AUC-003)
+GET {{baseUrl}}/auctions/{{lobbyId}}/lobby
+
+### LIV-001 — คน login แล้วแต่ยังไม่เข้าร่วม. expect 200 + you.joined = false
+GET {{baseUrl}}/auctions/{{lobbyId}}/lobby
+Authorization: Bearer {{buyerToken}}
+
+### ผู้ขายเจ้าของประมูลเห็น reservePrice ของตัวเองได้. expect 200
+# lobby อ่าน auction ผ่านทางเดียวกับ GET /auctions/:id เลย สิทธิ์จึงตรงกันเสมอ
+GET {{baseUrl}}/auctions/{{lobbyId}}/lobby
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 3. เข้าร่วม / ออก (LIV-001 — สถานะการเข้าร่วม)
+#=============================================================================
+
+### LIV-001 — ผู้ซื้อเข้าร่วม. expect 200 + joined true + participantCount 1
+# หลัง commit จะ broadcast `auction:presence` เข้า room ของประมูลนี้
+POST {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+### ยิงซ้ำ = idempotent. expect 200 + participantCount ยังเป็น 1
+# รอบนี้ไม่ broadcast ซ้ำ เพราะตัวเลขไม่ได้ขยับ (client reconnect แล้วยิงใหม่)
+POST {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+### ผู้ขายเข้าร่วมประมูลของตัวเองได้. expect 200 + participantCount 2
+POST {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{sellerAToken}}
+
+### ตรวจว่า lobby นับตรงกัน. expect 200 + participantCount 2 + you.joined true
+GET {{baseUrl}}/auctions/{{lobbyId}}/lobby
+Authorization: Bearer {{buyerToken}}
+
+### ออกจากห้อง. expect 200 + joined false + participantCount 1
+DELETE {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+### ออกซ้ำทั้งที่ไม่ได้อยู่แล้ว. expect 200 + participantCount 1 (ไม่ broadcast)
+DELETE {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+### กลับเข้ามาใหม่ — joinedAt ยังเป็นเวลาที่เข้าครั้งแรก. expect 200
+POST {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 4. เคสที่ต้องถูกปฏิเสธ
+#=============================================================================
+
+### ไม่ได้ login. expect 401
+POST {{baseUrl}}/auctions/{{lobbyId}}/participants
+
+### admin เข้าร่วมไม่ได้ (SRS ข้อ 2 — admin คุมตลาด ไม่ลงเล่นในตลาด). expect 403
+POST {{baseUrl}}/auctions/{{lobbyId}}/participants
+Authorization: Bearer {{adminToken}}
+
+### id ที่ไม่มีอยู่จริง. expect 404
+GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000009ff/lobby
+
+### id ที่ไม่ใช่ UUID. expect 400 จาก ParseUUIDPipe
+GET {{baseUrl}}/auctions/not-a-uuid/lobby
+
+#=============================================================================
+# 5. ประมูลที่จบไปแล้ว — เข้าร่วมไม่ได้
+#=============================================================================
+
+### สร้าง + publish ประมูลที่เริ่มไปแล้ว
+# @name liveDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบ arena",
+  "description": "เริ่มไปแล้ว",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Live"]
+}
+
+@liveId = {{liveDraft.response.body.$.id}}
+
+### publish. expect 200 + status ACTIVE
+POST {{baseUrl}}/auctions/drafts/{{liveId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### ประมูลที่วิ่งอยู่ก็ยังเข้าร่วมได้. expect 200
+# lobby ไม่ได้มีไว้แค่ก่อนเริ่ม — คนเข้ามากลางคันก็ต้องนับด้วย
+POST {{baseUrl}}/auctions/{{liveId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+### lobby ของประมูลที่วิ่งอยู่. expect 200 + msUntilStart = 0 + msUntilEnd > 0
+# เวลาที่ผ่านไปแล้วรายงานเป็น 0 ไม่ใช่เลขติดลบ
+GET {{baseUrl}}/auctions/{{liveId}}/lobby
+Authorization: Bearer {{buyerToken}}
+
+### ประมูลที่จบแล้ว (SOLD/UNSOLD) เข้าร่วมไม่ได้. expect 409
+# ต้องหา id ของประมูลที่จบแล้วมาใส่เอง — จาก GET /auctions แล้วรอจนหมดเวลา
+# หรือแก้ currentEndAt ใน DB ให้เป็นอดีตแล้ว GET /auctions/:id หนึ่งครั้ง
+# (AUC-007 read repair จะปิดประมูลให้) แล้วค่อยยิง request นี้
+# POST {{baseUrl}}/auctions/<ID-ที่จบแล้ว>/participants
+# Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 6. เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ (LIV-001)
+#=============================================================================
+#
+# AuctionLifecycleService เดินทุก 10 วินาที: SCHEDULED ที่ถึงเวลาแล้วจะกลาย
+# เป็น ACTIVE เอง แล้ว broadcast `auction:started` เข้า room — lobby หน้าจอ
+# จึงพลิกไปเป็น arena ได้เองโดยไม่ต้องถามซ้ำ
+#
+# วิธีดูของจริง:
+#   1. สร้าง draft ที่ scheduledStartAt อีก ~20 วินาทีข้างหน้า แล้ว publish
+#   2. เปิด WebSocket ค้างไว้ (namespace /auctions) แล้ว emit
+#      `auction:join` { "auctionId": "<id>" }
+#   3. รอ — จะได้ event `auction:started` เข้ามาเอง พร้อม endsAt
+#   4. GET lobby ซ้ำ จะเห็น status = ACTIVE และ msUntilStart = 0
+#
+# ⚠️ ScheduleModule ถูกปิดตอน NODE_ENV=test (ดู app.module.ts) เพราะ pass ที่
+#    เดินอยู่เบื้องหลังจะไปแข่งกับ transition ที่เทสกำลังตรวจอยู่พอดี
+#=============================================================================
