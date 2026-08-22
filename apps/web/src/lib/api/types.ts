@@ -241,3 +241,150 @@ export type Auction = {
  * buyer-facing surface.
  */
 export type OwnerAuction = Auction & { reservePrice: string | null }
+
+// ── src/bid/bid-history.mapper.ts → toPublicBid ─────────────────────────────
+export type PublicBid = {
+  id: string
+  amount: string
+  sequenceNo: number
+  placedAt: string
+  /**
+   * BID-003 — masked by the API, the same way in the history, the arena and
+   * the broadcast, so one person reads as one person across all three. Render
+   * it as given; there is no unmasked name to fall back to.
+   */
+  bidder: string
+  /** True only for the signed-in viewer's own bids. */
+  isYours: boolean
+}
+
+// ── src/live/utils/calculate-countdown.util.ts ──────────────────────────────
+/**
+ * LIV-001 — both the absolute times and the milliseconds left, on purpose.
+ *
+ * Count down from `msUntilEnd`, not from `endsAt` minus the browser's clock: a
+ * device whose clock is wrong would otherwise show a deadline that disagrees
+ * with the server that enforces it. `serverTime` is what the other fields were
+ * measured against.
+ */
+export type AuctionCountdown = {
+  serverTime: string
+  startsAt: string | null
+  endsAt: string | null
+  /** Clamped at 0 once it has started. */
+  msUntilStart: number
+  /** Clamped at 0 once it has ended. */
+  msUntilEnd: number
+}
+
+// ── src/live/utils/describe-sudden-death.util.ts ────────────────────────────
+export type AuctionExtension = {
+  extensionNumber: number
+  previousEndAt: string
+  newEndAt: string
+}
+
+/**
+ * LIV-003 / BID-004 — anti-sniping. `active` stays true when
+ * `extensionsRemaining` reaches 0: the auction is still in its closing window,
+ * it just cannot be pushed back any further.
+ */
+export type SuddenDeath = {
+  active: boolean
+  windowMs: number
+  extensionMs: number
+  extensionCount: number
+  extensionsRemaining: number
+  lastExtension: AuctionExtension | null
+}
+
+// ── src/live/utils/describe-auction-result.util.ts ──────────────────────────
+export type AuctionOutcome = "SOLD" | "UNSOLD"
+
+/**
+ * LIV-004 — null while the auction is still running, which is what tells a
+ * screen to keep showing the arena rather than a result.
+ */
+export type AuctionResult = {
+  outcome: AuctionOutcome
+  endedAt: string | null
+  /** What somebody paid. Null on UNSOLD, because there was no sale. */
+  soldPrice: string | null
+  /**
+   * The highest bid it reached, sold or not. Null when nobody bid at all — a
+   * price of 0 there means "no price", not "it went for nothing".
+   */
+  finalPrice: string | null
+  bidCount: number
+  reserveMet: boolean
+  /** Only a sale has a winner; the top bidder on an unsold auction did not win. */
+  winner: PublicBid | null
+}
+
+// ── src/live/utils/describe-bidding-access.util.ts ──────────────────────────
+/**
+ * Why the bid control is unusable. The room's own state comes first, because
+ * it is the same answer for everybody in it — a personal reason on top of
+ * "this auction is not open" would only be noise.
+ */
+export type BidBlockedReason =
+  | "AUCTION_NOT_OPEN"
+  | "YOU_ARE_THE_SELLER"
+  | "ADMINS_DO_NOT_BID"
+
+// ── src/live/live.service.ts → getLobby ─────────────────────────────────────
+/**
+ * LIV-001 — the viewer's own participation. Null rather than a false-ish
+ * object when nobody is signed in: that is a different thing from being signed
+ * in and not having joined.
+ */
+export type AuctionParticipation = {
+  joined: boolean
+  /** Only while they are here, so no screen can say "joined 20 minutes ago" to somebody who left. */
+  joinedAt: string | null
+}
+
+export type AuctionLobby = {
+  auction: Auction
+  participantCount: number
+  countdown: AuctionCountdown
+  you: AuctionParticipation | null
+}
+
+// ── src/live/live.service.ts → getArena ─────────────────────────────────────
+export type ArenaParticipation = AuctionParticipation & {
+  canBid: boolean
+  blockedBy: BidBlockedReason | null
+}
+
+export type AuctionArena = Omit<AuctionLobby, "you"> & {
+  /** The bid that would win right now, ordered the way settlement picks (AUC-007). */
+  leader: PublicBid | null
+  /** Newest first — an arena reads downwards from what just happened. */
+  recentBids: PublicBid[]
+  suddenDeath: SuddenDeath
+  result: AuctionResult | null
+  you: ArenaParticipation | null
+}
+
+// ── src/bid/bid.service.ts → placeBid ───────────────────────────────────────
+/**
+ * BID-001 — what comes back to the person who just bid.
+ *
+ * Deliberately not `PublicBid`: this is the bidder's own row, so it carries
+ * `bidderId` and `clientRequestId` and does *not* carry the masked `bidder`
+ * name or `isYours`. Read the arena or the history for the public view — those
+ * are the shapes everyone else sees.
+ *
+ * BID-002 — posting the same `clientRequestId` twice answers with this same
+ * bid rather than placing a second one.
+ */
+export type PlacedBid = {
+  id: string
+  auctionId: string
+  bidderId: string
+  amount: string
+  sequenceNo: number
+  clientRequestId: string
+  placedAt: string
+}
