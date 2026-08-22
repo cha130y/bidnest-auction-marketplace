@@ -7,7 +7,8 @@ const inMinutes = (count: number) => new Date(NOW.getTime() + count * MINUTE);
 const lastExtension = {
   extensionNumber: 2,
   previousEndAt: inMinutes(-1),
-  newEndAt: inMinutes(1)
+  newEndAt: inMinutes(1),
+  triggeringBid: '5000'
 };
 
 describe('describeSuddenDeath (LIV-003)', () => {
@@ -103,6 +104,21 @@ describe('describeSuddenDeath (LIV-003)', () => {
       expect(
         describeSuddenDeath(running(1), null, NOW).lastExtension
       ).toBeNull();
+    });
+
+    /**
+     * The panel says "this amount moved the deadline to that time", which is
+     * only checkable if the amount is the bid that actually did it. Reading it
+     * from the auction's current price instead would credit the extension to
+     * whatever has been bid since — a number that did not exist when the
+     * deadline moved.
+     */
+    it('reports the amount that caused the extension, not the price now', () => {
+      const later = { ...running(1, 2), currentPrice: '9999' };
+
+      expect(
+        describeSuddenDeath(later, lastExtension, NOW).lastExtension
+      ).toMatchObject({ triggeringBid: '5000' });
     });
   });
 });

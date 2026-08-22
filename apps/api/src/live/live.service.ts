@@ -144,7 +144,11 @@ export class LiveService implements OnModuleInit {
           select: {
             extensionNumber: true,
             previousEndAt: true,
-            newEndAt: true
+            newEndAt: true,
+            // The amount that caused it, through the relation the schema
+            // already keeps. Not `currentPrice`: later bids move that, and the
+            // panel would credit the extension to an amount placed after it.
+            triggeredByBid: { select: { amount: true } }
           }
         }),
         /**
@@ -179,7 +183,14 @@ export class LiveService implements OnModuleInit {
       // moments.
       suddenDeath: describeSuddenDeath(
         lobby.auction,
-        lastExtension,
+        // Flattened here rather than in the util, so the util stays a pure
+        // function over plain values and its tests need no Prisma shape.
+        lastExtension && {
+          extensionNumber: lastExtension.extensionNumber,
+          previousEndAt: lastExtension.previousEndAt,
+          newEndAt: lastExtension.newEndAt,
+          triggeringBid: lastExtension.triggeredByBid.amount.toString()
+        },
         lobby.countdown.serverTime
       ),
       // LIV-004 — null while the auction is still running, which is what tells
