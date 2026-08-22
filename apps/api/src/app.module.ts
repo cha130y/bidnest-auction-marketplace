@@ -26,6 +26,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
 import { UsersModule } from './users/users.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { UsersModule } from './users/users.module';
     AuctionModule,
     BidModule,
     LiveModule,
+    WatchlistModule,
     ProductModule,
     CartModule,
     OrderModule,
