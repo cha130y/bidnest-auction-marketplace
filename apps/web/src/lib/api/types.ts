@@ -164,3 +164,80 @@ export type ShipmentTimeline = {
   /** SHIP-001 — allowed next steps, so the UI never hardcodes the sequence */
   nextStatuses: ShipmentStatus[]
 }
+
+// ── src/auction/auction.mapper.ts → toPublicAuction ─────────────────────────
+/**
+ * AUC-005 — narrower than the database enum on purpose. Every buyer-facing
+ * route filters through PUBLIC_AUCTION_STATUSES, so DRAFT and CANCELLED never
+ * reach the browser — not even the seller's own view of their own auction.
+ * See src/auction/constants/public-auction-status.constant.ts.
+ */
+export type AuctionStatus = "SCHEDULED" | "ACTIVE" | "SOLD" | "UNSOLD"
+
+/** The four cards on the home page. Mirrors AUCTION_SECTIONS in the API. */
+export type AuctionSection =
+  | "hot"
+  | "ending-soon"
+  | "starting-soon"
+  | "recently-ended"
+
+export type AuctionImage = {
+  url: string
+  position: number
+  isPrimary: boolean
+}
+
+export type Auction = {
+  id: string
+  title: string
+  description: string
+  condition: ProductCondition
+  status: AuctionStatus
+  currency: string
+  startingPrice: string
+  minBidIncrement: string
+  currentPrice: string
+  /**
+   * LIV-002 — the lowest amount this auction will accept right now, computed
+   * by the same function BID-001 rejects bids with. Never work this out on the
+   * client: the opening bid is measured against the starting price, not
+   * against a `currentPrice` of 0, and deriving it gets the first bid of every
+   * auction wrong.
+   */
+  minimumNextBid: string
+  /** AUC-003 — the reserve never leaves the API. This is the whole answer. */
+  reserveMet: boolean
+  /**
+   * AUC-005 — a SCHEDULED auction is public to look at but not to bid on.
+   * Read this rather than comparing `status`, so the rule stays in one place.
+   */
+  biddingOpen: boolean
+  bidCount: number
+  scheduledStartAt: string | null
+  originalEndAt: string | null
+  /** BID-004 — moves when anti-sniping extends the auction. `originalEndAt` does not. */
+  currentEndAt: string | null
+  publishedAt: string | null
+  startedAt: string | null
+  /** AUC-007 — when settlement recorded the outcome, not when it was due to end. */
+  endedAt: string | null
+  extensionCount: number
+  /**
+   * LIV-004 — what somebody actually paid, and null unless they did. Null on
+   * an UNSOLD auction because there was no sale, not to hold anything back:
+   * `currentPrice` still shows where the bidding reached.
+   */
+  soldPrice: string | null
+  category: { id: string; name: string; slug: string }
+  seller: { id: string; displayName: string | null }
+  images: AuctionImage[]
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * AUC-003 / SRS §6 — `reservePrice` is added by `toOwnerAuction` and comes back
+ * only when the request carries the seller's own token. Never render it on a
+ * buyer-facing surface.
+ */
+export type OwnerAuction = Auction & { reservePrice: string | null }
