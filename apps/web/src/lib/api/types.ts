@@ -282,6 +282,13 @@ export type AuctionExtension = {
   extensionNumber: number
   previousEndAt: string
   newEndAt: string
+  /**
+   * The bid that moved the deadline, so a panel can say "this amount pushed
+   * it to that time" and be checkable. Read through the extension row rather
+   * than from the auction: later bids move the current price, and it would
+   * otherwise credit the extension to an amount placed after it.
+   */
+  triggeringBid: string
 }
 
 /**

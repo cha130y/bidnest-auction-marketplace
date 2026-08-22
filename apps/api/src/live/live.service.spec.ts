@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '../../generated/prisma/client';
 import { AuctionService } from '../auction/auction.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
@@ -307,16 +308,42 @@ describe('LiveService', () => {
       });
 
       it('shows the deadline move a reader may have missed', async () => {
-        const moved = {
+        prisma.auctionExtension.findFirst.mockResolvedValue({
           extensionNumber: 2,
           previousEndAt: STARTS_AT,
-          newEndAt: ENDS_AT
-        };
-        prisma.auctionExtension.findFirst.mockResolvedValue(moved);
+          newEndAt: ENDS_AT,
+          // The row's own shape: the amount arrives through the relation, and
+          // the service flattens it so the screen gets a plain value.
+          triggeredByBid: { amount: new Prisma.Decimal(5000) }
+        });
 
         const arena = await service.getArena(AUCTION_ID);
 
-        expect(arena.suddenDeath.lastExtension).toEqual(moved);
+        expect(arena.suddenDeath.lastExtension).toEqual({
+          extensionNumber: 2,
+          previousEndAt: STARTS_AT,
+          newEndAt: ENDS_AT,
+          triggeringBid: '5000'
+        });
+      });
+
+      // Reading it off the auction would credit the extension to whatever has
+      // been bid since, which is a number that did not exist when the deadline
+      // moved.
+      it('takes the triggering amount from the bid, not the current price', async () => {
+        prisma.auctionExtension.findFirst.mockResolvedValue({
+          extensionNumber: 1,
+          previousEndAt: STARTS_AT,
+          newEndAt: ENDS_AT,
+          triggeredByBid: { amount: new Prisma.Decimal(3000) }
+        });
+
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.suddenDeath.lastExtension?.triggeringBid).toBe('3000');
+        // and the auction is standing at something else entirely, so the two
+        // cannot be passing by coincidence
+        expect(arena.auction.currentPrice).not.toBe('3000');
       });
 
       it('reads the most recent extension, not the first', async () => {

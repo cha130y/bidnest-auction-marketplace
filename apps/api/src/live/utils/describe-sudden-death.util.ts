@@ -9,6 +9,16 @@ export type LastExtension = {
   extensionNumber: number;
   previousEndAt: Date;
   newEndAt: Date;
+  /**
+   * LIV-003 — the bid that caused it, which is what makes the panel say
+   * something rather than assert something: "this amount moved the deadline
+   * to that time" is checkable by the person reading it.
+   *
+   * Read through the `triggeredByBid` relation the schema already keeps, not
+   * from `currentPrice` — later bids move that, and the extension would then
+   * appear to have been caused by an amount that came after it.
+   */
+  triggeringBid: string;
 };
 
 export type SuddenDeath = {

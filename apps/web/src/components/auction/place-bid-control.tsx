@@ -54,6 +54,8 @@ export function PlaceBidControl({
   const router = useRouter()
   const [amount, setAmount] = useState("")
   const [error, setError] = useState<string | null>(null)
+  /** The amount the API accepted, so the confirmation quotes it rather than what was typed. */
+  const [placed, setPlaced] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   /**
@@ -106,6 +108,7 @@ export function PlaceBidControl({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     setError(null)
+    setPlaced(null)
 
     const value = Number(amount)
     if (!Number.isFinite(value) || value <= 0) {
@@ -124,12 +127,13 @@ export function PlaceBidControl({
     setSubmitting(true)
 
     try {
-      await placeBid(auction.id, {
+      const bid = await placeBid(auction.id, {
         amount: value,
         clientRequestId: attemptId.current,
       })
       attemptId.current = null
       setAmount("")
+      setPlaced(bid.amount)
       onBidPlaced?.()
     } catch (caught) {
       setError(
@@ -169,11 +173,62 @@ export function PlaceBidControl({
         </Button>
       </div>
 
+      {/**
+       * Three amounts to press instead of type, which is the difference
+       * between bidding and not when there are seconds left.
+       *
+       * Built from `minimumNextBid` and `minBidIncrement` — both the API's, so
+       * the lowest option is always exactly what it would accept. They fill
+       * the field rather than submitting, so nobody bids by mis-tapping.
+       */}
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {quickAmounts(auction).map((quick) => (
+          <Button
+            key={quick}
+            type="button"
+            variant="secondary"
+            size="md"
+            disabled={submitting}
+            onClick={() => setAmount(quick)}
+            className="tabular-nums"
+          >
+            {formatTHB(quick)}
+          </Button>
+        ))}
+      </div>
+
+      {placed && !error && (
+        <p className="mt-2 rounded-r2 bg-green-50 px-3 py-2 text-sm font-medium text-green">
+          รับการเสนอราคาที่ {formatTHB(placed)} แล้ว
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="mt-2 text-sm font-medium text-red">
           {error}
         </p>
       )}
     </form>
+  )
+}
+
+/**
+ * The minimum, then two steps above it.
+ *
+ * `Number` is safe on these: they are money strings from the API, well inside
+ * the range where a float is exact to the cent, and the value is sent back as
+ * a number anyway (`PlaceBidDto` takes one). The API re-checks whatever
+ * arrives, so a rounding disagreement is refused rather than accepted wrong.
+ */
+function quickAmounts(auction: Auction): string[] {
+  const minimum = Number(auction.minimumNextBid)
+  const step = Number(auction.minBidIncrement)
+
+  if (!Number.isFinite(minimum) || !Number.isFinite(step) || step <= 0) {
+    return [auction.minimumNextBid]
+  }
+
+  return [minimum, minimum + step, minimum + step * 5].map((value) =>
+    value.toFixed(2)
   )
 }
