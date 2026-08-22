@@ -26,6 +26,12 @@ describe('E-commerce (e2e)', () => {
   let sellerBId: string;
   let buyerId: string;
   let strangerId: string;
+  // PROD-005 gets its own pair. Who wins its checkout race is undecidable, so
+  // the winner's extra order and ORDER_PLACED row would leak that coin flip
+  // into every later assertion about the actor that raced — the stranger's
+  // "sees only their own" count, and the buyer's orders and shipments.
+  let racerAId: string;
+  let racerBId: string;
   let adminId: string;
   let categoryId: string;
 
@@ -116,6 +122,8 @@ describe('E-commerce (e2e)', () => {
     sellerBId = await createUser('seller-b', 'USER');
     buyerId = await createUser('buyer', 'USER');
     strangerId = await createUser('stranger', 'USER');
+    racerAId = await createUser('racer-a', 'USER');
+    racerBId = await createUser('racer-b', 'USER');
     adminId = await createUser('admin', 'ADMIN');
 
     const category = await prisma.category.create({
@@ -129,12 +137,22 @@ describe('E-commerce (e2e)', () => {
       sellerBId,
       buyerId,
       strangerId,
+      racerAId,
+      racerBId,
       adminId
     ]);
   });
 
   afterAll(async () => {
-    const userIds = [sellerAId, sellerBId, buyerId, strangerId, adminId];
+    const userIds = [
+      sellerAId,
+      sellerBId,
+      buyerId,
+      strangerId,
+      racerAId,
+      racerBId,
+      adminId
+    ];
 
     // Deleted in FK order so a failed run still leaves the database clean.
     await prisma.message.deleteMany({
@@ -361,17 +379,15 @@ describe('E-commerce (e2e)', () => {
     let productId: string;
 
     beforeAll(async () => {
-      await emptyCart(buyerId);
-      await emptyCart(strangerId);
       productId = await createProduct(sellerAId, { price: 4500, stockQty: 1 });
-      await addToCart(buyerId, productId, 1).expect(201);
-      await addToCart(strangerId, productId, 1).expect(201);
+      await addToCart(racerAId, productId, 1).expect(201);
+      await addToCart(racerBId, productId, 1).expect(201);
     });
 
     it('lets exactly one buyer win and leaves stock at zero', async () => {
       const [first, second] = await Promise.all([
-        checkout(buyerId),
-        checkout(strangerId)
+        checkout(racerAId),
+        checkout(racerBId)
       ]);
 
       // Whoever wins is a race; the invariant is that only one can.
