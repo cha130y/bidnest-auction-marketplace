@@ -89,6 +89,8 @@ const draftRow = (overrides: Record<string, unknown> = {}) => ({
   startedAt: null,
   endedAt: null,
   extensionCount: 0,
+  soldPrice: null,
+  cancellationReason: null,
   createdAt: new Date('2026-08-19T00:00:00.000Z'),
   updatedAt: new Date('2026-08-19T00:00:00.000Z'),
   images: [

@@ -38,6 +38,7 @@ const auctionRow = (
   endedAt: null,
   extensionCount: 0,
   soldPrice: null as Prisma.Decimal | null,
+  cancellationReason: null as string | null,
   createdAt: new Date('2026-08-19T00:00:00.000Z'),
   updatedAt: new Date('2026-08-19T00:00:00.000Z'),
   images: [

@@ -35,6 +35,7 @@ export const auctionRowSelect = {
   endedAt: true,
   extensionCount: true,
   soldPrice: true,
+  cancellationReason: true,
   createdAt: true,
   updatedAt: true,
   images: {

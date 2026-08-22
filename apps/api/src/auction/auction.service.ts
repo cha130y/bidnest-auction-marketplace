@@ -10,6 +10,7 @@ import { LEADING_BID_ORDER } from '../bid/constants/leading-bid-order.constant';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { RealtimeService } from '../realtime/realtime.service';
+import { toAuctionCancelledEvent } from './auction-cancelled-event.mapper';
 import {
   auctionCancelledNotification,
   auctionEndedNotification,
@@ -562,13 +563,22 @@ export class AuctionService {
    * moderation action and belongs to an admin (ADM-001).
    */
   async cancelOwnAuction(id: string, sellerId: string, reason?: string) {
-    const { auction, notifications } = await this.cancelInTransaction(
+    const { auction, event, notifications } = await this.cancelInTransaction(
       id,
       sellerId,
       reason
     );
 
-    // NOT-004 / SRS section 6 — told only once the cancellation has committed.
+    /**
+     * NOT-004 / SRS section 6 — told only once the cancellation has committed.
+     *
+     * The room hears the same `auction:cancelled` an admin cancellation sends
+     * (ADM-001). A seller can only call off a DRAFT or a SCHEDULED auction,
+     * so nobody is mid-bid — but a lobby full of people waiting for one to
+     * start would otherwise count down to an auction that is not coming, and
+     * the event has to mean one thing wherever it comes from.
+     */
+    this.gateway.emitToAuction(id, 'auction:cancelled', event);
     this.deliver(notifications);
 
     return auction;
@@ -628,7 +638,11 @@ export class AuctionService {
 
       await tx.notification.createMany({ data: notifications });
 
-      return { auction: toOwnerAuction(cancelled), notifications };
+      return {
+        auction: toOwnerAuction(cancelled),
+        event: toAuctionCancelledEvent(cancelled),
+        notifications
+      };
     });
   }
 

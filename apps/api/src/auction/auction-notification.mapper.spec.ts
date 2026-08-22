@@ -117,6 +117,20 @@ describe('auction notifications (NOT-001..004)', () => {
         expect(row.message).toContain('Vintage Seiko 5 Automatic');
       }
     );
+
+    /**
+     * The same row goes to a seller withdrawing their own listing (AUC-006)
+     * and to one a moderator pulled (ADM-001). Naming an actor would be wrong
+     * half the time, and telling every bidder a listing was moderated says
+     * something about the seller they have no business being told.
+     */
+    it('names nobody as having cancelled it', () => {
+      const row = auctionCancelledNotification(auction, USER_ID, 'Reported');
+
+      expect(row.message).not.toContain('seller');
+      expect(row.message).not.toContain('admin');
+      expect(row.message).not.toContain('moderator');
+    });
   });
 
   // VarChar(180) and VarChar(800) in the schema
