@@ -420,3 +420,56 @@ export type WatchlistEntry = {
   /** Null while it is still running (LIV-004). */
   result: AuctionResult | null
 }
+
+// ── prisma/schema.prisma → NotificationType ─────────────────────────────────
+/**
+ * All eight kinds share one table and one route, which is deliberate: the bell
+ * shows a single count rather than one per module.
+ *
+ * The first four are the auction side (NOT-001..004). The rest belong to the
+ * e-commerce and chat modules — a screen rendering this list will meet them,
+ * so they are named here rather than left to widen the type by surprise.
+ */
+export type NotificationType =
+  | "OUTBID"
+  | "AUCTION_WON"
+  | "AUCTION_ENDED"
+  | "AUCTION_CANCELLED"
+  | "ORDER_PLACED"
+  | "SHIPMENT_UPDATE"
+  | "DELIVERED"
+  | "NEW_MESSAGE"
+
+// ── src/notification/notification.service.ts ────────────────────────────────
+/**
+ * `title` and `message` are written by the API, already readable, so nothing
+ * on screen composes copy from `type`. Only the four id fields are for the
+ * client: they say what a row can link to, and exactly one of them is set.
+ */
+export type AppNotification = {
+  id: string
+  type: NotificationType
+  title: string
+  message: string
+  /** Null until it has been read. */
+  readAt: string | null
+  createdAt: string
+  orderId: string | null
+  conversationId: string | null
+  auctionId: string | null
+  bidId: string | null
+}
+
+/**
+ * The list, with the badge count alongside it.
+ *
+ * `unread` is the account's *total* unread, not the count of what came back:
+ * asking for one `types=` slice still reports every unread notification,
+ * because the badge is one number for the whole product. Verified against the
+ * API — a filtered read returned 42 while showing a single type.
+ */
+export type NotificationPage = {
+  items: AppNotification[]
+  unread: number
+  meta: { page: number; limit: number; total: number; totalPages: number }
+}
