@@ -20,6 +20,14 @@ describe('Auction notifications (e2e)', () => {
 
   // Unique per run so repeated local runs never collide on the unique indexes.
   const run = Date.now();
+
+  /**
+   * Titles carry the run too, not just the emails and slugs. An auction row
+   * that outlives its suite — a timeout skips afterAll — is otherwise
+   * indistinguishable from real data, and cleaning one up means matching a
+   * title that every run of every suite shares.
+   */
+  const auctionTitle = `Vintage Seiko 5 Automatic ${run}`;
   const sellerEmail = `notif-seller-${run}@example.com`;
   const buyerEmail = `notif-buyer-${run}@example.com`;
   const rivalEmail = `notif-rival-${run}@example.com`;
@@ -54,7 +62,7 @@ describe('Auction notifications (e2e)', () => {
       .post('/auctions/drafts')
       .set('Authorization', authOf(sellerId))
       .send({
-        title: 'Vintage Seiko 5 Automatic',
+        title: auctionTitle,
         description: 'Serviced last year, original bracelet.',
         categoryId,
         condition: 'USED',
@@ -202,7 +210,7 @@ describe('Auction notifications (e2e)', () => {
 
       const [notification] = (await bellFor(buyerId)).items;
 
-      expect(notification.message).toContain('Vintage Seiko 5 Automatic');
+      expect(notification.message).toContain(auctionTitle);
       expect(notification.message).toContain('THB 3,100.00');
     });
 

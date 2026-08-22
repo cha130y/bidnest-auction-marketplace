@@ -20,6 +20,15 @@ describe('Watchlist (e2e)', () => {
 
   // Unique per run so repeated local runs never collide on the unique indexes.
   const run = Date.now();
+
+  /**
+   * Titles carry the run too, not just the emails and slugs. An auction row
+   * that outlives its suite — a timeout skips afterAll — is otherwise
+   * indistinguishable from real data, and cleaning one up means matching a
+   * title that every run of every suite shares.
+   */
+  const auctionTitle = `Vintage Seiko 5 Automatic ${run}`;
+  const draftTitle = `Unpublished draft ${run}`;
   const sellerEmail = `watch-seller-${run}@example.com`;
   const buyerEmail = `watch-buyer-${run}@example.com`;
   const strangerEmail = `watch-stranger-${run}@example.com`;
@@ -54,7 +63,7 @@ describe('Watchlist (e2e)', () => {
       .post('/auctions/drafts')
       .set('Authorization', authOf(sellerId))
       .send({
-        title: 'Vintage Seiko 5 Automatic',
+        title: auctionTitle,
         description: 'Serviced last year, original bracelet.',
         categoryId,
         condition: 'USED',
@@ -82,7 +91,7 @@ describe('Watchlist (e2e)', () => {
       .post('/auctions/drafts')
       .set('Authorization', authOf(sellerId))
       .send({
-        title: 'Unpublished draft',
+        title: draftTitle,
         description: 'Nobody may look at this yet.',
         categoryId,
         condition: 'USED',

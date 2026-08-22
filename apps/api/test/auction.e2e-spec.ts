@@ -20,6 +20,14 @@ describe('Auction drafts (e2e)', () => {
 
   // Unique per run so repeated local runs never collide on the unique indexes.
   const run = Date.now();
+
+  /**
+   * Titles carry the run too, not just the emails and slugs. An auction row
+   * that outlives its suite — a timeout skips afterAll — is otherwise
+   * indistinguishable from real data, and cleaning one up means matching a
+   * title that every run of every suite shares.
+   */
+  const auctionTitle = `Vintage Seiko 5 Automatic ${run}`;
   const sellerEmail = `auction-seller-${run}@example.com`;
   const strangerEmail = `auction-stranger-${run}@example.com`;
   const adminEmail = `auction-admin-${run}@example.com`;
@@ -34,7 +42,7 @@ describe('Auction drafts (e2e)', () => {
   let inactiveCategoryId: string;
 
   const draftBody = () => ({
-    title: 'Vintage Seiko 5 Automatic',
+    title: auctionTitle,
     description: 'Serviced last year, original bracelet.',
     categoryId: activeCategoryId,
     condition: 'USED',
@@ -121,7 +129,7 @@ describe('Auction drafts (e2e)', () => {
         .expect(201);
 
       expect(response.body).toMatchObject({
-        title: 'Vintage Seiko 5 Automatic',
+        title: auctionTitle,
         description: 'Serviced last year, original bracelet.',
         condition: 'USED',
         status: 'DRAFT',
@@ -561,7 +569,7 @@ describe('Auction drafts (e2e)', () => {
         expect(response.body).toMatchObject({
           id: draftId,
           reserveMet: false,
-          title: 'Vintage Seiko 5 Automatic'
+          title: auctionTitle
         });
       });
 
@@ -793,7 +801,7 @@ describe('Auction drafts (e2e)', () => {
       expect(response.body).toMatchObject({
         id: auctionId,
         status: 'SCHEDULED',
-        title: 'Vintage Seiko 5 Automatic'
+        title: auctionTitle
       });
     });
 
@@ -1446,23 +1454,48 @@ describe('Auction drafts (e2e)', () => {
       return id;
     };
 
-    /** Ids from the hot list, in the order the API returned them. */
-    /**
-     * Ids from the hot list, in the order the API returned them.
-     *
-     * Asks for the maximum page unless a test is specifically about paging.
-     * The list is shared with every other auction in the database, and the
-     * default page of twenty is easily filled by leftovers from an earlier run
-     * that never reached its teardown — a test looking for its own auction
-     * would then fail for reasons that have nothing to do with the ranking.
-     */
-    const hotIds = async (query = '?limit=100') => {
+    type HotPage = {
+      items: { id: string }[];
+      meta: { totalPages: number };
+    };
+
+    const hotPage = async (query: string) => {
       const response = await request(app.getHttpServer())
         .get(`/auctions${query}`)
         .expect(200);
-      return (response.body as { items: { id: string }[] }).items.map(
-        (item) => item.id
-      );
+
+      return response.body as HotPage;
+    };
+
+    /**
+     * Every id on the hot list, in the order the API returned them.
+     *
+     * Reads all the pages rather than the first one. The list is shared with
+     * every auction in the database — including whatever an earlier run left
+     * behind when it timed out before its teardown — so a test looking for its
+     * own auction on a single page fails once enough leftovers accumulate, for
+     * reasons that have nothing to do with the ranking. Asking for a bigger
+     * page only moves the number at which that happens: this suite has been
+     * fixed twice that way already, at twenty and then at a hundred.
+     *
+     * The loop is bounded by the API's own `totalPages`, so it costs one
+     * request on a clean database and cannot run away on a dirty one.
+     *
+     * A test that is specifically about paging passes its own query and gets
+     * exactly the page it asked for.
+     */
+    const hotIds = async (query?: string) => {
+      if (query) return (await hotPage(query)).items.map((item) => item.id);
+
+      const first = await hotPage('?limit=100');
+      const ids = first.items.map((item) => item.id);
+
+      for (let page = 2; page <= first.meta.totalPages; page += 1) {
+        const next = await hotPage(`?limit=100&page=${page}`);
+        ids.push(...next.items.map((item) => item.id));
+      }
+
+      return ids;
     };
 
     it('is readable by a signed-out visitor', async () => {
