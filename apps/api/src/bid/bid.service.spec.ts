@@ -8,6 +8,7 @@ import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
+import { RealtimeService } from '../realtime/realtime.service';
 import { BidService } from './bid.service';
 
 const AUCTION_ID = '00000000-0000-4000-8000-000000000301';
@@ -25,6 +26,9 @@ const openAuction = (overrides: Record<string, unknown> = {}) => ({
   id: AUCTION_ID,
   sellerId: SELLER_ID,
   status: 'ACTIVE',
+  // NOT-001 reads these to write the outbid notification
+  title: 'Vintage Seiko 5 Automatic',
+  currency: 'THB',
   startingPrice: dec(3000),
   minBidIncrement: dec(100),
   currentPrice: dec(0),
@@ -63,15 +67,18 @@ describe('BidService (BID-001)', () => {
     };
     bid: {
       findUnique: jest.Mock;
+      findFirst: jest.Mock;
       create: jest.Mock;
       findMany: jest.Mock;
       count: jest.Mock;
     };
+    notification: { create: jest.Mock };
     auctionEvent: { create: jest.Mock };
     auctionExtension: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let gateway: { emitToAuction: jest.Mock };
+  let realtime: { emitNotificationCreated: jest.Mock };
 
   /** The auction as it stands after the bid, used to build the broadcast. */
   const auctionAfterBid = (overrides: Record<string, unknown> = {}) => ({
@@ -87,6 +94,7 @@ describe('BidService (BID-001)', () => {
 
   beforeEach(async () => {
     gateway = { emitToAuction: jest.fn() };
+    realtime = { emitNotificationCreated: jest.fn() };
     prisma = {
       auction: {
         findFirst: jest.fn(),
@@ -95,10 +103,13 @@ describe('BidService (BID-001)', () => {
       },
       bid: {
         findUnique: jest.fn(),
+        // NOT-001 — the previous leader; nobody was leading unless a test says so
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn()
       },
+      notification: { create: jest.fn() },
       auctionEvent: { create: jest.fn() },
       auctionExtension: { create: jest.fn() },
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
@@ -108,7 +119,8 @@ describe('BidService (BID-001)', () => {
       providers: [
         BidService,
         { provide: PrismaService, useValue: prisma },
-        { provide: AuctionGateway, useValue: gateway }
+        { provide: AuctionGateway, useValue: gateway },
+        { provide: RealtimeService, useValue: realtime }
       ]
     }).compile();
 
@@ -217,6 +229,93 @@ describe('BidService (BID-001)', () => {
       await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * NOT-001 — the room hears the price, and the person who just lost the lead
+   * hears it personally.
+   */
+  describe('telling the previous leader they were outbid (NOT-001)', () => {
+    const RIVAL_ID = '00000000-0000-4000-8000-0000000004c3';
+
+    /** Somebody was already leading when this bid arrived. */
+    const leadingBid = (bidderId: string) =>
+      prisma.bid.findFirst.mockResolvedValue({ bidderId });
+
+    const writtenNotification = () =>
+      (
+        prisma.notification.create.mock.calls as {
+          data: Record<string, unknown>;
+        }[][]
+      )[0][0].data;
+
+    it('writes the row in the same transaction as the bid', async () => {
+      bidWillBeAccepted();
+      leadingBid(RIVAL_ID);
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(writtenNotification()).toMatchObject({
+        userId: RIVAL_ID,
+        type: 'OUTBID',
+        auctionId: AUCTION_ID,
+        bidId: 'bid-1'
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('pushes it to them once the bid has committed', async () => {
+      bidWillBeAccepted();
+      leadingBid(RIVAL_ID);
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(realtime.emitNotificationCreated).toHaveBeenCalledWith(
+        RIVAL_ID,
+        expect.objectContaining({ type: 'OUTBID' })
+      );
+    });
+
+    // read before the new bid exists, so it cannot pick itself
+    it('looks for the leader by the order settlement uses', async () => {
+      bidWillBeAccepted();
+      leadingBid(RIVAL_ID);
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      const { orderBy } = (
+        prisma.bid.findFirst.mock.calls as { orderBy: unknown }[][]
+      )[0][0];
+      expect(orderBy).toEqual([{ amount: 'desc' }, { sequenceNo: 'asc' }]);
+    });
+
+    it('tells nobody on the first bid of an auction', async () => {
+      bidWillBeAccepted();
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(realtime.emitNotificationCreated).not.toHaveBeenCalled();
+    });
+
+    // somebody raising their own bid has outbid nobody
+    it('says nothing when the leader is the one bidding again', async () => {
+      bidWillBeAccepted();
+      leadingBid(BIDDER_ID);
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('says nothing when a retry is replayed', async () => {
+      prisma.bid.findUnique.mockResolvedValue(bidRow());
+      leadingBid(RIVAL_ID);
+
+      await service.placeBid(AUCTION_ID, BIDDER_ID, validDto());
+
+      expect(realtime.emitNotificationCreated).not.toHaveBeenCalled();
     });
   });
 

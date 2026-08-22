@@ -8,7 +8,10 @@ import {
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PUBLIC_AUCTION_STATUSES } from '../auction/constants/public-auction-status.constant';
+import { LEADING_BID_ORDER } from './constants/leading-bid-order.constant';
+import { outbidNotification } from '../auction/auction-notification.mapper';
 import { AuctionGateway } from '../realtime/auction.gateway';
+import { RealtimeService } from '../realtime/realtime.service';
 import { toBidAcceptedEvent } from './bid-accepted-event.mapper';
 import { bidHistorySelect, toPublicBid } from './bid-history.mapper';
 import { bidSelect, bidWithBidderSelect, toOwnBid } from './bid.mapper';
@@ -27,7 +30,8 @@ const DEFAULT_HISTORY_PAGE_SIZE = 20;
 export class BidService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly gateway: AuctionGateway
+    private readonly gateway: AuctionGateway,
+    private readonly realtime: RealtimeService
   ) {}
 
   /**
@@ -70,6 +74,16 @@ export class BidService {
           auctionId,
           'auction:extension',
           outcome.extension
+        );
+      }
+
+      // NOT-001 — the room hears the price; the person who lost the lead hears
+      // it personally. After the commit for the same reason the broadcast is,
+      // and a replayed retry sends nothing: they were told the first time.
+      if (outcome.outbid) {
+        this.realtime.emitNotificationCreated(
+          outcome.outbid.userId,
+          outcome.outbid
         );
       }
 
@@ -164,6 +178,10 @@ export class BidService {
           id: true,
           sellerId: true,
           status: true,
+          // NOT-001 — an outbid notification has to name the auction it is
+          // about and the money in the right currency.
+          title: true,
+          currency: true,
           startingPrice: true,
           minBidIncrement: true,
           currentPrice: true,
@@ -258,6 +276,17 @@ export class BidService {
         );
       }
 
+      /**
+       * NOT-001 — who was leading a moment ago. Read before the new bid
+       * exists, so it cannot pick itself, and by the same order settlement
+       * uses, so "the person who was winning" means one thing everywhere.
+       */
+      const previousLeader = await tx.bid.findFirst({
+        where: { auctionId },
+        orderBy: LEADING_BID_ORDER,
+        select: { bidderId: true }
+      });
+
       const bid = await tx.bid.create({
         data: {
           auctionId,
@@ -323,8 +352,26 @@ export class BidService {
         }
       });
 
+      /**
+       * NOT-001 — only the person this bid displaced, and only if that is
+       * somebody else. A bidder further down the list was outbid when the bid
+       * above them landed, not now; telling them again every time the price
+       * moves would make the bell useless. Somebody raising their own bid has
+       * outbid nobody.
+       *
+       * Written inside this transaction so a bid on record always has its
+       * notification on record too.
+       */
+      const outbid =
+        previousLeader && previousLeader.bidderId !== bidderId
+          ? outbidNotification(auction, previousLeader.bidderId, bid.id, amount)
+          : null;
+
+      if (outbid) await tx.notification.create({ data: outbid });
+
       return {
         bid: toOwnBid(bid),
+        outbid,
         broadcast: toBidAcceptedEvent(updated, bid),
         // SRS section 5.2 lists auction:extension among the events the platform
         // has to emit. A countdown on screen is wrong the moment the end time
