@@ -7,6 +7,15 @@ import { LiveService } from './live.service';
 
 const AUCTION_ID = '00000000-0000-4000-8000-0000000005a1';
 const VIEWER_ID = '00000000-0000-4000-8000-0000000005b2';
+const SELLER_ID = '00000000-0000-4000-8000-0000000005c3';
+
+/** The signed-in person looking, as the guard hands them to the service. */
+const VIEWER = {
+  id: VIEWER_ID,
+  email: 'viewer@example.com',
+  role: 'USER',
+  status: 'ACTIVE'
+} as const;
 
 const STARTS_AT = new Date('2026-09-01T10:00:00.000Z');
 const ENDS_AT = new Date('2026-09-01T12:00:00.000Z');
@@ -27,17 +36,34 @@ describe('LiveService', () => {
       upsert: jest.Mock;
       updateMany: jest.Mock;
     };
+    bid: { findFirst: jest.Mock; findMany: jest.Mock };
   };
   let auctionService: { findPublicAuction: jest.Mock };
   let gateway: { emitToAuction: jest.Mock };
 
-  /** What the REST read hands back, trimmed to what the lobby uses. */
+  /** What the REST read hands back, trimmed to what the live routes use. */
   const publicAuction = {
     id: AUCTION_ID,
-    status: 'SCHEDULED',
+    status: 'ACTIVE',
+    biddingOpen: true,
+    seller: { id: SELLER_ID },
     scheduledStartAt: STARTS_AT,
     currentEndAt: ENDS_AT
   };
+
+  /** A bid row as bidHistorySelect loads it. */
+  const bidRow = (
+    amount: string,
+    sequenceNo: number,
+    bidderId = VIEWER_ID
+  ) => ({
+    id: `bid-${sequenceNo}`,
+    amount: { toString: () => amount },
+    sequenceNo,
+    placedAt: JOINED_AT,
+    bidderId,
+    bidder: { profile: { displayName: 'Somchai' } }
+  });
 
   beforeEach(async () => {
     prisma = {
@@ -47,6 +73,10 @@ describe('LiveService', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockResolvedValue({ joinedAt: JOINED_AT }),
         updateMany: jest.fn().mockResolvedValue({ count: 0 })
+      },
+      bid: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([])
       }
     };
     auctionService = {
@@ -82,7 +112,7 @@ describe('LiveService', () => {
 
   describe('the lobby read (LIV-001)', () => {
     it('returns the auction through the same read the REST route uses', async () => {
-      const lobby = await service.getLobby(AUCTION_ID, VIEWER_ID);
+      const lobby = await service.getLobby(AUCTION_ID, VIEWER);
 
       expect(auctionService.findPublicAuction).toHaveBeenCalledWith(
         AUCTION_ID,
@@ -126,13 +156,13 @@ describe('LiveService', () => {
           joinedAt: JOINED_AT
         });
 
-        const lobby = await service.getLobby(AUCTION_ID, VIEWER_ID);
+        const lobby = await service.getLobby(AUCTION_ID, VIEWER);
 
         expect(lobby.you).toEqual({ joined: true, joinedAt: JOINED_AT });
       });
 
       it('reports a signed-in viewer who has not joined', async () => {
-        const lobby = await service.getLobby(AUCTION_ID, VIEWER_ID);
+        const lobby = await service.getLobby(AUCTION_ID, VIEWER);
 
         expect(lobby.you).toEqual({ joined: false, joinedAt: null });
       });
@@ -144,7 +174,7 @@ describe('LiveService', () => {
           joinedAt: JOINED_AT
         });
 
-        const lobby = await service.getLobby(AUCTION_ID, VIEWER_ID);
+        const lobby = await service.getLobby(AUCTION_ID, VIEWER);
 
         expect(lobby.you).toEqual({ joined: false, joinedAt: null });
       });
@@ -158,6 +188,115 @@ describe('LiveService', () => {
       await expect(service.getLobby(AUCTION_ID)).rejects.toBeInstanceOf(
         NotFoundException
       );
+    });
+  });
+
+  describe('the arena read (LIV-002)', () => {
+    /** The bidding so far, newest first. */
+    const bidding = (...bids: ReturnType<typeof bidRow>[]) => {
+      prisma.bid.findFirst.mockResolvedValue(bids[0] ?? null);
+      prisma.bid.findMany.mockResolvedValue(bids);
+    };
+
+    it('carries everything the lobby does', async () => {
+      prisma.auctionParticipant.count.mockResolvedValue(4);
+
+      const arena = await service.getArena(AUCTION_ID);
+
+      expect(arena.auction).toBe(publicAuction);
+      expect(arena.participantCount).toBe(4);
+      expect(arena.countdown).toMatchObject({ endsAt: ENDS_AT });
+    });
+
+    it('names the leader, masked', async () => {
+      bidding(bidRow('3100', 7));
+
+      const arena = await service.getArena(AUCTION_ID);
+
+      expect(arena.leader).toMatchObject({
+        amount: '3100',
+        sequenceNo: 7,
+        bidder: 'S***i'
+      });
+    });
+
+    // AUC-007 settles by the same order, so the person leading is the person
+    // who would win
+    it('picks the leader by amount, breaking a tie on who got there first', async () => {
+      bidding(bidRow('3100', 7));
+
+      await service.getArena(AUCTION_ID);
+
+      const { orderBy } = (
+        prisma.bid.findFirst.mock.calls as { orderBy: unknown }[][]
+      )[0][0];
+      expect(orderBy).toEqual([{ amount: 'desc' }, { sequenceNo: 'asc' }]);
+    });
+
+    it('never sends a bidder id, only a mask and whether it is yours', async () => {
+      bidding(bidRow('3100', 7, VIEWER_ID));
+
+      const arena = await service.getArena(AUCTION_ID, VIEWER);
+
+      expect(arena.leader).not.toHaveProperty('bidderId');
+      expect(arena.leader).toMatchObject({ isYours: true });
+    });
+
+    it('has no leader before anybody has bid', async () => {
+      const arena = await service.getArena(AUCTION_ID);
+
+      expect(arena.leader).toBeNull();
+      expect(arena.recentBids).toEqual([]);
+    });
+
+    it('lists the latest bids newest first, capped', async () => {
+      bidding(bidRow('3100', 7), bidRow('3000', 6));
+
+      const arena = await service.getArena(AUCTION_ID);
+
+      const { orderBy, take } = (
+        prisma.bid.findMany.mock.calls as { orderBy: unknown; take: number }[][]
+      )[0][0];
+      expect(orderBy).toEqual({ sequenceNo: 'desc' });
+      expect(take).toBe(10);
+      expect(arena.recentBids.map((bid) => bid.sequenceNo)).toEqual([7, 6]);
+    });
+
+    describe('whether the person looking may bid', () => {
+      it('says nothing at all to a visitor who is not signed in', async () => {
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.you).toBeNull();
+      });
+
+      it('tells a signed-in user they may bid on a running auction', async () => {
+        const arena = await service.getArena(AUCTION_ID, VIEWER);
+
+        expect(arena.you).toMatchObject({ canBid: true, blockedBy: null });
+      });
+
+      it('tells the seller why they may not', async () => {
+        const arena = await service.getArena(AUCTION_ID, {
+          ...VIEWER,
+          id: SELLER_ID
+        });
+
+        expect(arena.you).toMatchObject({
+          canBid: false,
+          blockedBy: 'YOU_ARE_THE_SELLER'
+        });
+      });
+
+      it('keeps the joined state the lobby reports', async () => {
+        prisma.auctionParticipant.findUnique.mockResolvedValue({
+          status: 'JOINED',
+          joinedAt: JOINED_AT
+        });
+
+        const arena = await service.getArena(AUCTION_ID, VIEWER);
+
+        expect(arena.you).toMatchObject({ joined: true, joinedAt: JOINED_AT });
+      });
     });
   });
 
