@@ -12,6 +12,7 @@ const auctionRow = (
   overrides: {
     currentPrice?: Prisma.Decimal;
     reservePrice?: Prisma.Decimal | null;
+    bidCount?: number;
   } = {}
 ) => ({
   id: AUCTION_ID,
@@ -108,6 +109,40 @@ describe('auction.mapper (AUC-003)', () => {
 
       expect(Object.keys(withReserve).sort()).toEqual(
         Object.keys(withoutReserve).sort()
+      );
+    });
+  });
+
+  /**
+   * LIV-002 — the arena shows the lowest amount that will be accepted, and it
+   * has to be the same number BID-001 measures a bid against.
+   */
+  describe('minimumNextBid', () => {
+    it('is the starting price before anybody has bid', () => {
+      const publicView = toPublicAuction(
+        auctionRow({ currentPrice: dec(0), bidCount: 0 })
+      );
+
+      expect(publicView.minimumNextBid).toBe('3000');
+    });
+
+    it('is the current price plus the increment once bidding has started', () => {
+      const publicView = toPublicAuction(
+        auctionRow({ currentPrice: dec(3200), bidCount: 4 })
+      );
+
+      expect(publicView.minimumNextBid).toBe('3300');
+    });
+
+    // a currentPrice of 0 means "no price yet", not "the price is zero" —
+    // reading it literally would let the opening bid come in at one increment
+    it('does not let the opening bid undercut the starting price', () => {
+      const publicView = toPublicAuction(
+        auctionRow({ currentPrice: dec(0), bidCount: 0 })
+      );
+
+      expect(Number(publicView.minimumNextBid)).toBeGreaterThanOrEqual(
+        Number(publicView.startingPrice)
       );
     });
   });
