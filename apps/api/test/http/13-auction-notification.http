@@ -12,8 +12,7 @@
 # 💡 ทุกแถวถูกเขียนใน transaction เดียวกับเหตุการณ์ที่ทำให้เกิด (SRS ข้อ 6)
 #    ประมูลที่ปิดสำเร็จจึงมีแจ้งเตือนครบเสมอ ไม่มีกรณี "ปิดแล้วแต่ไม่มีใครรู้"
 #
-# ⚠️ ตอนนี้ยังส่งออกทาง WebSocket ไม่ได้ — RealtimeService ยังเป็น stub ที่
-#    log อย่างเดียว ดูหัวข้อสุดท้ายของไฟล์นี้
+# 💡 ทุกแจ้งเตือน push เข้า WebSocket ห้องส่วนตัวของเจ้าของทันทีด้วย ดูหัวข้อ 4
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -193,24 +192,41 @@ GET {{baseUrl}}/notifications/unread-count
 Authorization: Bearer {{buyerToken}}
 
 #=============================================================================
-# 4. ⚠️ ที่ยังส่งออกทาง WebSocket ไม่ได้
+# 4. ส่งผ่าน WebSocket — ห้องส่วนตัวของแต่ละคน
 #=============================================================================
 #
-# เกณฑ์ NOT-001..004 เขียนว่า "ส่งผ่านแอป/WebSocket" — ครึ่งแรก (บันทึกใน
-# ระบบ) ทำครบแล้วและอ่านได้จาก GET /notifications ข้างบน
+# ทุก request ข้างบนนอกจากเขียนแถวลง DB แล้ว ยัง push เข้า WebSocket ให้เจ้าของ
+# แจ้งเตือนนั้นทันทีด้วย ทดสอบด้วย .http ไม่ได้ ต้องต่อ socket จริง
 #
-# ครึ่งหลังยังไม่ได้ทำ: RealtimeService.emitNotificationCreated ยังเป็น stub
-# ที่ log อย่างเดียว ดูได้จาก console ของ API ว่ามีบรรทัด
+# namespace: /user   (คนละตัวกับ /auctions ที่เป็นห้องประมูล)
+# event:     notification:created  และ  order:status_changed
 #
-#   [RealtimeService] [stub] notification:created -> user:<id> {...}
+# ⚠️ ต้องแนบ token ตอนต่อ ไม่งั้นถูกตัดทันที — ต่างจาก /auctions ที่ไม่ต้อง
+#    เพราะห้องประมูลเป็นสาธารณะ แต่ที่นี่ทุกอย่างจ่าหน้าถึงคนเดียว
 #
-# โผล่ทุกครั้งที่ยิง request ข้างบน แปลว่า call site ถูกต้องแล้ว เหลือแค่
-# เปลี่ยนไส้ในให้ emit จริง ซึ่งต้องมี:
-#   1. ห้อง per-user (`user:<id>`) ใน gateway
-#   2. WebSocket authentication — ตอนนี้ยังไม่มีที่ไหนในโปรเจคเลย
-#      gateway ของ auction ตั้งใจไม่ auth เพราะห้องประมูลเป็นสาธารณะ
+#   const socket = io('http://localhost:4000/user', {
+#     transports: ['websocket'],
+#     auth: { token: '<access token>' }     // ใส่ 'Bearer x' ก็ได้
+#   });
 #
-# ⚠️ RealtimeService ถูกเรียกจาก checkout (Dev 3), shipment (Dev 3) และ
-#    chat ด้วย การทำข้อ 1-2 จะทำให้ call site ของทุกคนเริ่มส่งจริงพร้อมกัน
-#    เป็นการแก้ให้ถูก ไม่ใช่การทำพัง แต่ควรบอกทีมก่อน
+#   socket.on('connection:ready',    (p) => console.log('ต่อได้', p.userId));
+#   socket.on('connection:rejected', (p) => console.log('ถูกปฏิเสธ', p.reason));
+#   socket.on('notification:created', (n) => console.log(n.type, n.message));
+#
+# เคสที่ถูกตัดทั้งหมด (ตอบ connection:rejected { reason: 'Unauthorized' }
+# เหมือนกันหมด ไม่บอกว่าผิดตรงไหน เหมือนฝั่ง HTTP):
+#   - ไม่ส่ง token
+#   - token ปลอม
+#   - token หมดอายุ
+#   - token ของ account ที่ไม่มีอยู่แล้ว
+#   - account ที่ถูกระงับ (ADM-002 — ตัดทันที ไม่รอ token หมดอายุ)
+#
+# วิธีดูของจริงเร็วๆ:
+#   1. เปิด socket ด้วย token ของ buyer ค้างไว้
+#   2. ให้คนอื่นบิดแซง buyer (หัวข้อ 1 ข้างบน)
+#   3. socket จะได้ notification:created ทันที ก้อนเดียวกับที่อยู่ใน
+#      GET /notifications เป๊ะ
+#
+# 💡 message:sent (ห้อง conversation) ยังเป็น stub อยู่ — กฎว่าใครเข้าห้อง
+#    สนทนาไหนได้เป็นของโมดูล chat ฝั่งประมูลไม่ควรตัดสินใจแทน
 #=============================================================================
