@@ -343,6 +343,71 @@ describe('LiveService', () => {
       });
     });
 
+    // LIV-004 — the result panel's data, on the same read the arena uses
+    describe('the result (LIV-004)', () => {
+      /** The auction as it looks once settlement has run. */
+      const settled = (status: 'SOLD' | 'UNSOLD', soldPrice: string | null) =>
+        auctionService.findPublicAuction.mockResolvedValue({
+          ...publicAuction,
+          status,
+          biddingOpen: false,
+          soldPrice,
+          currentPrice: '5000',
+          bidCount: 3,
+          reserveMet: status === 'SOLD',
+          endedAt: ENDS_AT
+        });
+
+      it('reports nothing while the auction is still running', async () => {
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.result).toBeNull();
+      });
+
+      it('reports a sale with its price and winner', async () => {
+        settled('SOLD', '5000');
+        prisma.bid.findFirst.mockResolvedValue(bidRow('5000', 3));
+
+        const arena = await service.getArena(AUCTION_ID, VIEWER);
+
+        expect(arena.result).toMatchObject({
+          outcome: 'SOLD',
+          soldPrice: '5000',
+          finalPrice: '5000',
+          endedAt: ENDS_AT
+        });
+        expect(arena.result?.winner).toMatchObject({
+          bidder: 'S***i',
+          isYours: true
+        });
+      });
+
+      it('reports an auction that did not sell', async () => {
+        settled('UNSOLD', null);
+
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.result).toMatchObject({
+          outcome: 'UNSOLD',
+          soldPrice: null,
+          finalPrice: '5000',
+          winner: null
+        });
+      });
+
+      // the recorded winner, not one recomputed from the bids
+      it('reads the winner through the auction it was recorded against', async () => {
+        settled('SOLD', '5000');
+
+        await service.getArena(AUCTION_ID);
+
+        const calls = prisma.bid.findFirst.mock.calls as {
+          where: Record<string, unknown>;
+        }[][];
+        expect(calls[1][0].where).toEqual({ wonAuction: { id: AUCTION_ID } });
+      });
+    });
+
     describe('whether the person looking may bid', () => {
       it('says nothing at all to a visitor who is not signed in', async () => {
         const arena = await service.getArena(AUCTION_ID);

@@ -1,5 +1,5 @@
 ###############################################################################
-# LIVE — Lobby, Arena และ Sudden death (ฝั่ง Dev 4)
+# LIVE — Lobby, Arena, Sudden death และผลลัพธ์ (ฝั่ง Dev 4)
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: LIV-001 Lobby — ข้อมูลประมูล, จำนวนผู้เข้าร่วมแบบเรียลไทม์,
@@ -8,6 +8,8 @@
 # เวลาที่เหลือ, ราคาต่ำสุดที่บิดต่อได้, reserve-met และสถานะปุ่มบิด
 #                    LIV-003 Sudden death — จำนวนครั้งที่ต่อเวลา เวลาสิ้นสุดใหม่
 # และสถานะเร่งด่วน
+#                    LIV-004 ผลลัพธ์ — Sold/Unsold, ราคาสุดท้าย และผู้ชนะแบบ
+# ปิดบังชื่อ
 #
 # 💡 เวลานับถอยหลังส่งมาสองแบบคู่กัน ตั้งใจให้ซ้ำ:
 #    - startsAt / endsAt = เวลาจริง ใช้ได้ถ้านาฬิกาเครื่อง client ตรง
@@ -283,7 +285,66 @@ GET {{baseUrl}}/auctions/{{liveId}}/arena
 Authorization: Bearer {{buyerToken}}
 
 #=============================================================================
-# 8. เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ (LIV-001)
+# 8. ผลลัพธ์เมื่อประมูลจบ (LIV-004)
+#=============================================================================
+#
+# `result` ติดมากับ arena เหมือน suddenDeath — เป็น null ตราบใดที่ยังไม่จบ
+# ซึ่งเป็นสัญญาณให้จอรู้ว่ายังต้องแสดง arena อยู่ ไม่ใช่หน้าผล
+#
+# {
+#   "outcome": "SOLD",          // หรือ "UNSOLD"
+#   "endedAt": "…",
+#   "soldPrice": "5000",        // null ถ้าไม่ได้ขาย — เพราะไม่มีการขาย
+#   "finalPrice": "5000",       // ราคาที่บิดไปถึง null ถ้าไม่มีใครบิดเลย
+#   "bidCount": 1,
+#   "reserveMet": true,
+#   "winner": { "amount": "5000", "bidder": "S***i", "isYours": false }
+# }
+#
+# ⚠️ UNSOLD มี winner = null เสมอ แม้จะมีคนบิดสูงสุดอยู่ — คนนั้นไม่ได้ชนะ
+#    การใส่ชื่อเขาไว้เท่ากับโกหกบนจอ
+#=============================================================================
+
+### ยังไม่จบ. expect result = null
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+
+### ทำให้หมดเวลา แล้วให้ read repair ปิดประมูลให้ (AUC-007)
+#
+#   docker exec docker-postgres-1 psql -U bidnest -d bidnest_db -c \
+#     "update auctions set current_end_at = now() - interval '1 second' \
+#      where id = '<liveId>';"
+#
+# แล้วยิง GET /auctions/:id หนึ่งครั้งเพื่อ trigger การปิด
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### ดูผล. expect 200
+# {{liveId}} ไม่ได้ตั้ง reservePrice ไว้ (ดูหัวข้อ 5) จึงถือว่า reserveMet เสมอ
+# ตรวจ: auction.status = SOLD, auction.soldPrice มีค่า
+#       result.outcome = SOLD, result.winner.bidder เป็นชื่อปิดบัง
+#       result.endedAt มีค่า
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+Authorization: Bearer {{buyerToken}}
+
+### คนอื่นเห็นผู้ชนะแบบปิดบังเหมือนกัน. expect isYours = false
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+
+### ประมูลที่จบแล้วเข้าร่วมไม่ได้. expect 409
+# (นี่คือเคสที่หัวข้อ 5 เขียนค้างไว้ ตอนนี้มี id จริงให้ยิงแล้ว)
+POST {{baseUrl}}/auctions/{{liveId}}/participants
+Authorization: Bearer {{buyerToken}}
+
+### เคส UNSOLD ต้องใช้ประมูลที่มี reservePrice
+# {{lobbyId}} ตั้ง reserve 4500 ไว้ ถ้าบิดแค่ 3000 แล้วปล่อยจบ จะได้ UNSOLD
+# ตรวจ: result.outcome = UNSOLD, soldPrice = null, winner = null
+#       แต่ finalPrice = "3000" — "ราคาสุดท้าย" ยังต้องบอกว่าบิดไปถึงไหน
+#       และต้องไม่มี 4500 โผล่ที่ไหนเลย (AUC-003 ยังคุมอยู่หลังจบ)
+#
+# ⚠️ ตอน broadcast: room จะได้ `auction:ended` ตอนที่ปิดประมูลสำเร็จ
+#    ทั้งจาก read repair และจาก scheduler — ประกาศครั้งเดียวเสมอ
+#    ต่อ WebSocket ค้างไว้แล้วทำตามขั้นตอนข้างบนจะเห็น event นี้
+
+#=============================================================================
+# 9. เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ (LIV-001)
 #=============================================================================
 #
 # AuctionLifecycleService เดินทุก 10 วินาที: SCHEDULED ที่ถึงเวลาแล้วจะกลาย
