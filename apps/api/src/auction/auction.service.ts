@@ -26,10 +26,13 @@ import {
   toOwnerAuction,
   toPublicAuction
 } from './auction.mapper';
-import { HOT_AUCTION_ORDER } from './constants/hot-auction-order.constant';
+import {
+  AUCTION_SECTION_QUERIES,
+  DEFAULT_AUCTION_SECTION
+} from './constants/auction-section.constant';
 import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
-import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
+import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import {
   assertAuctionIsCancellable,
@@ -40,7 +43,7 @@ import { findAuctionAudience } from './utils/find-auction-audience.util';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
 
 /** Matches the product catalogue, so both lists page the same way. */
-const DEFAULT_HOT_PAGE_SIZE = 20;
+const DEFAULT_LIST_PAGE_SIZE = 20;
 
 @Injectable()
 export class AuctionService {
@@ -287,23 +290,32 @@ export class AuctionService {
   }
 
   /**
-   * AUC-008 — the Hot Auctions list: everything currently running, ranked by
-   * how much bidding it has attracted. Only ACTIVE auctions appear, so a
-   * scheduled one waiting to open is not "hot" yet and a finished one has
-   * dropped off.
+   * AUC-008 — the auction list. Asking for nothing is the Hot Auctions list:
+   * everything currently running, ranked by how much bidding it has
+   * attracted, so a scheduled auction waiting to open is not "hot" yet and a
+   * finished one has dropped off.
    *
-   * The ordering lives in HOT_AUCTION_ORDER and is not a query parameter —
-   * "no special flags or hidden scoring" means a caller cannot ask for a
-   * different arrangement, and there is no promotion or weighting to find.
+   * A `section` picks a different arrangement of what a buyer may already
+   * see — ending soon, starting soon, recently ended — for the four cards on
+   * the home page. Each section's filter and ordering are fixed in
+   * AUCTION_SECTION_QUERIES, so naming a section is the only choice on
+   * offer: there is still no `sort` or `status` to reach for, which is what
+   * keeps "no special flags or hidden scoring" true of the endpoint as a
+   * whole rather than only of its default.
    *
-   * Mapped through toPublicAuction, so the reserve stays out of the list the
-   * same way it stays out of a single read (AUC-003).
+   * Mapped through toPublicAuction, so the reserve stays out of every
+   * section the same way it stays out of a single read (AUC-003).
    */
-  async listHotAuctions(dto: ListHotAuctionsDto) {
+  async listAuctions(dto: ListAuctionsDto) {
     const page = dto.page ?? 1;
-    const limit = dto.limit ?? DEFAULT_HOT_PAGE_SIZE;
+    const limit = dto.limit ?? DEFAULT_LIST_PAGE_SIZE;
+    const section = dto.section ?? DEFAULT_AUCTION_SECTION;
+    const { where: sectionWhere, orderBy } = AUCTION_SECTION_QUERIES[section];
+
+    // Applied here rather than in each section so a section added later
+    // cannot forget it and start listing auctions an admin has removed.
     const where: Prisma.AuctionWhereInput = {
-      status: 'ACTIVE',
+      ...sectionWhere,
       deletedAt: null
     };
 
@@ -311,7 +323,7 @@ export class AuctionService {
       this.prisma.auction.findMany({
         where,
         select: auctionRowSelect,
-        orderBy: HOT_AUCTION_ORDER,
+        orderBy,
         skip: (page - 1) * limit,
         take: limit
       }),

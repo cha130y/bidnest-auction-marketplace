@@ -1634,6 +1634,214 @@ describe('Auction drafts (e2e)', () => {
     it('rejects a page that is not a positive number', () => {
       return request(app.getHttpServer()).get('/auctions?page=0').expect(400);
     });
+
+    /**
+     * The three sections beyond `hot` come from the home page design rather
+     * than the SRS. These tests are about the two things a mocked query cannot
+     * show: that the ordering holds against a real database, and that a
+     * section never surfaces an auction the single read hides (AUC-005).
+     */
+    describe('sections', () => {
+      /** Publishes an auction whose start is still ahead of it. */
+      const scheduledAuction = async (startsInHours: number) => {
+        const created = await request(app.getHttpServer())
+          .post('/auctions/drafts')
+          .set('Authorization', authOf(sellerId))
+          .send({
+            ...draftBody(),
+            scheduledStartAt: hoursFromNow(startsInHours).toISOString(),
+            scheduledEndAt: hoursFromNow(startsInHours + 4).toISOString()
+          })
+          .expect(201);
+        const id = (created.body as { id: string }).id;
+
+        await request(app.getHttpServer())
+          .post(`/auctions/drafts/${id}/publish`)
+          .set('Authorization', authOf(sellerId))
+          .expect(200);
+
+        return id;
+      };
+
+      /** A settled auction, with the outcome recorded however long ago. */
+      const endedAuction = async (
+        status: 'SOLD' | 'UNSOLD',
+        endedHoursAgo: number
+      ) => {
+        const id = await liveAuction(1, 5);
+
+        await prisma.auction.update({
+          where: { id },
+          data: { status, endedAt: hoursFromNow(-endedHoursAgo) }
+        });
+
+        return id;
+      };
+
+      /** Paged through for the reason hotIds explains. */
+      const sectionIds = async (section: string) => {
+        const first = await hotPage(`?limit=100&section=${section}`);
+        const ids = first.items.map((item) => item.id);
+
+        for (let page = 2; page <= first.meta.totalPages; page += 1) {
+          const next = await hotPage(
+            `?limit=100&page=${page}&section=${section}`
+          );
+          ids.push(...next.items.map((item) => item.id));
+        }
+
+        return ids;
+      };
+
+      const SECTIONS = [
+        'hot',
+        'ending-soon',
+        'starting-soon',
+        'recently-ended'
+      ];
+
+      /**
+       * The one test that proves a section reaches the database at all: the
+       * same two auctions come back in opposite orders, because hot ranks by
+       * bidding and ending-soon ranks by the clock.
+       */
+      it('orders ending-soon by the clock, not by the bidding', async () => {
+        const busyButLater = await liveAuction(9, 8);
+        const quietButSooner = await liveAuction(1, 2);
+
+        const hot = await hotIds();
+        const ending = await sectionIds('ending-soon');
+
+        expect(hot.indexOf(busyButLater)).toBeLessThan(
+          hot.indexOf(quietButSooner)
+        );
+        expect(ending.indexOf(quietButSooner)).toBeLessThan(
+          ending.indexOf(busyButLater)
+        );
+      });
+
+      it('lists starting-soon from the scheduled ones, soonest first', async () => {
+        const later = await scheduledAuction(9);
+        const sooner = await scheduledAuction(2);
+        const running = await liveAuction(1, 5);
+
+        const ids = await sectionIds('starting-soon');
+
+        expect(ids.indexOf(sooner)).toBeLessThan(ids.indexOf(later));
+        expect(ids).not.toContain(running);
+      });
+
+      it('lists recently-ended newest first, whether sold or not', async () => {
+        const older = await endedAuction('SOLD', 6);
+        const newer = await endedAuction('UNSOLD', 1);
+        const running = await liveAuction(1, 5);
+
+        const ids = await sectionIds('recently-ended');
+
+        expect(ids.indexOf(newer)).toBeLessThan(ids.indexOf(older));
+        expect(ids).not.toContain(running);
+      });
+
+      /**
+       * AUC-005 — CANCELLED is not a public status, so an auction an admin or
+       * a seller withdrew must not reappear as a result. This is the section
+       * most likely to get it wrong, because it is the one that looks for
+       * auctions that are over.
+       */
+      it('keeps a cancelled auction out of recently-ended', async () => {
+        const cancelled = await liveAuction(1, 5);
+        await prisma.auction.update({
+          where: { id: cancelled },
+          data: {
+            status: 'CANCELLED',
+            endedAt: new Date(),
+            cancellationReason: 'Item no longer available'
+          }
+        });
+
+        const ids = await sectionIds('recently-ended');
+
+        expect(ids).not.toContain(cancelled);
+      });
+
+      it.each(SECTIONS)(
+        'hides a soft-deleted auction from %s',
+        async (section) => {
+          const deleted =
+            section === 'starting-soon'
+              ? await scheduledAuction(3)
+              : section === 'recently-ended'
+                ? await endedAuction('SOLD', 1)
+                : await liveAuction(1, 5);
+
+          await prisma.auction.update({
+            where: { id: deleted },
+            data: { deletedAt: new Date() }
+          });
+
+          expect(await sectionIds(section)).not.toContain(deleted);
+        }
+      );
+
+      // AUC-003 — every section is buyer-facing, so the same rule holds
+      it.each(SECTIONS)(
+        'never exposes the reserve through %s',
+        async (section) => {
+          await liveAuction(1, 5);
+          await scheduledAuction(3);
+          await endedAuction('SOLD', 1);
+
+          const response = await request(app.getHttpServer())
+            .get(`/auctions?section=${section}`)
+            .expect(200);
+
+          const body = response.body as { items: Record<string, unknown>[] };
+          expect(body.items.every((item) => !('reservePrice' in item))).toBe(
+            true
+          );
+          expectNoReserve(body.items, 4500);
+        }
+      );
+
+      /**
+       * The totals have to describe the section, not the table. A count taken
+       * from the wrong filter is the failure that makes a "12 starting soon"
+       * label lie without anything looking broken.
+       */
+      it('counts the section rather than everything public', async () => {
+        await scheduledAuction(3);
+        await liveAuction(1, 5);
+
+        const response = await request(app.getHttpServer())
+          .get('/auctions?section=starting-soon&limit=1')
+          .expect(200);
+
+        const meta = (response.body as { meta: { total: number } }).meta;
+        const scheduledInDatabase = await prisma.auction.count({
+          where: { status: 'SCHEDULED', deletedAt: null }
+        });
+
+        expect(meta.total).toBe(scheduledInDatabase);
+      });
+
+      // a screen asking for a section that does not exist has a bug, and
+      // answering it with the hot list would hide that
+      it('rejects a section it does not have', () => {
+        return request(app.getHttpServer())
+          .get('/auctions?section=most-expensive')
+          .expect(400);
+      });
+
+      it('still reads the hot list when no section is asked for', async () => {
+        const running = await liveAuction(4, 5);
+        const scheduled = await scheduledAuction(3);
+
+        const ids = await hotIds();
+
+        expect(ids).toContain(running);
+        expect(ids).not.toContain(scheduled);
+      });
+    });
   });
 
   /**
