@@ -7,6 +7,7 @@ import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AuctionService } from './auction.service';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 
@@ -116,11 +117,14 @@ describe('AuctionService', () => {
     };
     auctionEvent: { createMany: jest.Mock; create: jest.Mock };
     auctionImage: { deleteMany: jest.Mock; createMany: jest.Mock };
-    bid: { findFirst: jest.Mock };
+    bid: { findFirst: jest.Mock; findMany: jest.Mock };
+    watchlist: { findMany: jest.Mock };
+    notification: { createMany: jest.Mock };
     category: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
   let gateway: { emitToAuction: jest.Mock };
+  let realtime: { emitNotificationCreated: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -135,19 +139,23 @@ describe('AuctionService', () => {
       },
       auctionEvent: { createMany: jest.fn(), create: jest.fn() },
       auctionImage: { deleteMany: jest.fn(), createMany: jest.fn() },
-      bid: { findFirst: jest.fn() },
+      bid: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      watchlist: { findMany: jest.fn().mockResolvedValue([]) },
+      notification: { createMany: jest.fn() },
       category: { findUnique: jest.fn() },
       // Hands the callback the same mock, so assertions can read every call the
       // transaction made without a second layer of fakes.
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
     };
     gateway = { emitToAuction: jest.fn() };
+    realtime = { emitNotificationCreated: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuctionService,
         { provide: PrismaService, useValue: prisma },
-        { provide: AuctionGateway, useValue: gateway }
+        { provide: AuctionGateway, useValue: gateway },
+        { provide: RealtimeService, useValue: realtime }
       ]
     }).compile();
 
@@ -1061,6 +1069,79 @@ describe('AuctionService', () => {
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
 
+    /**
+     * NOT-004 — everybody who bid on it or was watching was waiting on
+     * something that is not going to happen now.
+     */
+    describe('telling the people who were following it (NOT-004)', () => {
+      const WATCHER_ID = '00000000-0000-4000-8000-0000000004f6';
+
+      const writtenRows = () =>
+        (
+          prisma.notification.createMany.mock.calls as {
+            data: { userId: string; type: string; message: string }[];
+          }[][]
+        )[0][0].data;
+
+      it('writes a row for each of them, in the cancelling transaction', async () => {
+        cancelSucceeds(cancellableRow());
+        prisma.watchlist.findMany.mockResolvedValue([{ userId: WATCHER_ID }]);
+
+        await service.cancelOwnAuction(DRAFT_ID, SELLER_ID, 'Sold elsewhere');
+
+        expect(writtenRows()).toEqual([
+          expect.objectContaining({
+            userId: WATCHER_ID,
+            type: 'AUCTION_CANCELLED',
+            auctionId: DRAFT_ID
+          })
+        ]);
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+
+      it('passes the seller’s reason on to them', async () => {
+        cancelSucceeds(cancellableRow());
+        prisma.watchlist.findMany.mockResolvedValue([{ userId: WATCHER_ID }]);
+
+        await service.cancelOwnAuction(DRAFT_ID, SELLER_ID, 'Sold elsewhere');
+
+        expect(writtenRows()[0].message).toContain('Sold elsewhere');
+      });
+
+      // they are the one who just cancelled it
+      it('does not tell the seller', async () => {
+        cancelSucceeds(cancellableRow());
+        prisma.watchlist.findMany.mockResolvedValue([{ userId: SELLER_ID }]);
+
+        await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+        expect(writtenRows()).toEqual([]);
+      });
+
+      it('pushes each row to its owner after the commit', async () => {
+        cancelSucceeds(cancellableRow());
+        prisma.watchlist.findMany.mockResolvedValue([{ userId: WATCHER_ID }]);
+
+        await service.cancelOwnAuction(DRAFT_ID, SELLER_ID);
+
+        expect(realtime.emitNotificationCreated).toHaveBeenCalledWith(
+          WATCHER_ID,
+          expect.objectContaining({ type: 'AUCTION_CANCELLED' })
+        );
+      });
+
+      it('sends nothing when the guarded write matched no row', async () => {
+        prisma.auction.findFirst.mockResolvedValue(cancellableRow());
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+        prisma.watchlist.findMany.mockResolvedValue([{ userId: WATCHER_ID }]);
+
+        await expect(
+          service.cancelOwnAuction(DRAFT_ID, SELLER_ID)
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(realtime.emitNotificationCreated).not.toHaveBeenCalled();
+      });
+    });
+
     it('reports a conflict when the guarded write matches no row', async () => {
       prisma.auction.findFirst.mockResolvedValue(cancellableRow());
       prisma.auction.updateMany.mockResolvedValue({ count: 0 });
@@ -1091,6 +1172,10 @@ describe('AuctionService', () => {
       currentEndAt: new Date(Date.now() - 60 * 1000),
       reservePrice: dec(4500),
       bidCount: 1,
+      // NOT-002 / NOT-003 read these to write the notifications
+      title: 'Vintage Seiko 5 Automatic',
+      currency: 'THB',
+      sellerId: SELLER_ID,
       ...overrides
     });
 
@@ -1339,6 +1424,139 @@ describe('AuctionService', () => {
         await service.settleAuction(DRAFT_ID);
 
         expect(JSON.stringify(announcement()[2])).not.toContain('4500');
+      });
+    });
+
+    /**
+     * NOT-002 / NOT-003 — the winner is told they won; everybody else with a
+     * stake is told it is over.
+     */
+    describe('notifying about the result (NOT-002 / NOT-003)', () => {
+      const WINNER_ID = 'bidder-1';
+      const WATCHER_ID = '00000000-0000-4000-8000-0000000004d4';
+
+      /** Who bid on it and who was watching. */
+      const audienceOf = (bidders: string[], watchers: string[]) => {
+        prisma.bid.findMany.mockResolvedValue(
+          bidders.map((bidderId) => ({ bidderId }))
+        );
+        prisma.watchlist.findMany.mockResolvedValue(
+          watchers.map((userId) => ({ userId }))
+        );
+      };
+
+      const writtenRows = () =>
+        (
+          prisma.notification.createMany.mock.calls as {
+            data: { userId: string; type: string }[];
+          }[][]
+        )[0][0].data;
+
+      it('tells the winner they won, in the settling transaction', async () => {
+        settleWith(ended(), bid(5000));
+        audienceOf([WINNER_ID], []);
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(writtenRows()).toContainEqual(
+          expect.objectContaining({ userId: WINNER_ID, type: 'AUCTION_WON' })
+        );
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      });
+
+      // two rows about the same event would read as a mistake
+      it('does not also tell the winner the auction ended', async () => {
+        settleWith(ended(), bid(5000));
+        audienceOf([WINNER_ID], [WINNER_ID]);
+
+        await service.settleAuction(DRAFT_ID);
+
+        const theirs = writtenRows().filter((row) => row.userId === WINNER_ID);
+        expect(theirs.map((row) => row.type)).toEqual(['AUCTION_WON']);
+      });
+
+      it('tells the seller their auction ended', async () => {
+        settleWith(ended(), bid(5000));
+        audienceOf([WINNER_ID], []);
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(writtenRows()).toContainEqual(
+          expect.objectContaining({
+            userId: SELLER_ID,
+            type: 'AUCTION_ENDED'
+          })
+        );
+      });
+
+      it('tells a watcher who never bid', async () => {
+        settleWith(ended(), bid(5000));
+        audienceOf([WINNER_ID], [WATCHER_ID]);
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(writtenRows()).toContainEqual(
+          expect.objectContaining({
+            userId: WATCHER_ID,
+            type: 'AUCTION_ENDED'
+          })
+        );
+      });
+
+      it('tells a losing bidder, and nobody twice', async () => {
+        const loser = '00000000-0000-4000-8000-0000000004e5';
+        settleWith(ended(), bid(5000));
+        audienceOf([WINNER_ID, loser], [loser]);
+
+        await service.settleAuction(DRAFT_ID);
+
+        const rows = writtenRows().filter((row) => row.userId === loser);
+        expect(rows.map((row) => row.type)).toEqual(['AUCTION_ENDED']);
+      });
+
+      it('nobody wins an auction that did not sell', async () => {
+        settleWith(ended(), bid(4000));
+        audienceOf(['bidder-1'], []);
+
+        await service.settleAuction(DRAFT_ID);
+
+        const types = writtenRows().map((row) => row.type);
+        expect(types).not.toContain('AUCTION_WON');
+        expect(types).toContain('AUCTION_ENDED');
+      });
+
+      it('still tells the seller when nobody bid at all', async () => {
+        settleWith(ended({ bidCount: 0 }), null);
+        audienceOf([], []);
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(writtenRows()).toEqual([
+          expect.objectContaining({
+            userId: SELLER_ID,
+            type: 'AUCTION_ENDED'
+          })
+        ]);
+      });
+
+      it('pushes every row to its owner once the transaction commits', async () => {
+        settleWith(ended(), bid(5000));
+        audienceOf([WINNER_ID], [WATCHER_ID]);
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(realtime.emitNotificationCreated).toHaveBeenCalledTimes(3);
+      });
+
+      it('writes and sends nothing when it lost the race to settle', async () => {
+        prisma.auction.findFirst.mockResolvedValue(ended());
+        prisma.bid.findFirst.mockResolvedValue(bid(5000));
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(prisma.notification.createMany).not.toHaveBeenCalled();
+        expect(realtime.emitNotificationCreated).not.toHaveBeenCalled();
       });
     });
   });

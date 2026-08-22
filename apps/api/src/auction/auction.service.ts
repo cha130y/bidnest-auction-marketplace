@@ -9,6 +9,12 @@ import type { Prisma } from '../../generated/prisma/client';
 import { LEADING_BID_ORDER } from '../bid/constants/leading-bid-order.constant';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
+import { RealtimeService } from '../realtime/realtime.service';
+import {
+  auctionCancelledNotification,
+  auctionEndedNotification,
+  auctionWonNotification
+} from './auction-notification.mapper';
 import {
   settledWinnerSelect,
   toAuctionEndedEvent
@@ -29,6 +35,7 @@ import {
   assertAuctionIsEditable
 } from './utils/assert-seller-can-change.util';
 import { calculateReserveMet } from './utils/calculate-reserve-met.util';
+import { findAuctionAudience } from './utils/find-auction-audience.util';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
 
 /** Matches the product catalogue, so both lists page the same way. */
@@ -38,7 +45,8 @@ const DEFAULT_HOT_PAGE_SIZE = 20;
 export class AuctionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly gateway: AuctionGateway
+    private readonly gateway: AuctionGateway,
+    private readonly realtime: RealtimeService
   ) {}
 
   /**
@@ -341,6 +349,7 @@ export class AuctionService {
      */
     if (outcome) {
       this.gateway.emitToAuction(id, 'auction:ended', outcome.event);
+      this.deliver(outcome.notifications);
     }
 
     return outcome && { sold: outcome.sold };
@@ -354,7 +363,12 @@ export class AuctionService {
           id: true,
           currentEndAt: true,
           reservePrice: true,
-          bidCount: true
+          bidCount: true,
+          // NOT-002 / NOT-003 — a notification has to name the thing it is
+          // about, and reach the seller as well as the bidders.
+          title: true,
+          currency: true,
+          sellerId: true
         }
       });
 
@@ -400,8 +414,43 @@ export class AuctionService {
         data: { auctionId: id, eventType: 'ENDED', bidId: highestBid?.id }
       });
 
+      /**
+       * NOT-002 / NOT-003 — raised in the same transaction that settled the
+       * auction, so a result on record always has its notifications on record
+       * too. A separate write afterwards could fail and leave somebody never
+       * told their auction had ended.
+       */
+      const winnerId = sold ? highestBid.bidderId : null;
+      const audience = await findAuctionAudience(tx, id, [winnerId]);
+
+      const notifications = [
+        ...(sold
+          ? [
+              auctionWonNotification(
+                auction,
+                winnerId!,
+                highestBid.id,
+                highestBid.amount
+              )
+            ]
+          : []),
+        // The seller hears too, and is added here rather than in the audience
+        // query because their id is already known.
+        ...[...new Set([...audience, auction.sellerId])]
+          .filter((userId) => userId !== winnerId)
+          .map((userId) =>
+            auctionEndedNotification(auction, userId, {
+              sold,
+              finalPrice: highestBid?.amount ?? null
+            })
+          )
+      ];
+
+      await tx.notification.createMany({ data: notifications });
+
       return {
         sold,
+        notifications,
         event: toAuctionEndedEvent({
           id,
           sold,
@@ -513,6 +562,19 @@ export class AuctionService {
    * moderation action and belongs to an admin (ADM-001).
    */
   async cancelOwnAuction(id: string, sellerId: string, reason?: string) {
+    const { auction, notifications } = await this.cancelInTransaction(
+      id,
+      sellerId,
+      reason
+    );
+
+    // NOT-004 / SRS section 6 — told only once the cancellation has committed.
+    this.deliver(notifications);
+
+    return auction;
+  }
+
+  private cancelInTransaction(id: string, sellerId: string, reason?: string) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.auction.findFirst({
         where: { id, sellerId, deletedAt: null },
@@ -554,8 +616,33 @@ export class AuctionService {
         select: auctionRowSelect
       });
 
-      return toOwnerAuction(cancelled);
+      /**
+       * NOT-004 — everybody who bid on it or was watching hears, because they
+       * were waiting on something that is not going to happen now. The seller
+       * is excluded: they are the one who just cancelled it.
+       */
+      const audience = await findAuctionAudience(tx, id, [sellerId]);
+      const notifications = audience.map((userId) =>
+        auctionCancelledNotification(cancelled, userId, reason)
+      );
+
+      await tx.notification.createMany({ data: notifications });
+
+      return { auction: toOwnerAuction(cancelled), notifications };
     });
+  }
+
+  /**
+   * NOT-001..004 — hands committed notification rows to the realtime side.
+   *
+   * Deliberately after the transaction, like every other announcement (SRS
+   * section 6), and deliberately not awaited into the caller's result: a bell
+   * that fails to light must not undo a settled auction.
+   */
+  private deliver(notifications: Prisma.NotificationCreateManyInput[]): void {
+    for (const notification of notifications) {
+      this.realtime.emitNotificationCreated(notification.userId, notification);
+    }
   }
 
   // ADR-0001 — auctions and products draw from the same category set, so an

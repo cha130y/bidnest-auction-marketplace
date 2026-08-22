@@ -1,0 +1,216 @@
+###############################################################################
+# NOTIFICATION — แจ้งเตือนฝั่งประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: NOT-001 Outbid, NOT-002 AuctionWon,
+# NOT-003 AuctionEnded, NOT-004 AuctionCancelled
+#
+# 💡 ไฟล์นี้เขียนแค่ฝั่ง "ทำให้เกิด" แจ้งเตือน ส่วนฝั่งอ่าน (GET /notifications,
+#    unread-count, mark read) เป็นของ Dev 3 อยู่ใน 10-notification.http
+#    ที่นี่ใช้ GET /notifications เพื่อ "ตรวจผล" เท่านั้น
+#
+# 💡 ทุกแถวถูกเขียนใน transaction เดียวกับเหตุการณ์ที่ทำให้เกิด (SRS ข้อ 6)
+#    ประมูลที่ปิดสำเร็จจึงมีแจ้งเตือนครบเสมอ ไม่มีกรณี "ปิดแล้วแต่ไม่มีใครรู้"
+#
+# ⚠️ ตอนนี้ยังส่งออกทาง WebSocket ไม่ได้ — RealtimeService ยังเป็น stub ที่
+#    log อย่างเดียว ดูหัวข้อสุดท้ายของไฟล์นี้
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@sellerA = 00000000-0000-4000-8000-000000000002
+@sellerB = 00000000-0000-4000-8000-000000000003
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# AUTH-008 — วาง token จาก `pnpm --filter api exec prisma db seed`
+@sellerAToken =
+@sellerBToken =
+@buyerToken   =
+
+#=============================================================================
+# 1. Outbid (NOT-001)
+#=============================================================================
+
+### สร้าง + publish ประมูลที่วิ่งอยู่
+# @name liveDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบแจ้งเตือน",
+  "description": "เริ่มไปแล้ว",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Notify"]
+}
+
+@liveId = {{liveDraft.response.body.$.id}}
+
+### publish. expect 200 + status ACTIVE
+POST {{baseUrl}}/auctions/drafts/{{liveId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### บิดแรก โดย buyer. expect 201
+# ยังไม่มีใครถูก outbid — ไม่มีแจ้งเตือนเกิดขึ้นเลย
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "amount": 3000, "clientRequestId": "22222222-2222-4222-8222-222222222201" }
+
+### ตรวจว่าไม่มีอะไรเข้ากระดิ่ง buyer. expect 200 + meta.total 0
+GET {{baseUrl}}/notifications?types=OUTBID
+Authorization: Bearer {{buyerToken}}
+
+### buyer บิดทับตัวเอง. expect 201
+# คนที่นำอยู่บิดสูงขึ้นเอง = ไม่ได้แซงใคร ยังไม่มีแจ้งเตือน
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "amount": 3200, "clientRequestId": "22222222-2222-4222-8222-222222222202" }
+
+### ตรวจซ้ำ. expect 200 + meta.total ยังเป็น 0
+GET {{baseUrl}}/notifications?types=OUTBID
+Authorization: Bearer {{buyerToken}}
+
+### sellerB แซง. expect 201
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{sellerBToken}}
+Content-Type: application/json
+
+{ "amount": 3500, "clientRequestId": "22222222-2222-4222-8222-222222222203" }
+
+### NOT-001 — ตอนนี้ buyer ต้องมี OUTBID 1 แถว. expect 200
+# ตรวจ: type OUTBID, auctionId = liveId, bidId = id ของบิดที่แซง
+#       message มีชื่อประมูล และ "THB 3,500.00"
+GET {{baseUrl}}/notifications?types=OUTBID
+Authorization: Bearer {{buyerToken}}
+
+### sellerB ต้องไม่ได้อะไร (เขาเป็นคนแซง). expect 200 + meta.total 0
+GET {{baseUrl}}/notifications?types=OUTBID
+Authorization: Bearer {{sellerBToken}}
+
+### ผู้ขายก็ไม่ได้ (ไม่เกี่ยวกับการแซง). expect 200 + meta.total 0
+GET {{baseUrl}}/notifications?types=OUTBID
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 2. AuctionWon + AuctionEnded (NOT-002 / NOT-003)
+#=============================================================================
+#
+# ทำให้ {{liveId}} หมดเวลา แล้วให้ read repair ปิดให้ (AUC-007):
+#
+#   docker exec docker-postgres-1 psql -U bidnest -d bidnest_db -c \
+#     "update auctions set current_end_at = now() - interval '1 second' \
+#      where id = '<liveId>';"
+#
+# ราคาล่าสุดคือ 3500 ซึ่งต่ำกว่า reserve 4500 ประมูลนี้จะจบแบบ UNSOLD
+# ถ้าอยากได้เคส SOLD ให้บิดถึง 4500 ก่อนทำขั้นตอนข้างบน
+#=============================================================================
+
+### trigger การปิด. expect 200 + status UNSOLD (หรือ SOLD ถ้าบิดถึง reserve)
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### NOT-003 — ผู้ขายต้องได้ AUCTION_ENDED. expect 200
+# ⚠️ message ต้องไม่มีเลข 4500 โผล่ — reserve ยังเป็นความลับหลังจบ (AUC-003)
+#    เคส UNSOLD จะบอกแค่ "ended without meeting its reserve"
+GET {{baseUrl}}/notifications?types=AUCTION_ENDED
+Authorization: Bearer {{sellerAToken}}
+
+### คนที่บิดแล้วไม่ชนะก็ได้ AUCTION_ENDED ด้วย. expect 200
+# buyer จะมี 2 แถว: OUTBID (จากข้อ 1) + AUCTION_ENDED
+GET {{baseUrl}}/notifications
+Authorization: Bearer {{buyerToken}}
+
+### ถ้าเป็นเคส SOLD ผู้ชนะจะได้ AUCTION_WON ไม่ใช่ AUCTION_ENDED
+# ตั้งใจให้ได้แค่แถวเดียว — สองแถวเรื่องเดียวกันจะอ่านเหมือนระบบพลาด
+GET {{baseUrl}}/notifications?types=AUCTION_WON
+Authorization: Bearer {{sellerBToken}}
+
+#=============================================================================
+# 3. AuctionCancelled (NOT-004)
+#=============================================================================
+
+### สร้างประมูลที่ยังไม่เริ่ม ไว้ยกเลิก
+# @name cancelDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของที่จะถูกยกเลิก",
+  "description": "รอเริ่ม",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "scheduledStartAt": "2026-12-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Cancel"]
+}
+
+@cancelId = {{cancelDraft.response.body.$.id}}
+
+### publish. expect 200 + status SCHEDULED
+POST {{baseUrl}}/auctions/drafts/{{cancelId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### buyer กดติดตาม (WAT-001). expect 200
+POST {{baseUrl}}/auctions/{{cancelId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### ผู้ขายกดติดตามของตัวเองด้วย เพื่อพิสูจน์ว่าเขาจะไม่ได้แจ้งเตือน. expect 200
+POST {{baseUrl}}/auctions/{{cancelId}}/watchlist
+Authorization: Bearer {{sellerAToken}}
+
+### ผู้ขายยกเลิก. expect 200 + status CANCELLED
+POST {{baseUrl}}/auctions/{{cancelId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{ "reason": "ของมีตำหนิ ขอถอนก่อน" }
+
+### NOT-004 — buyer ต้องได้ AUCTION_CANCELLED พร้อมเหตุผล. expect 200
+# "ยกเลิก" เฉยๆ โดยไม่บอกเหตุผลคือแจ้งเตือนแบบที่คนจะเปิด support ticket ถาม
+GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
+Authorization: Bearer {{buyerToken}}
+
+### ผู้ขายต้องไม่ได้ ทั้งที่กดติดตามไว้. expect 200 + meta.total 0
+# เขาเป็นคนกดยกเลิกเอง จะแจ้งกลับไปหาทำไม
+GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
+Authorization: Bearer {{sellerAToken}}
+
+### กระดิ่งของ Dev 3 ใช้กับแจ้งเตือนฝั่งประมูลได้ปกติ. expect 200
+# unread นับรวมแจ้งเตือนประมูลด้วย ไม่ได้แยกกระดิ่งคนละใบ
+GET {{baseUrl}}/notifications/unread-count
+Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 4. ⚠️ ที่ยังส่งออกทาง WebSocket ไม่ได้
+#=============================================================================
+#
+# เกณฑ์ NOT-001..004 เขียนว่า "ส่งผ่านแอป/WebSocket" — ครึ่งแรก (บันทึกใน
+# ระบบ) ทำครบแล้วและอ่านได้จาก GET /notifications ข้างบน
+#
+# ครึ่งหลังยังไม่ได้ทำ: RealtimeService.emitNotificationCreated ยังเป็น stub
+# ที่ log อย่างเดียว ดูได้จาก console ของ API ว่ามีบรรทัด
+#
+#   [RealtimeService] [stub] notification:created -> user:<id> {...}
+#
+# โผล่ทุกครั้งที่ยิง request ข้างบน แปลว่า call site ถูกต้องแล้ว เหลือแค่
+# เปลี่ยนไส้ในให้ emit จริง ซึ่งต้องมี:
+#   1. ห้อง per-user (`user:<id>`) ใน gateway
+#   2. WebSocket authentication — ตอนนี้ยังไม่มีที่ไหนในโปรเจคเลย
+#      gateway ของ auction ตั้งใจไม่ auth เพราะห้องประมูลเป็นสาธารณะ
+#
+# ⚠️ RealtimeService ถูกเรียกจาก checkout (Dev 3), shipment (Dev 3) และ
+#    chat ด้วย การทำข้อ 1-2 จะทำให้ call site ของทุกคนเริ่มส่งจริงพร้อมกัน
+#    เป็นการแก้ให้ถูก ไม่ใช่การทำพัง แต่ควรบอกทีมก่อน
+#=============================================================================
