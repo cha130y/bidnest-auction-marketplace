@@ -110,8 +110,14 @@ export function auctionEndedNotification(
  * hears, because they were waiting on something that is no longer going to
  * happen.
  *
- * The reason is included when the seller gave one: "cancelled" without a why
- * is the kind of notification people write support tickets about.
+ * The reason is included when one was given: "cancelled" without a why is the
+ * kind of notification people write support tickets about.
+ *
+ * Who called it off is deliberately left out. The same row goes to a seller
+ * withdrawing their own listing (AUC-006) and to an auction a moderator pulled
+ * (ADM-001), so naming an actor would be wrong half the time — and telling
+ * every bidder that a listing was moderated says something about the seller
+ * that the bidders have no business being told.
  */
 export function auctionCancelledNotification(
   auction: AuctionRef,
@@ -125,6 +131,6 @@ export function auctionCancelledNotification(
     auctionId: auction.id,
     type: 'AUCTION_CANCELLED',
     title: 'An auction you followed was cancelled',
-    message: `${name(auction)} has been cancelled by the seller.${because}`
+    message: `${name(auction)} has been cancelled.${because}`
   };
 }
