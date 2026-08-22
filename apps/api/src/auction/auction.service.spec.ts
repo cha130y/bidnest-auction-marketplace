@@ -9,6 +9,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AuctionService } from './auction.service';
+import {
+  AUCTION_SECTIONS,
+  AUCTION_SECTION_QUERIES
+} from './constants/auction-section.constant';
+import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 
 const SELLER_ID = '00000000-0000-4000-8000-000000000002';
@@ -1567,7 +1572,7 @@ describe('AuctionService', () => {
    * AUC-008 — Hot Auctions. Only ACTIVE, undeleted auctions, ranked by accepted
    * bids desc, then soonest end, then id — and nothing else.
    */
-  describe('listHotAuctions (AUC-008)', () => {
+  describe('listAuctions (AUC-008)', () => {
     const listSucceeds = (
       rows: ReturnType<typeof draftRow>[],
       total = rows.length
@@ -1589,7 +1594,7 @@ describe('AuctionService', () => {
     it('lists only auctions that are ACTIVE and not deleted', async () => {
       listSucceeds([]);
 
-      await service.listHotAuctions({});
+      await service.listAuctions({});
 
       expect(findManyArgs().where).toEqual({
         status: 'ACTIVE',
@@ -1600,7 +1605,7 @@ describe('AuctionService', () => {
     it('ranks by accepted bids, then soonest end, then id', async () => {
       listSucceeds([]);
 
-      await service.listHotAuctions({});
+      await service.listAuctions({});
 
       expect(findManyArgs().orderBy).toEqual([
         { bidCount: 'desc' },
@@ -1612,7 +1617,7 @@ describe('AuctionService', () => {
     it('counts with exactly the same filter it lists with', async () => {
       listSucceeds([]);
 
-      await service.listHotAuctions({});
+      await service.listAuctions({});
 
       const countArgs = (
         prisma.auction.count.mock.calls as WhereArgs[][]
@@ -1623,7 +1628,7 @@ describe('AuctionService', () => {
     it('never exposes the reserve in the list', async () => {
       listSucceeds([draftRow({ status: 'ACTIVE' })]);
 
-      const result = await service.listHotAuctions({});
+      const result = await service.listAuctions({});
 
       expect(result.items[0]).not.toHaveProperty('reservePrice');
       expect(JSON.stringify(result.items)).not.toContain('4500');
@@ -1633,7 +1638,7 @@ describe('AuctionService', () => {
       it('defaults to the first page of twenty', async () => {
         listSucceeds([]);
 
-        await service.listHotAuctions({});
+        await service.listAuctions({});
 
         expect(findManyArgs()).toMatchObject({ skip: 0, take: 20 });
       });
@@ -1641,7 +1646,7 @@ describe('AuctionService', () => {
       it('skips whole pages, not rows', async () => {
         listSucceeds([]);
 
-        await service.listHotAuctions({ page: 3, limit: 10 });
+        await service.listAuctions({ page: 3, limit: 10 });
 
         expect(findManyArgs()).toMatchObject({ skip: 20, take: 10 });
       });
@@ -1649,7 +1654,7 @@ describe('AuctionService', () => {
       it('reports how many pages there are', async () => {
         listSucceeds([], 45);
 
-        const result = await service.listHotAuctions({ limit: 20 });
+        const result = await service.listAuctions({ limit: 20 });
 
         expect(result.meta).toEqual({
           page: 1,
@@ -1662,10 +1667,173 @@ describe('AuctionService', () => {
       it('reports zero pages when nothing is running', async () => {
         listSucceeds([], 0);
 
-        const result = await service.listHotAuctions({});
+        const result = await service.listAuctions({});
 
         expect(result.meta).toMatchObject({ total: 0, totalPages: 0 });
         expect(result.items).toEqual([]);
+      });
+    });
+
+    /**
+     * The three sections beyond `hot` come from the home page design rather
+     * than the SRS, so what holds them honest lives here: each one may only
+     * rearrange auctions a buyer could already see, and none may reach past
+     * the filters AUC-005 and AUC-008 already impose.
+     */
+    describe('sections', () => {
+      it('reads the hot list when no section is named', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({});
+
+        expect(findManyArgs().where).toEqual({
+          status: 'ACTIVE',
+          deletedAt: null
+        });
+        expect(findManyArgs().orderBy).toEqual([
+          { bidCount: 'desc' },
+          { currentEndAt: 'asc' },
+          { id: 'asc' }
+        ]);
+      });
+
+      it('treats an explicit hot section as the same request', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ section: 'hot' });
+
+        expect(findManyArgs().where).toEqual({
+          status: 'ACTIVE',
+          deletedAt: null
+        });
+      });
+
+      // running, closest deadline first, measured by `currentEndAt` so an
+      // auction anti-sniping pushed back (BID-004) moves down the list instead
+      // of going on claiming it is about to close
+      it('orders ending-soon by the deadline actually in force', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ section: 'ending-soon' });
+
+        expect(findManyArgs().where).toEqual({
+          status: 'ACTIVE',
+          deletedAt: null
+        });
+        expect(findManyArgs().orderBy).toEqual([
+          { currentEndAt: 'asc' },
+          { id: 'asc' }
+        ]);
+      });
+
+      it('lists starting-soon from the scheduled ones, soonest first', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ section: 'starting-soon' });
+
+        expect(findManyArgs().where).toEqual({
+          status: 'SCHEDULED',
+          deletedAt: null
+        });
+        expect(findManyArgs().orderBy).toEqual([
+          { scheduledStartAt: 'asc' },
+          { id: 'asc' }
+        ]);
+      });
+
+      // `endedAt` is when settlement recorded the outcome (AUC-007), which is
+      // the honest answer to "recently ended"; `currentEndAt` is only when the
+      // auction was due to end
+      it('orders recently-ended by when settlement recorded the outcome', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ section: 'recently-ended' });
+
+        expect(findManyArgs().where).toEqual({
+          status: { in: ['SOLD', 'UNSOLD'] },
+          deletedAt: null
+        });
+        expect(findManyArgs().orderBy).toEqual([
+          { endedAt: { sort: 'desc', nulls: 'last' } },
+          { id: 'desc' }
+        ]);
+      });
+
+      // the column is nullable and Postgres sorts nulls first on a descending
+      // sort, so a row missing one would lead a list of the newest results
+      it('keeps a missing endedAt out of the front of recently-ended', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ section: 'recently-ended' });
+
+        const [first] = findManyArgs().orderBy as Record<string, unknown>[];
+        expect(first.endedAt).toMatchObject({ nulls: 'last' });
+      });
+
+      it.each(AUCTION_SECTIONS)(
+        'hides deleted auctions from %s',
+        async (section) => {
+          listSucceeds([]);
+
+          await service.listAuctions({ section });
+
+          expect(findManyArgs().where).toMatchObject({ deletedAt: null });
+        }
+      );
+
+      it.each(AUCTION_SECTIONS)(
+        'counts %s with the filter it lists with',
+        async (section) => {
+          listSucceeds([]);
+
+          await service.listAuctions({ section });
+
+          const countArgs = (
+            prisma.auction.count.mock.calls as WhereArgs[][]
+          )[0][0];
+          expect(countArgs.where).toEqual(findManyArgs().where);
+        }
+      );
+
+      it.each(AUCTION_SECTIONS)(
+        'never exposes the reserve through %s',
+        async (section) => {
+          listSucceeds([draftRow({ status: 'ACTIVE' })]);
+
+          const result = await service.listAuctions({ section });
+
+          expect(result.items[0]).not.toHaveProperty('reservePrice');
+          expect(JSON.stringify(result.items)).not.toContain('4500');
+        }
+      );
+
+      /**
+       * AUC-005 — a section arranges what a buyer may already see. Without
+       * this, a section added later could name DRAFT or CANCELLED in its
+       * filter and quietly publish auctions the single read hides.
+       */
+      it.each(AUCTION_SECTIONS)(
+        'only asks %s for statuses a buyer may see',
+        (section) => {
+          const { status } = AUCTION_SECTION_QUERIES[section].where as {
+            status: string | { in: string[] };
+          };
+          const asked = typeof status === 'string' ? [status] : status.in;
+
+          expect(asked.length).toBeGreaterThan(0);
+          for (const one of asked) {
+            expect(PUBLIC_AUCTION_STATUSES).toContain(one);
+          }
+        }
+      );
+
+      // a stable order is what makes paging trustworthy — HOT_AUCTION_ORDER
+      // spells out why
+      it.each(AUCTION_SECTIONS)('breaks ties on the id in %s', (section) => {
+        const { orderBy } = AUCTION_SECTION_QUERIES[section];
+        const last = orderBy[orderBy.length - 1];
+
+        expect(Object.keys(last)).toEqual(['id']);
       });
     });
   });

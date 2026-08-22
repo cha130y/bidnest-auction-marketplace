@@ -18,7 +18,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
 import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
-import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
+import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 
 @Controller('auctions')
@@ -111,14 +111,17 @@ export class AuctionController {
   }
 
   /**
-   * AUC-008 — Hot Auctions. Public, and paging is the only thing a caller may
-   * ask for: the ranking is fixed by the requirement, so there is no `sort`
-   * parameter to reach for.
+   * AUC-008 — the auction list. Public, and a caller may ask for two things:
+   * which section and which page. No section is the Hot Auctions list, so a
+   * client written before sections existed is unaffected.
+   *
+   * The ranking *within* a section is fixed by the requirement, so there is
+   * still no `sort` parameter to reach for — see AUCTION_SECTION_QUERIES.
    */
   @Public()
   @Get()
-  listHotAuctions(@Query() dto: ListHotAuctionsDto) {
-    return this.auctionService.listHotAuctions(dto);
+  listAuctions(@Query() dto: ListAuctionsDto) {
+    return this.auctionService.listAuctions(dto);
   }
 
   /**

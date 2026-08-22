@@ -3,7 +3,7 @@
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
-# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก, AUC-007 จบประมูล, AUC-008 Hot Auctions
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก, AUC-007 จบประมูล, AUC-008 Hot Auctions + browse sections
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -668,3 +668,66 @@ GET {{baseUrl}}/auctions?page=abc
 ### AUC-008 — ส่ง sort มาเอง. expect 400
 # ห้ามให้ client เปลี่ยนลำดับ — DTO ไม่มี field นี้จึงโดน forbidNonWhitelisted ปัดตก
 GET {{baseUrl}}/auctions?sort=price_asc
+
+#=============================================================================
+# 10. Browse sections (ต่อยอด AUC-008)
+#=============================================================================
+# หน้าแรกของเว็บมี 4 การ์ด: hot / ending soon / starting soon / recently ended
+# ทั้งสี่ใช้ endpoint เดียวกัน ต่างกันที่ `section` เท่านั้น
+#
+# มีแค่ `hot` ที่อยู่ใน SRS อีกสามอันมาจาก design ของหน้า home
+#
+# สำคัญ: client เลือกได้แค่ "ชื่อ section" เท่านั้น เปลี่ยนลำดับเองไม่ได้
+# แต่ละ section มี where + orderBy ตายตัวฝั่ง server จึงไม่ขัดข้อกำหนด AUC-008
+# ที่ห้ามมี flag พิเศษหรือ hidden scoring
+#
+# ทุก section เห็นเฉพาะสถานะที่ผู้ซื้อมองเห็นได้อยู่แล้ว (AUC-005)
+# DRAFT / CANCELLED / ที่ถูกลบ ไม่โผล่ใน section ไหนเลย
+
+### section — ไม่ส่งอะไรเลย = hot list เหมือนเดิมทุกประการ. expect 200
+GET {{baseUrl}}/auctions
+
+### section — ส่ง hot ตรงๆ ต้องได้ผลเท่ากับข้างบน. expect 200
+GET {{baseUrl}}/auctions?section=hot
+
+### section — ending soon: ACTIVE เรียงตาม currentEndAt ใกล้ -> ไกล. expect 200
+# ใช้ currentEndAt ไม่ใช่ originalEndAt ประมูลที่โดนต่อเวลา (BID-004)
+# จะเลื่อนลงไปข้างล่าง ไม่ค้างอยู่หัวลิสต์ว่ากำลังจะปิด
+GET {{baseUrl}}/auctions?section=ending-soon
+
+### section — starting soon: SCHEDULED เรียงตาม scheduledStartAt. expect 200
+# ยังไม่เปิดให้บิด แต่ผู้ซื้อดูล่วงหน้าได้ (AUC-005)
+GET {{baseUrl}}/auctions?section=starting-soon
+
+### section — recently ended: SOLD + UNSOLD เรียงตาม endedAt ใหม่ -> เก่า. expect 200
+# ใช้ endedAt (เวลาที่ settle จริง AUC-007) ไม่ใช่ currentEndAt ที่แค่ "ควรจบ"
+# CANCELLED ไม่อยู่ในลิสต์นี้ เพราะไม่ใช่สถานะสาธารณะ
+GET {{baseUrl}}/auctions?section=recently-ended
+
+### section — แบ่งหน้าภายใน section ได้ปกติ. expect 200 + meta.total ของ section นั้น
+# meta.total ต้องนับเฉพาะ section ไม่ใช่ทั้งตาราง
+GET {{baseUrl}}/auctions?section=starting-soon&limit=4
+
+### section — 4 การ์ดหน้าแรก ยิงทีละอันแบบนี้ (การ์ดละ 4 รายการ)
+GET {{baseUrl}}/auctions?section=hot&limit=4
+
+###
+GET {{baseUrl}}/auctions?section=ending-soon&limit=4
+
+###
+GET {{baseUrl}}/auctions?section=starting-soon&limit=4
+
+###
+GET {{baseUrl}}/auctions?section=recently-ended&limit=4
+
+### section — ชื่อ section ที่ไม่มีอยู่จริง. expect 400
+# ไม่ fallback เงียบๆ ไปเป็น hot — หน้าจอที่ขอ section ผิดคือหน้าจอที่มีบั๊ก
+GET {{baseUrl}}/auctions?section=most-expensive
+
+### section — สะกดผิด. expect 400
+GET {{baseUrl}}/auctions?section=ending_soon
+
+### section — ส่ง status มาเอง. expect 400
+# ไม่มี field นี้ใน DTO จึงโดน forbidNonWhitelisted ปัดตก
+# เลือกได้แค่ชื่อ section เท่านั้น ประกอบ filter เองไม่ได้
+GET {{baseUrl}}/auctions?status=SOLD
