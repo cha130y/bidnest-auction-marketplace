@@ -1,4 +1,5 @@
 import type { Prisma } from '../../generated/prisma/client';
+import { calculateMinimumBid } from '../bid/utils/calculate-minimum-bid.util';
 import { calculateReserveMet } from './utils/calculate-reserve-met.util';
 
 /**
@@ -61,6 +62,17 @@ export function toPublicAuction(auction: AuctionRow) {
     startingPrice: auction.startingPrice.toString(),
     minBidIncrement: auction.minBidIncrement.toString(),
     currentPrice: auction.currentPrice.toString(),
+    /**
+     * LIV-002 — the lowest amount this auction will take right now, computed
+     * by the same function BID-001 rejects bids with, so a screen cannot offer
+     * an amount the endpoint will refuse.
+     *
+     * Here rather than only on the arena for the reason `biddingOpen` is here:
+     * the opening bid is measured against the starting price, not against a
+     * `currentPrice` of 0, and a frontend deriving that rule from the fields
+     * would get it wrong on the first bid of every auction.
+     */
+    minimumNextBid: calculateMinimumBid(auction).toString(),
     reserveMet: calculateReserveMet(auction.currentPrice, auction.reservePrice),
     // AUC-005 — a SCHEDULED auction is public to look at, but bidding only
     // opens once it turns ACTIVE. Saying so here keeps the frontend from

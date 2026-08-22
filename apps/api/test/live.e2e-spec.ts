@@ -102,7 +102,7 @@ describe('Live lobby (e2e)', () => {
   };
 
   type Lobby = {
-    auction: { id: string; status: string };
+    auction: { id: string; status: string; minimumNextBid: string };
     participantCount: number;
     countdown: {
       serverTime: string;
@@ -133,6 +133,38 @@ describe('Live lobby (e2e)', () => {
     request(app.getHttpServer())
       .delete(`/auctions/${auctionId}/participants`)
       .set('Authorization', authOf(userId));
+
+  const bid = (auctionId: string, userId: string, amount: number) =>
+    request(app.getHttpServer())
+      .post(`/auctions/${auctionId}/bids`)
+      .set('Authorization', authOf(userId))
+      .send({ amount, clientRequestId: randomUUID() });
+
+  type Arena = Lobby & {
+    leader: {
+      amount: string;
+      sequenceNo: number;
+      bidder: string;
+      isYours: boolean;
+    } | null;
+    recentBids: { amount: string; sequenceNo: number; bidder: string }[];
+    you:
+      | (NonNullable<Lobby['you']> & {
+          canBid: boolean;
+          blockedBy: string | null;
+        })
+      | null;
+  };
+
+  const readArena = async (auctionId: string, viewerId?: string) => {
+    const call = request(app.getHttpServer()).get(
+      `/auctions/${auctionId}/arena`
+    );
+    if (viewerId) call.set('Authorization', authOf(viewerId));
+
+    const response = await call.expect(200);
+    return response.body as Arena;
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -173,6 +205,11 @@ describe('Live lobby (e2e)', () => {
     await prisma.auctionParticipant.deleteMany({
       where: { auction: { sellerId: { in: userIds } } }
     });
+    // extensions point at bids, and bids at auctions — unwind in that order
+    await prisma.auctionExtension.deleteMany({
+      where: { auction: { sellerId: { in: userIds } } }
+    });
+    await prisma.bid.deleteMany({ where: { bidderId: { in: userIds } } });
     await prisma.auction.deleteMany({ where: { sellerId: { in: userIds } } });
     await prisma.category.deleteMany({ where: { id: categoryId } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -435,6 +472,197 @@ describe('Live lobby (e2e)', () => {
         participantCount: 1,
         joinedAt: (first.body as { joinedAt: string }).joinedAt
       });
+    });
+  });
+
+  /**
+   * LIV-002 — the arena while an auction runs: the price, who is leading, the
+   * latest bids, the time left, the lowest amount that will be accepted, the
+   * reserve state, and whether the person looking may bid at all.
+   */
+  describe('GET /auctions/:id/arena', () => {
+    it('shows a signed-out visitor the bidding without naming anybody', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      const arena = await readArena(auctionId);
+
+      expect(arena.auction).toMatchObject({
+        status: 'ACTIVE',
+        currentPrice: '3000',
+        biddingOpen: true,
+        reserveMet: false
+      });
+      expect(arena.leader).toMatchObject({ amount: '3000', isYours: false });
+      expect(arena.leader).not.toHaveProperty('bidderId');
+      expect(arena.you).toBeNull();
+    });
+
+    it('reports the lowest amount that will be accepted', async () => {
+      const auctionId = await publishAuction(-1);
+
+      const beforeAnyBid = await readArena(auctionId);
+      expect(beforeAnyBid.auction).toMatchObject({ minimumNextBid: '3000' });
+
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      const afterOneBid = await readArena(auctionId);
+      expect(afterOneBid.auction).toMatchObject({ minimumNextBid: '3100' });
+    });
+
+    // the number on the screen has to be a number the endpoint will take
+    it('offers a minimum the bid endpoint actually accepts', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      const arena = await readArena(auctionId);
+
+      await bid(
+        auctionId,
+        strangerId,
+        Number(arena.auction.minimumNextBid)
+      ).expect(201);
+    });
+
+    it('masks the leader the same way the history does', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      const arena = await readArena(auctionId);
+      const history = await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}/bids`)
+        .expect(200);
+
+      const [firstInHistory] = (history.body as { items: { bidder: string }[] })
+        .items;
+      expect(arena.leader?.bidder).toBe(firstInHistory.bidder);
+    });
+
+    it('names the highest bidder as the leader, not the newest', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+      await bid(auctionId, strangerId, 3500).expect(201);
+
+      const arena = await readArena(auctionId, strangerId);
+
+      expect(arena.leader).toMatchObject({
+        amount: '3500',
+        sequenceNo: 2,
+        isYours: true
+      });
+    });
+
+    it('lists the latest bids newest first', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+      await bid(auctionId, strangerId, 3500).expect(201);
+      await bid(auctionId, buyerId, 4000).expect(201);
+
+      const arena = await readArena(auctionId);
+
+      expect(arena.recentBids.map((row) => row.amount)).toEqual([
+        '4000',
+        '3500',
+        '3000'
+      ]);
+    });
+
+    it('has no leader and no bids before anybody has bid', async () => {
+      const auctionId = await publishAuction(-1);
+
+      const arena = await readArena(auctionId);
+
+      expect(arena.leader).toBeNull();
+      expect(arena.recentBids).toEqual([]);
+    });
+
+    // AUC-003 over the wire again — the arena shows the auction, so it inherits
+    // the duty, and reserveMet is the only thing derived from the reserve
+    it('never sends the reserve, even to the leader', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      expectNoReserve(await readArena(auctionId), 4500);
+      expectNoReserve(await readArena(auctionId, buyerId), 4500);
+    });
+
+    it('reports the reserve being met without saying what it was', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 5000).expect(201);
+
+      const arena = await readArena(auctionId, buyerId);
+
+      expect(arena.auction).toMatchObject({ reserveMet: true });
+      expectNoReserve(arena, 4500);
+    });
+
+    describe('whether the person looking may bid', () => {
+      it('tells a signed-in user they may', async () => {
+        const auctionId = await publishAuction(-1);
+
+        const arena = await readArena(auctionId, buyerId);
+
+        expect(arena.you).toMatchObject({ canBid: true, blockedBy: null });
+      });
+
+      it('tells the seller why they may not', async () => {
+        const auctionId = await publishAuction(-1);
+
+        const arena = await readArena(auctionId, sellerId);
+
+        expect(arena.you).toMatchObject({
+          canBid: false,
+          blockedBy: 'YOU_ARE_THE_SELLER'
+        });
+      });
+
+      it('tells an admin why they may not', async () => {
+        const auctionId = await publishAuction(-1);
+
+        const arena = await readArena(auctionId, adminId);
+
+        expect(arena.you).toMatchObject({
+          canBid: false,
+          blockedBy: 'ADMINS_DO_NOT_BID'
+        });
+      });
+
+      it('reports an auction that has not opened yet', async () => {
+        const auctionId = await publishAuction(1);
+
+        const arena = await readArena(auctionId, buyerId);
+
+        expect(arena.auction).toMatchObject({ biddingOpen: false });
+        expect(arena.you).toMatchObject({
+          canBid: false,
+          blockedBy: 'AUCTION_NOT_OPEN'
+        });
+      });
+
+      // the report must not disagree with the endpoint it describes
+      it('is refused by the bid endpoint for the same reason it gave', async () => {
+        const auctionId = await publishAuction(-1);
+
+        const arena = await readArena(auctionId, sellerId);
+
+        expect(arena.you?.blockedBy).toBe('YOU_ARE_THE_SELLER');
+        await bid(auctionId, sellerId, 3000).expect(403);
+      });
+    });
+
+    it('answers 404 for an auction that does not exist', async () => {
+      await request(app.getHttpServer())
+        .get(`/auctions/${randomUUID()}/arena`)
+        .expect(404);
+    });
+
+    it('hides the arena of a draft', async () => {
+      const draftId = await createDraft();
+
+      await request(app.getHttpServer())
+        .get(`/auctions/${draftId}/arena`)
+        .set('Authorization', authOf(sellerId))
+        .expect(404);
     });
   });
 

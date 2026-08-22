@@ -1,9 +1,11 @@
 ###############################################################################
-# LIVE — Lobby ก่อนเริ่มประมูล (ฝั่ง Dev 4)
+# LIVE — Lobby และ Arena (ฝั่ง Dev 4)
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
 # ครอบคลุมถึงตอนนี้: LIV-001 Lobby — ข้อมูลประมูล, จำนวนผู้เข้าร่วมแบบเรียลไทม์,
 # เวลานับถอยหลัง, สถานะการเข้าร่วม และการเปลี่ยนสถานะเริ่มประมูลอัตโนมัติ
+#                    LIV-002 Arena — ราคาปัจจุบัน, ผู้นำแบบปิดบังชื่อ, บิดล่าสุด,
+# เวลาที่เหลือ, ราคาต่ำสุดที่บิดต่อได้, reserve-met และสถานะปุ่มบิด
 #
 # 💡 เวลานับถอยหลังส่งมาสองแบบคู่กัน ตั้งใจให้ซ้ำ:
 #    - startsAt / endsAt = เวลาจริง ใช้ได้ถ้านาฬิกาเครื่อง client ตรง
@@ -129,7 +131,7 @@ GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000009ff/lobby
 GET {{baseUrl}}/auctions/not-a-uuid/lobby
 
 #=============================================================================
-# 5. ประมูลที่จบไปแล้ว — เข้าร่วมไม่ได้
+# 5. ประมูลที่วิ่งอยู่ (ใช้ต่อในหัวข้อ 6) และเคสประมูลที่จบแล้ว
 #=============================================================================
 
 ### สร้าง + publish ประมูลที่เริ่มไปแล้ว
@@ -166,6 +168,64 @@ Authorization: Bearer {{buyerToken}}
 GET {{baseUrl}}/auctions/{{liveId}}/lobby
 Authorization: Bearer {{buyerToken}}
 
+#=============================================================================
+# 6. Arena ขณะประมูล (LIV-002)
+#=============================================================================
+#
+# arena = ทุกอย่างที่ lobby มี + สามอย่างที่มีความหมายตอนบิดเปิดแล้วเท่านั้น:
+# ผู้นำ, บิดล่าสุด และราคาต่ำสุดที่บิดต่อได้
+#
+# แยก endpoint จาก lobby เพราะ arena เสีย query เพิ่มอีก 2 ตัว ส่วน lobby มีไว้
+# ให้คนรอประมูลที่ยังไม่มีบิดอะไรให้แสดง ไม่ควรต้องจ่ายค่านั้น
+#=============================================================================
+
+### LIV-002 — arena ก่อนมีใครบิด. expect 200
+# ตรวจ: leader = null, recentBids = [], auction.minimumNextBid = "3000"
+#       (ราคาเริ่มต้น ไม่ใช่ 0 + increment — currentPrice 0 แปลว่า "ยังไม่มีราคา")
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+
+### บิดแรกที่ราคาเริ่มต้นพอดี. expect 201
+# ⚠️ ยิงซ้ำต้องเปลี่ยน clientRequestId ไม่งั้นจะได้บิดเดิมกลับมา (BID-002)
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "amount": 3000, "clientRequestId": "11111111-1111-4111-8111-111111111101" }
+
+### LIV-002 — arena หลังมีบิดแล้ว. expect 200
+# ตรวจ: leader.bidder เป็นชื่อปิดบัง (เช่น "S***i") ไม่มี bidderId เด็ดขาด
+#       leader.isYours = true (เพราะยิงด้วย token ของคนที่บิด)
+#       minimumNextBid = "3100" (currentPrice + increment)
+#       recentBids เรียงใหม่สุดขึ้นก่อน — สลับทางกับ GET /bids ของ BID-005
+#       you.canBid = true, you.blockedBy = null
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+Authorization: Bearer {{buyerToken}}
+
+### คนที่ไม่ได้ login. expect 200 + you = null + leader.isYours = false
+# ยังดูการประมูลได้ทั้งหมด แค่ไม่มีอะไรที่เป็น "ของคุณ" ให้ตอบ
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+
+### ผู้ขายดู arena ตัวเอง. expect 200 + blockedBy = "YOU_ARE_THE_SELLER"
+# canBid เป็นแค่รายงานล่วงหน้า ไม่ใช่ประตู — BID-001 ยังตรวจซ้ำใน transaction
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+Authorization: Bearer {{sellerAToken}}
+
+### ยืนยันว่ารายงานตรงกับของจริง. expect 403
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{ "amount": 5000, "clientRequestId": "11111111-1111-4111-8111-111111111102" }
+
+### admin ดู arena. expect 200 + blockedBy = "ADMINS_DO_NOT_BID"
+GET {{baseUrl}}/auctions/{{liveId}}/arena
+Authorization: Bearer {{adminToken}}
+
+### arena ของประมูลที่ยังไม่เริ่ม. expect 200 + blockedBy = "AUCTION_NOT_OPEN"
+# สถานะห้องมาก่อนเหตุผลส่วนตัวเสมอ — เป็นคำตอบเดียวกันสำหรับทุกคนในห้อง
+GET {{baseUrl}}/auctions/{{lobbyId}}/arena
+Authorization: Bearer {{buyerToken}}
+
 ### ประมูลที่จบแล้ว (SOLD/UNSOLD) เข้าร่วมไม่ได้. expect 409
 # ต้องหา id ของประมูลที่จบแล้วมาใส่เอง — จาก GET /auctions แล้วรอจนหมดเวลา
 # หรือแก้ currentEndAt ใน DB ให้เป็นอดีตแล้ว GET /auctions/:id หนึ่งครั้ง
@@ -174,7 +234,7 @@ Authorization: Bearer {{buyerToken}}
 # Authorization: Bearer {{buyerToken}}
 
 #=============================================================================
-# 6. เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ (LIV-001)
+# 7. เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ (LIV-001)
 #=============================================================================
 #
 # AuctionLifecycleService เดินทุก 10 วินาที: SCHEDULED ที่ถึงเวลาแล้วจะกลาย

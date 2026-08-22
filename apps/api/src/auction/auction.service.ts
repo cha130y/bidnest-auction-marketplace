@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
+import { LEADING_BID_ORDER } from '../bid/constants/leading-bid-order.constant';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   auctionRowSelect,
@@ -331,9 +332,9 @@ export class AuctionService {
 
       const highestBid = await tx.bid.findFirst({
         where: { auctionId: id },
-        // A tie on amount goes to whoever got there first, which is what the
-        // sequence number records.
-        orderBy: [{ amount: 'desc' }, { sequenceNo: 'asc' }],
+        // The same order the arena names its leader by (LIV-002), so the
+        // person shown to be winning is the person who actually wins.
+        orderBy: LEADING_BID_ORDER,
         select: { id: true, bidderId: true, amount: true }
       });
 

@@ -9,9 +9,13 @@ import type {
 } from '../../generated/prisma/enums';
 import { AuctionService } from '../auction/auction.service';
 import { PUBLIC_AUCTION_STATUSES } from '../auction/constants/public-auction-status.constant';
+import { bidHistorySelect, toPublicBid } from '../bid/bid-history.mapper';
+import { LEADING_BID_ORDER } from '../bid/constants/leading-bid-order.constant';
+import type { AuthenticatedUser } from '../common/types/authenticated-user.type';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { calculateCountdown } from './utils/calculate-countdown.util';
+import { describeBiddingAccess } from './utils/describe-bidding-access.util';
 
 /**
  * LIV-001 — the statuses somebody can still take part in. A finished auction
@@ -26,6 +30,15 @@ export const JOINABLE_AUCTION_STATUSES: AuctionStatus[] = [
   'SCHEDULED',
   'ACTIVE'
 ];
+
+/**
+ * LIV-002 — how many of the latest bids the arena carries.
+ *
+ * Enough to read the shape of the bidding at a glance without a second call,
+ * and small enough that it costs nothing on a busy auction. The whole history
+ * is a separate, paged route (BID-005) for anyone who wants it.
+ */
+const ARENA_RECENT_BIDS = 10;
 
 @Injectable()
 export class LiveService {
@@ -46,15 +59,15 @@ export class LiveService {
    * out of time is still ACTIVE — that read repairs it (AUC-007), and this
    * gets the repaired answer for free.
    */
-  async getLobby(auctionId: string, viewerId?: string) {
+  async getLobby(auctionId: string, viewer?: AuthenticatedUser) {
     const auction = await this.auctionService.findPublicAuction(
       auctionId,
-      viewerId
+      viewer?.id
     );
 
     const [participantCount, participant] = await Promise.all([
       this.countParticipants(auctionId),
-      viewerId ? this.findParticipant(auctionId, viewerId) : null
+      viewer ? this.findParticipant(auctionId, viewer.id) : null
     ]);
 
     return {
@@ -63,7 +76,55 @@ export class LiveService {
       countdown: calculateCountdown(auction, new Date()),
       // Null rather than a false-ish object: nobody is signed in, which is a
       // different thing from being signed in and not having joined.
-      you: viewerId ? toViewerParticipation(participant) : null
+      you: viewer ? toViewerParticipation(participant) : null
+    };
+  }
+
+  /**
+   * LIV-002 — the arena, while the auction runs. Everything the lobby shows,
+   * plus the three things that only matter once bidding is open: who is
+   * leading, the latest bids, and the lowest amount that will be accepted.
+   *
+   * A separate read from the lobby rather than fields bolted onto it: a lobby
+   * is looked at by people waiting for an auction that has no bids to show,
+   * and it should not pay for the two extra queries.
+   */
+  async getArena(auctionId: string, viewer?: AuthenticatedUser) {
+    const lobby = await this.getLobby(auctionId, viewer);
+
+    const [leadingBid, recentBids] = await Promise.all([
+      // Ordered the way settlement picks a winner, so the person shown to be
+      // leading is the person who would actually win (AUC-007).
+      this.prisma.bid.findFirst({
+        where: { auctionId },
+        orderBy: LEADING_BID_ORDER,
+        select: bidHistorySelect
+      }),
+      // Newest first: an arena reads downwards from what just happened, which
+      // is the opposite of the history route (BID-005).
+      this.prisma.bid.findMany({
+        where: { auctionId },
+        orderBy: { sequenceNo: 'desc' },
+        take: ARENA_RECENT_BIDS,
+        select: bidHistorySelect
+      })
+    ]);
+
+    // The arena's control needs to know whether it is usable, which the lobby
+    // has no reason to answer.
+    const you =
+      viewer && lobby.you
+        ? { ...lobby.you, ...describeBiddingAccess(lobby.auction, viewer) }
+        : null;
+
+    return {
+      ...lobby,
+      // BID-005's mapper, so the leader is masked by exactly the same rule the
+      // history and the broadcast use — one person reads as one person across
+      // all three.
+      leader: leadingBid ? toPublicBid(leadingBid, viewer?.id) : null,
+      recentBids: recentBids.map((bid) => toPublicBid(bid, viewer?.id)),
+      you
     };
   }
 

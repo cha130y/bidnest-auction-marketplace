@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuctionModule } from '../auction/auction.module';
+import { ArenaController } from './arena.controller';
 import { LiveService } from './live.service';
 import { LobbyController } from './lobby.controller';
 import { ParticipantController } from './participant.controller';
@@ -17,7 +18,7 @@ import { ParticipantController } from './participant.controller';
  */
 @Module({
   imports: [AuctionModule],
-  controllers: [LobbyController, ParticipantController],
+  controllers: [LobbyController, ArenaController, ParticipantController],
   providers: [LiveService],
   exports: [LiveService]
 })

@@ -29,6 +29,6 @@ export class LobbyController {
     @Param('auctionId', ParseUUIDPipe) auctionId: string,
     @Req() request: Request
   ) {
-    return this.liveService.getLobby(auctionId, request.user?.id);
+    return this.liveService.getLobby(auctionId, request.user);
   }
 }
