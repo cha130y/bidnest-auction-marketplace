@@ -34,6 +34,7 @@ export const auctionRowSelect = {
   startedAt: true,
   endedAt: true,
   extensionCount: true,
+  soldPrice: true,
   createdAt: true,
   updatedAt: true,
   images: {
@@ -86,6 +87,15 @@ export function toPublicAuction(auction: AuctionRow) {
     startedAt: auction.startedAt,
     endedAt: auction.endedAt,
     extensionCount: auction.extensionCount,
+    /**
+     * LIV-004 — what it sold for, null unless it did. Public the moment it
+     * happens, unlike the reserve: the reserve is what the seller would have
+     * accepted, the sold price is what somebody actually paid.
+     *
+     * Null on an UNSOLD auction because there was no sale, not to hold
+     * anything back — `currentPrice` still shows what the bidding reached.
+     */
+    soldPrice: auction.soldPrice?.toString() ?? null,
     category: auction.category,
     seller: {
       id: auction.seller.id,
