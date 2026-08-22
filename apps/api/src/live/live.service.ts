@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { calculateCountdown } from './utils/calculate-countdown.util';
 import { describeBiddingAccess } from './utils/describe-bidding-access.util';
+import { describeSuddenDeath } from './utils/describe-sudden-death.util';
 
 /**
  * LIV-001 — the statuses somebody can still take part in. A finished auction
@@ -81,18 +82,19 @@ export class LiveService {
   }
 
   /**
-   * LIV-002 — the arena, while the auction runs. Everything the lobby shows,
-   * plus the three things that only matter once bidding is open: who is
-   * leading, the latest bids, and the lowest amount that will be accepted.
+   * LIV-002 / LIV-003 — the arena, while the auction runs. Everything the
+   * lobby shows, plus what only matters once bidding is open: who is leading,
+   * the latest bids, the lowest amount that will be accepted, and how close to
+   * the end it is.
    *
    * A separate read from the lobby rather than fields bolted onto it: a lobby
    * is looked at by people waiting for an auction that has no bids to show,
-   * and it should not pay for the two extra queries.
+   * and it should not pay for the extra queries.
    */
   async getArena(auctionId: string, viewer?: AuthenticatedUser) {
     const lobby = await this.getLobby(auctionId, viewer);
 
-    const [leadingBid, recentBids] = await Promise.all([
+    const [leadingBid, recentBids, lastExtension] = await Promise.all([
       // Ordered the way settlement picks a winner, so the person shown to be
       // leading is the person who would actually win (AUC-007).
       this.prisma.bid.findFirst({
@@ -107,6 +109,18 @@ export class LiveService {
         orderBy: { sequenceNo: 'desc' },
         take: ARENA_RECENT_BIDS,
         select: bidHistorySelect
+      }),
+      // LIV-003 — the deadline move a screen can point at. The realtime event
+      // carries the same thing (BID-004), but somebody opening the page after
+      // it fired has no event to have missed.
+      this.prisma.auctionExtension.findFirst({
+        where: { auctionId },
+        orderBy: { extensionNumber: 'desc' },
+        select: {
+          extensionNumber: true,
+          previousEndAt: true,
+          newEndAt: true
+        }
       })
     ]);
 
@@ -124,6 +138,14 @@ export class LiveService {
       // all three.
       leader: leadingBid ? toPublicBid(leadingBid, viewer?.id) : null,
       recentBids: recentBids.map((bid) => toPublicBid(bid, viewer?.id)),
+      // LIV-003 — measured against the countdown's own instant, so the urgent
+      // state and the time left on screen cannot describe two different
+      // moments.
+      suddenDeath: describeSuddenDeath(
+        lobby.auction,
+        lastExtension,
+        lobby.countdown.serverTime
+      ),
       you
     };
   }

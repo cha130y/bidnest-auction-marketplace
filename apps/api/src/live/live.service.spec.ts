@@ -37,6 +37,7 @@ describe('LiveService', () => {
       updateMany: jest.Mock;
     };
     bid: { findFirst: jest.Mock; findMany: jest.Mock };
+    auctionExtension: { findFirst: jest.Mock };
   };
   let auctionService: { findPublicAuction: jest.Mock };
   let gateway: { emitToAuction: jest.Mock };
@@ -48,7 +49,8 @@ describe('LiveService', () => {
     biddingOpen: true,
     seller: { id: SELLER_ID },
     scheduledStartAt: STARTS_AT,
-    currentEndAt: ENDS_AT
+    currentEndAt: ENDS_AT,
+    extensionCount: 0
   };
 
   /** A bid row as bidHistorySelect loads it. */
@@ -77,7 +79,8 @@ describe('LiveService', () => {
       bid: {
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([])
-      }
+      },
+      auctionExtension: { findFirst: jest.fn().mockResolvedValue(null) }
     };
     auctionService = {
       findPublicAuction: jest.fn().mockResolvedValue(publicAuction)
@@ -260,6 +263,84 @@ describe('LiveService', () => {
       expect(orderBy).toEqual({ sequenceNo: 'desc' });
       expect(take).toBe(10);
       expect(arena.recentBids.map((bid) => bid.sequenceNo)).toEqual([7, 6]);
+    });
+
+    // LIV-003 — the urgent state, so a screen does not have to know BID-004's
+    // rule to know when to look urgent
+    describe('sudden death (LIV-003)', () => {
+      /** An auction whose deadline is `ms` away from real now. */
+      const endingIn = (ms: number, extensionCount = 0) =>
+        auctionService.findPublicAuction.mockResolvedValue({
+          ...publicAuction,
+          currentEndAt: new Date(Date.now() + ms),
+          extensionCount
+        });
+
+      it('is quiet while there is plenty of time left', async () => {
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.suddenDeath).toMatchObject({
+          active: false,
+          extensionCount: 0,
+          extensionsRemaining: 5,
+          lastExtension: null
+        });
+      });
+
+      it('turns on inside the last two minutes', async () => {
+        endingIn(60_000);
+
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.suddenDeath.active).toBe(true);
+      });
+
+      it('counts the extensions used and the ones left', async () => {
+        endingIn(60_000, 3);
+
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.suddenDeath).toMatchObject({
+          extensionCount: 3,
+          extensionsRemaining: 2
+        });
+      });
+
+      it('shows the deadline move a reader may have missed', async () => {
+        const moved = {
+          extensionNumber: 2,
+          previousEndAt: STARTS_AT,
+          newEndAt: ENDS_AT
+        };
+        prisma.auctionExtension.findFirst.mockResolvedValue(moved);
+
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.suddenDeath.lastExtension).toEqual(moved);
+      });
+
+      it('reads the most recent extension, not the first', async () => {
+        await service.getArena(AUCTION_ID);
+
+        const { orderBy } = (
+          prisma.auctionExtension.findFirst.mock.calls as {
+            orderBy: unknown;
+          }[][]
+        )[0][0];
+        expect(orderBy).toEqual({ extensionNumber: 'desc' });
+      });
+
+      // the urgency and the clock on screen must describe the same instant
+      it('is measured against the same moment the countdown is', async () => {
+        endingIn(60_000);
+
+        const arena = await service.getArena(AUCTION_ID);
+
+        expect(arena.countdown.msUntilEnd).toBeLessThanOrEqual(
+          arena.suddenDeath.windowMs
+        );
+        expect(arena.suddenDeath.active).toBe(true);
+      });
     });
 
     describe('whether the person looking may bid', () => {

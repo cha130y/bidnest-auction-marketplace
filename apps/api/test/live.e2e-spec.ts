@@ -148,6 +148,18 @@ describe('Live lobby (e2e)', () => {
       isYours: boolean;
     } | null;
     recentBids: { amount: string; sequenceNo: number; bidder: string }[];
+    suddenDeath: {
+      active: boolean;
+      windowMs: number;
+      extensionMs: number;
+      extensionCount: number;
+      extensionsRemaining: number;
+      lastExtension: {
+        extensionNumber: number;
+        previousEndAt: string;
+        newEndAt: string;
+      } | null;
+    };
     you:
       | (NonNullable<Lobby['you']> & {
           canBid: boolean;
@@ -663,6 +675,143 @@ describe('Live lobby (e2e)', () => {
         .get(`/auctions/${draftId}/arena`)
         .set('Authorization', authOf(sellerId))
         .expect(404);
+    });
+  });
+
+  /**
+   * LIV-003 — "แสดงจำนวนครั้งที่ต่อเวลา/เวลาสิ้นสุดใหม่ในสถานะเร่งด่วนที่
+   * เข้าถึงง่าย". The rule itself is BID-004's and is tested there; this is
+   * about the arena reporting it so a screen never has to work it out.
+   */
+  describe('sudden death on the arena (LIV-003)', () => {
+    const MINUTE = 60 * 1000;
+
+    /**
+     * A running auction ending `endsInMinutes` from now, with `used`
+     * extensions already spent. Published normally, then aged into position —
+     * AUC-004 refuses to publish something already at its deadline.
+     */
+    const endingSoon = async (endsInMinutes: number, used = 0) => {
+      const auctionId = await publishAuction(-1);
+
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: {
+          currentEndAt: new Date(Date.now() + endsInMinutes * MINUTE),
+          extensionCount: used
+        }
+      });
+
+      return auctionId;
+    };
+
+    it('stays quiet while there is plenty of time left', async () => {
+      const auctionId = await publishAuction(-1);
+
+      const { suddenDeath } = await readArena(auctionId);
+
+      expect(suddenDeath).toMatchObject({
+        active: false,
+        extensionCount: 0,
+        extensionsRemaining: 5,
+        lastExtension: null
+      });
+    });
+
+    it('turns urgent inside the last two minutes', async () => {
+      const auctionId = await endingSoon(1);
+
+      const { suddenDeath } = await readArena(auctionId);
+
+      expect(suddenDeath.active).toBe(true);
+    });
+
+    // a screen should not have to know BID-004's numbers to describe them
+    it('sends the window and the extension length', async () => {
+      const auctionId = await endingSoon(1);
+
+      const { suddenDeath } = await readArena(auctionId);
+
+      expect(suddenDeath).toMatchObject({
+        windowMs: 2 * MINUTE,
+        extensionMs: 2 * MINUTE
+      });
+    });
+
+    it('reports the deadline moving after a bid extends it', async () => {
+      const auctionId = await endingSoon(1);
+      const before = await readArena(auctionId);
+
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      const after = await readArena(auctionId);
+      expect(after.suddenDeath).toMatchObject({
+        extensionCount: 1,
+        extensionsRemaining: 4
+      });
+      expect(after.suddenDeath.lastExtension).toMatchObject({
+        extensionNumber: 1
+      });
+      expect(
+        Date.parse(after.suddenDeath.lastExtension!.newEndAt)
+      ).toBeGreaterThan(
+        Date.parse(after.suddenDeath.lastExtension!.previousEndAt)
+      );
+      expect(before.suddenDeath.lastExtension).toBeNull();
+    });
+
+    // the extension the arena reports has to be the one that actually happened
+    it('agrees with the auction it describes about the new deadline', async () => {
+      const auctionId = await endingSoon(1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      const arena = await readArena(auctionId);
+
+      expect(arena.suddenDeath.lastExtension?.newEndAt).toBe(
+        arena.countdown.endsAt
+      );
+    });
+
+    it('reports the latest extension, not the first', async () => {
+      const auctionId = await endingSoon(1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+      // the first bid pushed the end two minutes out, back outside the window
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { currentEndAt: new Date(Date.now() + MINUTE) }
+      });
+      await bid(auctionId, strangerId, 3500).expect(201);
+
+      const arena = await readArena(auctionId);
+
+      expect(arena.suddenDeath).toMatchObject({
+        extensionCount: 2,
+        extensionsRemaining: 3
+      });
+      expect(arena.suddenDeath.lastExtension).toMatchObject({
+        extensionNumber: 2
+      });
+    });
+
+    // the last two minutes of an auction that can no longer be extended are
+    // the most urgent it gets, not the least
+    it('stays urgent once the five extensions are spent', async () => {
+      const auctionId = await endingSoon(1, 5);
+
+      const { suddenDeath } = await readArena(auctionId);
+
+      expect(suddenDeath).toMatchObject({
+        active: true,
+        extensionsRemaining: 0
+      });
+    });
+
+    it('is quiet on an auction that has not opened yet', async () => {
+      const auctionId = await publishAuction(1);
+
+      const { suddenDeath } = await readArena(auctionId);
+
+      expect(suddenDeath.active).toBe(false);
     });
   });
 
