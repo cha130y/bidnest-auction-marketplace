@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 
 import { ArenaPanel } from "@/components/auction/arena-panel"
 import { AuctionImage } from "@/components/auction/auction-image"
+import { WatchButton } from "@/components/auction/watch-button"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { SiteHeader } from "@/components/layout/site-header"
 import { getArena } from "@/lib/api/auctions"
@@ -141,6 +142,10 @@ export default async function AuctionDetailPage({
               {/* Everything that moves lives in here; the rest of the page is
                   server-rendered and stays put. */}
               <ArenaPanel auctionId={auction.id} initialArena={arena} />
+
+              {/* WAT-001 — reads its own state: this page is rendered without
+                  a token, so it cannot know whether the viewer follows it. */}
+              <WatchButton auctionId={auction.id} className="mt-4" />
             </div>
           </div>
 
