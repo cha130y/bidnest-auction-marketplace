@@ -388,3 +388,35 @@ export type PlacedBid = {
   clientRequestId: string
   placedAt: string
 }
+
+// ── src/watchlist/watchlist.service.ts ──────────────────────────────────────
+/**
+ * WAT-001 — the answer to watching or unwatching, from either direction.
+ *
+ * `watching` is the state afterwards, so a button can render straight from it
+ * without inferring which call it just made. Watching twice is not an error:
+ * the second call returns the first `watchedAt` unchanged.
+ */
+export type WatchToggle = {
+  auctionId: string
+  watching: boolean
+  /** Present when watching; the moment it was first added, not re-stamped. */
+  watchedAt?: string
+  /** Present when unwatching; false if there was nothing to remove. */
+  removed?: boolean
+}
+
+/**
+ * WAT-002 — a row of the watchlist.
+ *
+ * Carries the countdown and the result alongside the auction so a list of
+ * things somebody is following can show how long each has left, or how it
+ * ended, without a request per row.
+ */
+export type WatchlistEntry = {
+  watchedAt: string
+  auction: Auction
+  countdown: AuctionCountdown
+  /** Null while it is still running (LIV-004). */
+  result: AuctionResult | null
+}
