@@ -148,6 +148,15 @@ describe('Live lobby (e2e)', () => {
       isYours: boolean;
     } | null;
     recentBids: { amount: string; sequenceNo: number; bidder: string }[];
+    result: {
+      outcome: 'SOLD' | 'UNSOLD';
+      endedAt: string | null;
+      soldPrice: string | null;
+      finalPrice: string | null;
+      bidCount: number;
+      reserveMet: boolean;
+      winner: { amount: string; bidder: string; isYours: boolean } | null;
+    } | null;
     suddenDeath: {
       active: boolean;
       windowMs: number;
@@ -675,6 +684,181 @@ describe('Live lobby (e2e)', () => {
         .get(`/auctions/${draftId}/arena`)
         .set('Authorization', authOf(sellerId))
         .expect(404);
+    });
+  });
+
+  /**
+   * LIV-004 — "เมื่อจบแสดงผล Sold/Unsold/ราคาสุดท้าย". Settlement itself is
+   * AUC-007's and is tested there; this is about what the finished auction
+   * reports and what the room is told.
+   */
+  describe('the result (LIV-004)', () => {
+    /**
+     * Runs an auction out of time and lets the next read settle it (AUC-007),
+     * which is how a real auction with nobody watching ends.
+     */
+    const runOutOfTime = async (auctionId: string) => {
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { currentEndAt: new Date(Date.now() - 1000) }
+      });
+
+      await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}`)
+        .expect(200);
+    };
+
+    it('reports nothing while the auction is still running', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 3000).expect(201);
+
+      expect((await readArena(auctionId)).result).toBeNull();
+    });
+
+    it('reports a sale with its price, its winner and when it ended', async () => {
+      const auctionId = await publishAuction(-1);
+      // the reserve is 4500, so this clears it
+      await bid(auctionId, buyerId, 5000).expect(201);
+      await runOutOfTime(auctionId);
+
+      const arena = await readArena(auctionId, buyerId);
+
+      expect(arena.auction).toMatchObject({
+        status: 'SOLD',
+        soldPrice: '5000',
+        biddingOpen: false
+      });
+      expect(arena.result).toMatchObject({
+        outcome: 'SOLD',
+        soldPrice: '5000',
+        finalPrice: '5000',
+        reserveMet: true,
+        bidCount: 1
+      });
+      expect(arena.result?.winner).toMatchObject({ isYours: true });
+      expect(arena.result?.endedAt).not.toBeNull();
+    });
+
+    it('names the winner masked, to everybody', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 5000).expect(201);
+      await runOutOfTime(auctionId);
+
+      const stranger = await readArena(auctionId, strangerId);
+
+      expect(stranger.result?.winner?.bidder).toMatch(/\*/);
+      expect(stranger.result?.winner).not.toHaveProperty('bidderId');
+      expect(stranger.result?.winner?.isYours).toBe(false);
+    });
+
+    it('reports an auction whose top bid missed the reserve as UNSOLD', async () => {
+      const auctionId = await publishAuction(-1);
+      // 3000 is above the starting price but below the 4500 reserve
+      await bid(auctionId, buyerId, 3000).expect(201);
+      await runOutOfTime(auctionId);
+
+      const arena = await readArena(auctionId, buyerId);
+
+      expect(arena.auction).toMatchObject({
+        status: 'UNSOLD',
+        soldPrice: null
+      });
+      expect(arena.result).toMatchObject({
+        outcome: 'UNSOLD',
+        soldPrice: null,
+        // "ราคาสุดท้าย" is still what the bidding reached
+        finalPrice: '3000',
+        reserveMet: false,
+        winner: null
+      });
+    });
+
+    it('reports an auction nobody bid on', async () => {
+      const auctionId = await publishAuction(-1);
+      await runOutOfTime(auctionId);
+
+      const arena = await readArena(auctionId);
+
+      expect(arena.result).toMatchObject({
+        outcome: 'UNSOLD',
+        bidCount: 0,
+        finalPrice: null,
+        soldPrice: null,
+        winner: null
+      });
+    });
+
+    // AUC-003 — the reserve stays private after the auction ends too
+    it('never sends the reserve, sold or unsold', async () => {
+      const sold = await publishAuction(-1);
+      await bid(sold, buyerId, 5000).expect(201);
+      await runOutOfTime(sold);
+
+      const unsold = await publishAuction(-1);
+      await bid(unsold, buyerId, 3000).expect(201);
+      await runOutOfTime(unsold);
+
+      expectNoReserve(await readArena(sold, buyerId), 4500);
+      expectNoReserve(await readArena(unsold, buyerId), 4500);
+    });
+
+    it('tells the room, so a screen flips to the result by itself', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 5000).expect(201);
+      broadcasts.mockClear();
+
+      await runOutOfTime(auctionId);
+
+      expect(broadcasts).toHaveBeenCalledWith(
+        auctionId,
+        'auction:ended',
+        expect.objectContaining({
+          auctionId,
+          status: 'SOLD',
+          soldPrice: '5000'
+        })
+      );
+    });
+
+    // the scheduler settles auctions nobody is looking at, and those rooms
+    // need telling just as much
+    it('tells the room when the scheduler is what settled it', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 5000).expect(201);
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { currentEndAt: new Date(Date.now() - 1000) }
+      });
+      broadcasts.mockClear();
+
+      await lifecycle.reconcileLifecycle();
+
+      expect(broadcasts).toHaveBeenCalledWith(
+        auctionId,
+        'auction:ended',
+        expect.objectContaining({ status: 'SOLD' })
+      );
+    });
+
+    it('announces the result once, however many readers arrive', async () => {
+      const auctionId = await publishAuction(-1);
+      await bid(auctionId, buyerId, 5000).expect(201);
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { currentEndAt: new Date(Date.now() - 1000) }
+      });
+      broadcasts.mockClear();
+
+      await Promise.all([
+        readArena(auctionId),
+        readArena(auctionId),
+        readArena(auctionId)
+      ]);
+
+      const ended = (broadcasts.mock.calls as [string, string][]).filter(
+        ([, event]) => event === 'auction:ended'
+      );
+      expect(ended).toHaveLength(1);
     });
   });
 

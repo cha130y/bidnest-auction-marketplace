@@ -12,6 +12,8 @@ const auctionRow = (
   overrides: {
     currentPrice?: Prisma.Decimal;
     reservePrice?: Prisma.Decimal | null;
+    soldPrice?: Prisma.Decimal | null;
+    status?: 'ACTIVE' | 'SOLD' | 'UNSOLD';
     bidCount?: number;
   } = {}
 ) => ({
@@ -35,6 +37,7 @@ const auctionRow = (
   startedAt: null,
   endedAt: null,
   extensionCount: 0,
+  soldPrice: null as Prisma.Decimal | null,
   createdAt: new Date('2026-08-19T00:00:00.000Z'),
   updatedAt: new Date('2026-08-19T00:00:00.000Z'),
   images: [

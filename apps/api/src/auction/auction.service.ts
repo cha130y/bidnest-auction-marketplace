@@ -8,6 +8,11 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
 import { LEADING_BID_ORDER } from '../bid/constants/leading-bid-order.constant';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
+import {
+  settledWinnerSelect,
+  toAuctionEndedEvent
+} from './auction-ended-event.mapper';
 import {
   auctionRowSelect,
   auctionPublishGateSelect,
@@ -31,7 +36,10 @@ const DEFAULT_HOT_PAGE_SIZE = 20;
 
 @Injectable()
 export class AuctionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: AuctionGateway
+  ) {}
 
   /**
    * AUC-001 — a draft is private to its seller and lands in DRAFT, the only
@@ -320,10 +328,34 @@ export class AuctionService {
    * looking at is a separate piece of work.
    */
   async settleAuction(id: string) {
+    const outcome = await this.settleInTransaction(id);
+
+    /**
+     * LIV-004 / SRS section 6 — the room hears the result only once it is on
+     * record. A result is final in a way a price is not: no later event
+     * supersedes it, so announcing one a rollback could take back would leave
+     * a screen showing a sale that never happened.
+     *
+     * A caller that lost the race to settle gets null and announces nothing —
+     * whoever won it has already told the room.
+     */
+    if (outcome) {
+      this.gateway.emitToAuction(id, 'auction:ended', outcome.event);
+    }
+
+    return outcome && { sold: outcome.sold };
+  }
+
+  private settleInTransaction(id: string) {
     return this.prisma.$transaction(async (tx) => {
       const auction = await tx.auction.findFirst({
         where: { id, status: 'ACTIVE', deletedAt: null },
-        select: { id: true, currentEndAt: true, reservePrice: true }
+        select: {
+          id: true,
+          currentEndAt: true,
+          reservePrice: true,
+          bidCount: true
+        }
       });
 
       // Not running, or still running — either way there is nothing to settle.
@@ -335,7 +367,9 @@ export class AuctionService {
         // The same order the arena names its leader by (LIV-002), so the
         // person shown to be winning is the person who actually wins.
         orderBy: LEADING_BID_ORDER,
-        select: { id: true, bidderId: true, amount: true }
+        // The bidder's profile rides along so the announcement below can name
+        // the winner masked, without a second read after the commit.
+        select: { ...settledWinnerSelect, bidderId: true }
       });
 
       const reserveMet =
@@ -343,13 +377,15 @@ export class AuctionService {
         calculateReserveMet(highestBid.amount, auction.reservePrice);
       const sold = highestBid !== null && reserveMet;
 
+      const endedAt = new Date();
+
       const { count } = await tx.auction.updateMany({
         // Guarded on ACTIVE, so two readers arriving at once cannot both settle
         // the same auction and write two ENDED events.
         where: { id, status: 'ACTIVE', deletedAt: null },
         data: {
           status: sold ? 'SOLD' : 'UNSOLD',
-          endedAt: new Date(),
+          endedAt,
           winnerUserId: sold ? highestBid.bidderId : null,
           winningBidId: sold ? highestBid.id : null,
           soldPrice: sold ? highestBid.amount : null,
@@ -364,7 +400,16 @@ export class AuctionService {
         data: { auctionId: id, eventType: 'ENDED', bidId: highestBid?.id }
       });
 
-      return { sold };
+      return {
+        sold,
+        event: toAuctionEndedEvent({
+          id,
+          sold,
+          endedAt,
+          bidCount: auction.bidCount,
+          winner: highestBid
+        })
+      };
     });
   }
 

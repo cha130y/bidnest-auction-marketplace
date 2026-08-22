@@ -6,6 +6,7 @@ import {
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
 import { AuctionService } from './auction.service';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 
@@ -119,6 +120,7 @@ describe('AuctionService', () => {
     category: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
+  let gateway: { emitToAuction: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -139,9 +141,14 @@ describe('AuctionService', () => {
       // transaction made without a second layer of fakes.
       $transaction: jest.fn((run: (tx: unknown) => unknown) => run(prisma))
     };
+    gateway = { emitToAuction: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [AuctionService, { provide: PrismaService, useValue: prisma }]
+      providers: [
+        AuctionService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AuctionGateway, useValue: gateway }
+      ]
     }).compile();
 
     service = moduleRef.get(AuctionService);
@@ -1083,13 +1090,17 @@ describe('AuctionService', () => {
       id: DRAFT_ID,
       currentEndAt: new Date(Date.now() - 60 * 1000),
       reservePrice: dec(4500),
+      bidCount: 1,
       ...overrides
     });
 
+    // shaped like settledWinnerSelect: the profile rides along so the
+    // announcement can mask the winner without a second read
     const bid = (amount: string | number, bidderId = 'bidder-1') => ({
       id: 'bid-1',
       bidderId,
-      amount: dec(amount)
+      amount: dec(amount),
+      bidder: { profile: { displayName: 'Somchai' } }
     });
 
     const settleWith = (
@@ -1260,6 +1271,75 @@ describe('AuctionService', () => {
       await service.settleAuction(DRAFT_ID);
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    // LIV-004 — a result is final in a way a price is not, so it is announced
+    // only once it is on record
+    describe('announcing the result (LIV-004)', () => {
+      const announcement = () =>
+        (
+          gateway.emitToAuction.mock.calls as [
+            string,
+            string,
+            Record<string, unknown>
+          ][]
+        )[0];
+
+      it('tells the room a sale happened, with the winner masked', async () => {
+        settleWith(ended(), bid(5000));
+
+        await service.settleAuction(DRAFT_ID);
+
+        const [auctionId, event, payload] = announcement();
+        expect(auctionId).toBe(DRAFT_ID);
+        expect(event).toBe('auction:ended');
+        expect(payload).toMatchObject({
+          status: 'SOLD',
+          soldPrice: '5000',
+          winner: 'S***i'
+        });
+      });
+
+      it('tells the room an auction did not sell', async () => {
+        settleWith(ended(), bid(4000));
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(announcement()[2]).toMatchObject({
+          status: 'UNSOLD',
+          soldPrice: null,
+          winner: null
+        });
+      });
+
+      // SRS section 6 — a rollback would take the sale back, and a result
+      // cannot be corrected by a later event the way a price can
+      it('announces nothing when it lost the race to settle', async () => {
+        prisma.auction.findFirst.mockResolvedValue(ended());
+        prisma.bid.findFirst.mockResolvedValue(bid(5000));
+        prisma.auction.updateMany.mockResolvedValue({ count: 0 });
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      it('announces nothing for an auction that is not due', async () => {
+        prisma.auction.findFirst.mockResolvedValue(null);
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(gateway.emitToAuction).not.toHaveBeenCalled();
+      });
+
+      // AUC-003 — the reserve stays private after the auction ends too
+      it('never puts the reserve in the announcement', async () => {
+        settleWith(ended({ reservePrice: dec(4500) }), bid(5000));
+
+        await service.settleAuction(DRAFT_ID);
+
+        expect(JSON.stringify(announcement()[2])).not.toContain('4500');
+      });
     });
   });
 

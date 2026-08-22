@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { calculateCountdown } from './utils/calculate-countdown.util';
 import { describeBiddingAccess } from './utils/describe-bidding-access.util';
+import { describeAuctionResult } from './utils/describe-auction-result.util';
 import { describeSuddenDeath } from './utils/describe-sudden-death.util';
 
 /**
@@ -94,35 +95,47 @@ export class LiveService {
   async getArena(auctionId: string, viewer?: AuthenticatedUser) {
     const lobby = await this.getLobby(auctionId, viewer);
 
-    const [leadingBid, recentBids, lastExtension] = await Promise.all([
-      // Ordered the way settlement picks a winner, so the person shown to be
-      // leading is the person who would actually win (AUC-007).
-      this.prisma.bid.findFirst({
-        where: { auctionId },
-        orderBy: LEADING_BID_ORDER,
-        select: bidHistorySelect
-      }),
-      // Newest first: an arena reads downwards from what just happened, which
-      // is the opposite of the history route (BID-005).
-      this.prisma.bid.findMany({
-        where: { auctionId },
-        orderBy: { sequenceNo: 'desc' },
-        take: ARENA_RECENT_BIDS,
-        select: bidHistorySelect
-      }),
-      // LIV-003 — the deadline move a screen can point at. The realtime event
-      // carries the same thing (BID-004), but somebody opening the page after
-      // it fired has no event to have missed.
-      this.prisma.auctionExtension.findFirst({
-        where: { auctionId },
-        orderBy: { extensionNumber: 'desc' },
-        select: {
-          extensionNumber: true,
-          previousEndAt: true,
-          newEndAt: true
-        }
-      })
-    ]);
+    const [leadingBid, recentBids, lastExtension, winningBid] =
+      await Promise.all([
+        // Ordered the way settlement picks a winner, so the person shown to be
+        // leading is the person who would actually win (AUC-007).
+        this.prisma.bid.findFirst({
+          where: { auctionId },
+          orderBy: LEADING_BID_ORDER,
+          select: bidHistorySelect
+        }),
+        // Newest first: an arena reads downwards from what just happened, which
+        // is the opposite of the history route (BID-005).
+        this.prisma.bid.findMany({
+          where: { auctionId },
+          orderBy: { sequenceNo: 'desc' },
+          take: ARENA_RECENT_BIDS,
+          select: bidHistorySelect
+        }),
+        // LIV-003 — the deadline move a screen can point at. The realtime event
+        // carries the same thing (BID-004), but somebody opening the page after
+        // it fired has no event to have missed.
+        this.prisma.auctionExtension.findFirst({
+          where: { auctionId },
+          orderBy: { extensionNumber: 'desc' },
+          select: {
+            extensionNumber: true,
+            previousEndAt: true,
+            newEndAt: true
+          }
+        }),
+        /**
+         * LIV-004 — the bid settlement recorded as the winner, reached through
+         * the relation rather than recomputed. The leader query above would
+         * almost certainly agree, but "almost certainly" is not what a result
+         * screen should rest on: this is the bid the auction is on record as
+         * having been won by. Null on anything that has not been sold.
+         */
+        this.prisma.bid.findFirst({
+          where: { wonAuction: { id: auctionId } },
+          select: bidHistorySelect
+        })
+      ]);
 
     // The arena's control needs to know whether it is usable, which the lobby
     // has no reason to answer.
@@ -145,6 +158,12 @@ export class LiveService {
         lobby.auction,
         lastExtension,
         lobby.countdown.serverTime
+      ),
+      // LIV-004 — null while the auction is still running, which is what tells
+      // a screen to keep showing the arena rather than a result.
+      result: describeAuctionResult(
+        lobby.auction,
+        winningBid ? toPublicBid(winningBid, viewer?.id) : null
       ),
       you
     };
