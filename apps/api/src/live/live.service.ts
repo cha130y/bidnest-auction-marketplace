@@ -1,7 +1,8 @@
 import {
   ConflictException,
   Injectable,
-  NotFoundException
+  NotFoundException,
+  OnModuleInit
 } from '@nestjs/common';
 import type {
   AuctionStatus,
@@ -43,12 +44,34 @@ export const JOINABLE_AUCTION_STATUSES: AuctionStatus[] = [
 const ARENA_RECENT_BIDS = 10;
 
 @Injectable()
-export class LiveService {
+export class LiveService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auctionService: AuctionService,
     private readonly gateway: AuctionGateway
   ) {}
+
+  /**
+   * LIV-001 — closes the loop on presence without closing an import loop.
+   *
+   * Joining is recorded over HTTP, but nothing over HTTP can tell when
+   * somebody closes the tab; only the gateway sees a socket go. It hands the
+   * memberships that connection was holding to this, which releases them the
+   * same way an explicit DELETE /participants does — same write, same
+   * announcement, one rule.
+   *
+   * Registered rather than injected the other way round: the gateway must not
+   * import this service, because this service already announces through the
+   * gateway and AuctionService depends on it too. See
+   * AuctionGateway.onSocketPresenceReleased.
+   */
+  onModuleInit(): void {
+    this.gateway.onSocketPresenceReleased(async (gone) => {
+      for (const { auctionId, userId } of gone) {
+        await this.leave(auctionId, userId);
+      }
+    });
+  }
 
   /**
    * LIV-001 — everything the lobby screen needs in one read: the auction

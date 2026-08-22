@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuctionGateway } from './auction.gateway';
+import { PresenceRegistry } from './presence-registry';
 import { RealtimeService } from './realtime.service';
 import { UserGateway } from './user.gateway';
 
@@ -17,8 +18,20 @@ import { UserGateway } from './user.gateway';
  */
 @Global()
 @Module({
+  /**
+   * Note what is *not* imported here: nothing from a feature module.
+   *
+   * LIV-001 needs a dropped socket to mark its person absent, which is a
+   * decision only LiveService can make — but LiveService already announces
+   * through AuctionGateway, and AuctionService depends on that gateway too.
+   * Importing back would close a loop and spread it.
+   *
+   * So the gateway offers a place to register instead
+   * (`onSocketPresenceReleased`) and LiveService fills it at startup. Every
+   * import still points one way.
+   */
   imports: [JwtModule.register({})],
-  providers: [RealtimeService, AuctionGateway, UserGateway],
+  providers: [RealtimeService, PresenceRegistry, AuctionGateway, UserGateway],
   exports: [RealtimeService, AuctionGateway, UserGateway]
 })
 export class RealtimeModule {}
