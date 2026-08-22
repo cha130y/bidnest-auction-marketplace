@@ -18,17 +18,22 @@ export async function findAuctionAudience(
   auctionId: string,
   exclude: (string | null | undefined)[] = []
 ): Promise<string[]> {
-  const [bidders, watchers] = await Promise.all([
-    tx.bid.findMany({
-      where: { auctionId },
-      select: { bidderId: true },
-      distinct: ['bidderId']
-    }),
-    tx.watchlist.findMany({
-      where: { auctionId },
-      select: { userId: true }
-    })
-  ]);
+  // Read one at a time rather than with Promise.all: `tx` is a single
+  // connection pinned for the life of the transaction, and two queries in
+  // flight on one pg client is the pattern pg deprecates and removes in 9.0.
+  // Prisma's own interpreter still does this within a single call, which is
+  // upstream noise — this is the one instance our code controls, and the extra
+  // round trip costs nothing beside the settlement it runs inside.
+  const bidders = await tx.bid.findMany({
+    where: { auctionId },
+    select: { bidderId: true },
+    distinct: ['bidderId']
+  });
+
+  const watchers = await tx.watchlist.findMany({
+    where: { auctionId },
+    select: { userId: true }
+  });
 
   const excluded = new Set(exclude.filter((id): id is string => Boolean(id)));
   const audience = new Set<string>();
