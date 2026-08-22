@@ -1,0 +1,485 @@
+import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { randomUUID } from 'node:crypto';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from './../src/app.module';
+import { configureApp } from './../src/app.setup';
+import { AuctionLifecycleService } from './../src/auction/auction-lifecycle.service';
+import { AuctionGateway } from './../src/realtime/auction.gateway';
+import { PrismaService } from './../src/prisma/prisma.service';
+import { authRegistry } from './helpers/auth';
+import { expectNoReserve } from './helpers/reserve';
+
+/**
+ * LIV-001 — the lobby before an auction starts, end to end: the auction on
+ * show, how many people are in it, the countdown, whether the person looking
+ * has joined, and the auction opening by itself when its time arrives.
+ */
+describe('Live lobby (e2e)', () => {
+  let app: INestApplication<App>;
+  let prisma: PrismaService;
+  let lifecycle: AuctionLifecycleService;
+  let broadcasts: jest.SpyInstance;
+
+  // Unique per run so repeated local runs never collide on the unique indexes.
+  const run = Date.now();
+  const sellerEmail = `live-seller-${run}@example.com`;
+  const buyerEmail = `live-buyer-${run}@example.com`;
+  const strangerEmail = `live-stranger-${run}@example.com`;
+  const adminEmail = `live-admin-${run}@example.com`;
+
+  let sellerId: string;
+  let buyerId: string;
+  let strangerId: string;
+  let adminId: string;
+  let categoryId: string;
+  let authOf: (userId: string) => string;
+
+  const hoursFromNow = (hours: number) =>
+    new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+  const createUser = async (email: string, role: 'USER' | 'ADMIN') => {
+    const user = await prisma.user.create({
+      data: {
+        email,
+        role,
+        status: 'ACTIVE',
+        profile: { create: { firstName: 'E2E', displayName: `e2e-${email}` } }
+      },
+      select: { id: true }
+    });
+    return user.id;
+  };
+
+  /** Creates a draft and publishes it, returning its id. */
+  const publishAuction = async (startInHours: number) => {
+    const created = await request(app.getHttpServer())
+      .post('/auctions/drafts')
+      .set('Authorization', authOf(sellerId))
+      .send({
+        title: 'Vintage Seiko 5 Automatic',
+        description: 'Serviced last year, original bracelet.',
+        categoryId,
+        condition: 'USED',
+        startingPrice: 3000,
+        minBidIncrement: 100,
+        reservePrice: 4500,
+        scheduledStartAt: hoursFromNow(startInHours),
+        scheduledEndAt: hoursFromNow(startInHours + 4),
+        imageUrls: ['https://placehold.co/600x400?text=Front']
+      })
+      .expect(201);
+
+    const id = (created.body as { id: string }).id;
+
+    await request(app.getHttpServer())
+      .post(`/auctions/drafts/${id}/publish`)
+      .set('Authorization', authOf(sellerId))
+      .expect(200);
+
+    return id;
+  };
+
+  const createDraft = async () => {
+    const created = await request(app.getHttpServer())
+      .post('/auctions/drafts')
+      .set('Authorization', authOf(sellerId))
+      .send({
+        title: 'Unpublished draft',
+        description: 'Nobody may look at this yet.',
+        categoryId,
+        condition: 'USED',
+        startingPrice: 1000,
+        minBidIncrement: 50,
+        scheduledStartAt: hoursFromNow(2),
+        scheduledEndAt: hoursFromNow(6),
+        imageUrls: ['https://placehold.co/600x400?text=Draft']
+      })
+      .expect(201);
+
+    return (created.body as { id: string }).id;
+  };
+
+  type Lobby = {
+    auction: { id: string; status: string };
+    participantCount: number;
+    countdown: {
+      serverTime: string;
+      startsAt: string | null;
+      endsAt: string | null;
+      msUntilStart: number | null;
+      msUntilEnd: number | null;
+    };
+    you: { joined: boolean; joinedAt: string | null } | null;
+  };
+
+  const readLobby = async (auctionId: string, viewerId?: string) => {
+    const call = request(app.getHttpServer()).get(
+      `/auctions/${auctionId}/lobby`
+    );
+    if (viewerId) call.set('Authorization', authOf(viewerId));
+
+    const response = await call.expect(200);
+    return response.body as Lobby;
+  };
+
+  const join = (auctionId: string, userId: string) =>
+    request(app.getHttpServer())
+      .post(`/auctions/${auctionId}/participants`)
+      .set('Authorization', authOf(userId));
+
+  const leave = (auctionId: string, userId: string) =>
+    request(app.getHttpServer())
+      .delete(`/auctions/${auctionId}/participants`)
+      .set('Authorization', authOf(userId));
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule]
+    }).compile();
+
+    app = configureApp(
+      moduleFixture.createNestApplication()
+    ) as INestApplication<App>;
+    prisma = app.get(PrismaService);
+    lifecycle = app.get(AuctionLifecycleService);
+    await app.init();
+
+    // No socket server is listening in these tests, so the gateway would drop
+    // every event silently. Spying on it is what makes the broadcasts visible.
+    broadcasts = jest.spyOn(app.get(AuctionGateway), 'emitToAuction');
+
+    sellerId = await createUser(sellerEmail, 'USER');
+    buyerId = await createUser(buyerEmail, 'USER');
+    strangerId = await createUser(strangerEmail, 'USER');
+    adminId = await createUser(adminEmail, 'ADMIN');
+
+    const category = await prisma.category.create({
+      data: { name: `E2E Live ${run}`, slug: `e2e-live-${run}` },
+      select: { id: true }
+    });
+    categoryId = category.id;
+
+    authOf = await authRegistry(app, [sellerId, buyerId, strangerId, adminId]);
+  });
+
+  beforeEach(() => {
+    broadcasts.mockClear();
+  });
+
+  afterAll(async () => {
+    const userIds = [sellerId, buyerId, strangerId, adminId];
+    await prisma.auctionParticipant.deleteMany({
+      where: { auction: { sellerId: { in: userIds } } }
+    });
+    await prisma.auction.deleteMany({ where: { sellerId: { in: userIds } } });
+    await prisma.category.deleteMany({ where: { id: categoryId } });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await app.close();
+  });
+
+  describe('GET /auctions/:id/lobby', () => {
+    it('shows a signed-out visitor the auction, the count and the countdown', async () => {
+      const auctionId = await publishAuction(1);
+
+      const lobby = await readLobby(auctionId);
+
+      expect(lobby.auction).toMatchObject({
+        id: auctionId,
+        status: 'SCHEDULED',
+        title: 'Vintage Seiko 5 Automatic'
+      });
+      expect(lobby.participantCount).toBe(0);
+      expect(lobby.you).toBeNull();
+    });
+
+    it('counts down to the start of an auction that has not begun', async () => {
+      const auctionId = await publishAuction(1);
+
+      const { countdown } = await readLobby(auctionId);
+
+      const oneHour = 60 * 60 * 1000;
+      expect(countdown.msUntilStart).toBeGreaterThan(oneHour - 60_000);
+      expect(countdown.msUntilStart).toBeLessThanOrEqual(oneHour);
+      expect(countdown.startsAt).not.toBeNull();
+      expect(countdown.endsAt).not.toBeNull();
+    });
+
+    // a running auction started in the past, and "how long until it started"
+    // is not a thing a screen counts down
+    it('reports zero rather than a negative number once the start has passed', async () => {
+      const auctionId = await publishAuction(-1);
+
+      const { countdown } = await readLobby(auctionId);
+
+      expect(countdown.msUntilStart).toBe(0);
+      expect(countdown.msUntilEnd).toBeGreaterThan(0);
+    });
+
+    it('sends its own clock so a client with a wrong one can still count', async () => {
+      const auctionId = await publishAuction(1);
+
+      const { countdown } = await readLobby(auctionId);
+
+      expect(Date.parse(countdown.serverTime)).toBeGreaterThan(0);
+    });
+
+    // AUC-003 — the lobby shows the auction, so it inherits the same duty
+    it('never sends the reserve to a visitor or to another user', async () => {
+      const auctionId = await publishAuction(1);
+
+      const anonymous = await readLobby(auctionId);
+      const stranger = await readLobby(auctionId, strangerId);
+
+      expectNoReserve(anonymous, 4500);
+      expectNoReserve(stranger, 4500);
+    });
+
+    it('still shows the seller their own reserve', async () => {
+      const auctionId = await publishAuction(1);
+
+      const lobby = await readLobby(auctionId, sellerId);
+
+      expect(lobby.auction).toMatchObject({ reservePrice: '4500' });
+    });
+
+    it('hides the lobby of a draft, the way the auction read hides the draft', async () => {
+      const draftId = await createDraft();
+
+      await request(app.getHttpServer())
+        .get(`/auctions/${draftId}/lobby`)
+        .set('Authorization', authOf(sellerId))
+        .expect(404);
+    });
+
+    it('answers 404 for an auction that does not exist', async () => {
+      await request(app.getHttpServer())
+        .get(`/auctions/${randomUUID()}/lobby`)
+        .expect(404);
+    });
+  });
+
+  describe('POST /auctions/:id/participants', () => {
+    it('counts the person who joined, for everybody looking', async () => {
+      const auctionId = await publishAuction(1);
+
+      const joined = await join(auctionId, buyerId).expect(200);
+
+      expect(joined.body).toMatchObject({
+        auctionId,
+        joined: true,
+        participantCount: 1
+      });
+      expect((await readLobby(auctionId)).participantCount).toBe(1);
+    });
+
+    it('tells the person who joined that they are in', async () => {
+      const auctionId = await publishAuction(1);
+      await join(auctionId, buyerId).expect(200);
+
+      const lobby = await readLobby(auctionId, buyerId);
+
+      expect(lobby.you).toMatchObject({ joined: true });
+      expect(lobby.you?.joinedAt).not.toBeNull();
+    });
+
+    it('leaves a different signed-in viewer out of it', async () => {
+      const auctionId = await publishAuction(1);
+      await join(auctionId, buyerId).expect(200);
+
+      const lobby = await readLobby(auctionId, strangerId);
+
+      expect(lobby.you).toEqual({ joined: false, joinedAt: null });
+      expect(lobby.participantCount).toBe(1);
+    });
+
+    it('pushes the new count to the room rather than waiting to be asked', async () => {
+      const auctionId = await publishAuction(1);
+
+      await join(auctionId, buyerId).expect(200);
+
+      expect(broadcasts).toHaveBeenCalledWith(
+        auctionId,
+        'auction:presence',
+        expect.objectContaining({ auctionId, participantCount: 1 })
+      );
+    });
+
+    // a client that reconnects and rejoins must not make the number jump
+    it('is idempotent — joining twice is one participant', async () => {
+      const auctionId = await publishAuction(1);
+
+      await join(auctionId, buyerId).expect(200);
+      const second = await join(auctionId, buyerId).expect(200);
+
+      expect(second.body).toMatchObject({ participantCount: 1 });
+      expect(broadcasts).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts two different people separately', async () => {
+      const auctionId = await publishAuction(1);
+
+      await join(auctionId, buyerId).expect(200);
+      const second = await join(auctionId, strangerId).expect(200);
+
+      expect(second.body).toMatchObject({ participantCount: 2 });
+    });
+
+    // joining is not bidding: the seller may watch their own auction
+    it('lets the seller join their own auction', async () => {
+      const auctionId = await publishAuction(1);
+
+      await join(auctionId, sellerId).expect(200);
+
+      expect((await readLobby(auctionId)).participantCount).toBe(1);
+    });
+
+    it('lets somebody join an auction that is already running', async () => {
+      const auctionId = await publishAuction(-1);
+
+      await join(auctionId, buyerId).expect(200);
+
+      const lobby = await readLobby(auctionId, buyerId);
+      expect(lobby.auction.status).toBe('ACTIVE');
+      expect(lobby.you).toMatchObject({ joined: true });
+    });
+
+    it('refuses an auction that has already finished', async () => {
+      const auctionId = await publishAuction(-1);
+      // the auction runs out of time, and the next read settles it (AUC-007)
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { currentEndAt: new Date(Date.now() - 1000) }
+      });
+      await request(app.getHttpServer())
+        .get(`/auctions/${auctionId}`)
+        .expect(200);
+
+      await join(auctionId, buyerId).expect(409);
+    });
+
+    // saying "you cannot join it" would confirm a private draft exists
+    it('gives nothing away about a draft', async () => {
+      const draftId = await createDraft();
+
+      await join(draftId, buyerId).expect(404);
+    });
+
+    // SRS 2 — admins moderate the marketplace, they do not take part in it
+    it('keeps admins out', async () => {
+      const auctionId = await publishAuction(1);
+
+      await join(auctionId, adminId).expect(403);
+    });
+
+    it('turns away a visitor who is not signed in', async () => {
+      const auctionId = await publishAuction(1);
+
+      await request(app.getHttpServer())
+        .post(`/auctions/${auctionId}/participants`)
+        .expect(401);
+    });
+  });
+
+  describe('DELETE /auctions/:id/participants', () => {
+    it('drops the person from the count', async () => {
+      const auctionId = await publishAuction(1);
+      await join(auctionId, buyerId).expect(200);
+
+      const left = await leave(auctionId, buyerId).expect(200);
+
+      expect(left.body).toMatchObject({
+        auctionId,
+        joined: false,
+        participantCount: 0
+      });
+      expect((await readLobby(auctionId, buyerId)).you).toEqual({
+        joined: false,
+        joinedAt: null
+      });
+    });
+
+    it('pushes the new count to the room', async () => {
+      const auctionId = await publishAuction(1);
+      await join(auctionId, buyerId).expect(200);
+      broadcasts.mockClear();
+
+      await leave(auctionId, buyerId).expect(200);
+
+      expect(broadcasts).toHaveBeenCalledWith(
+        auctionId,
+        'auction:presence',
+        expect.objectContaining({ participantCount: 0 })
+      );
+    });
+
+    it('is harmless when the person was never here', async () => {
+      const auctionId = await publishAuction(1);
+
+      const left = await leave(auctionId, buyerId).expect(200);
+
+      expect(left.body).toMatchObject({ participantCount: 0 });
+      expect(broadcasts).not.toHaveBeenCalled();
+    });
+
+    it('lets somebody come back, keeping the time they first arrived', async () => {
+      const auctionId = await publishAuction(1);
+      const first = await join(auctionId, buyerId).expect(200);
+      await leave(auctionId, buyerId).expect(200);
+
+      const back = await join(auctionId, buyerId).expect(200);
+
+      expect(back.body).toMatchObject({
+        joined: true,
+        participantCount: 1,
+        joinedAt: (first.body as { joinedAt: string }).joinedAt
+      });
+    });
+  });
+
+  /**
+   * LIV-001 — "เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ". The scheduler is switched
+   * off under test (see app.module), so the pass is called directly here —
+   * which is also the only way to assert on it without waiting ten seconds.
+   */
+  describe('an auction opening by itself', () => {
+    it('turns a scheduled auction ACTIVE once its time arrives', async () => {
+      const auctionId = await publishAuction(1);
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { scheduledStartAt: new Date(Date.now() - 1000) }
+      });
+
+      await lifecycle.reconcileLifecycle();
+
+      const lobby = await readLobby(auctionId);
+      expect(lobby.auction.status).toBe('ACTIVE');
+      expect(lobby.countdown.msUntilStart).toBe(0);
+    });
+
+    it('tells the room, so a lobby flips over without asking again', async () => {
+      const auctionId = await publishAuction(1);
+      await prisma.auction.update({
+        where: { id: auctionId },
+        data: { scheduledStartAt: new Date(Date.now() - 1000) }
+      });
+
+      await lifecycle.reconcileLifecycle();
+
+      expect(broadcasts).toHaveBeenCalledWith(
+        auctionId,
+        'auction:started',
+        expect.objectContaining({ auctionId, status: 'ACTIVE' })
+      );
+    });
+
+    it('leaves an auction whose time has not come alone', async () => {
+      const auctionId = await publishAuction(1);
+
+      await lifecycle.reconcileLifecycle();
+
+      expect((await readLobby(auctionId)).auction.status).toBe('SCHEDULED');
+    });
+  });
+});

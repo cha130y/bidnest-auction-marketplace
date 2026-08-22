@@ -16,6 +16,7 @@ import { ChatModule } from './chat/chat.module';
 import { AccessTokenGuard } from './common/guards/access-token.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HealthController } from './health/health.controller';
+import { LiveModule } from './live/live.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationModule } from './notification/notification.module';
 import { OrderModule } from './order/order.module';
@@ -57,6 +58,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AuctionModule,
     BidModule,
+    LiveModule,
     ProductModule,
     CartModule,
     OrderModule,
