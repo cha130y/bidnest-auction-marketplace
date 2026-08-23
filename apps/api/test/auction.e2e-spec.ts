@@ -147,19 +147,25 @@ describe('Auction drafts (e2e)', () => {
         category: { id: activeCategoryId },
         seller: { id: sellerId }
       });
-      const body = response.body as { images: unknown[] };
+      const body = response.body as { images: { id: unknown }[] };
       expect(body.images).toEqual([
         {
+          // AUC-001 — the id is what lets a seller's screen name a picture to
+          // remove, so it is asserted rather than allowed through: dropping it
+          // from the mapper would leave the image manager unable to delete.
+          id: expect.any(String) as unknown,
           url: 'https://placehold.co/600x400?text=Front',
           position: 0,
           isPrimary: true
         },
         {
+          id: expect.any(String) as unknown,
           url: 'https://placehold.co/600x400?text=Back',
           position: 1,
           isPrimary: false
         }
       ]);
+      expect(body.images[0].id).not.toEqual(body.images[1].id);
     });
 
     it('records the CREATED lifecycle event alongside the draft', async () => {
