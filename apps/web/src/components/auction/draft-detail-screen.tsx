@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { AlertTriangle, Check } from "lucide-react"
 
 import { AuctionImage } from "@/components/auction/auction-image"
+import { DraftImageManager } from "@/components/auction/draft-image-manager"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api/client"
@@ -162,6 +163,17 @@ export function DraftDetail({ auctionId }: { auctionId: string }) {
           <p className="mt-4 text-sm leading-6 whitespace-pre-line text-n-600">
             {draft.description}
           </p>
+        </section>
+
+        <section className="rounded-r4 bg-white p-6 shadow-sh1">
+          {/* Adding or removing a picture can change whether the draft is
+              publishable (AUC-002 requires at least one), so this reloads
+              both rather than only patching the images it just changed. */}
+          <DraftImageManager
+            auctionId={draft.id}
+            images={draft.images}
+            onChange={() => void load()}
+          />
         </section>
       </div>
 
