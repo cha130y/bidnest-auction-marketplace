@@ -17,14 +17,14 @@ export const metadata: Metadata = {
  * empty during SSR and a server read would 401 for everybody. `WatchlistView`
  * does the reading once the browser has it.
  *
- * Dev 1's header has a `Heart` with a `wishlistActive` prop already, but it
- * links nowhere yet. Pointing it here is a one-line change to `site-header.tsx`
- * — their file, so it is left for them rather than made in passing.
+ * Dev 1's header no longer carries a wishlist entry point (the `Heart` /
+ * `wishlistActive` prop was replaced by the notification bell) — this page
+ * has no in-header link to itself for now.
  */
 export default function WatchlistPage() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader activeHref="/watchlist" />
+      <SiteHeader />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-330 px-4 pb-16 md:px-6">

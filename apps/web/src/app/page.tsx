@@ -88,15 +88,14 @@ const SECTIONS: HomeSectionDefinition[] = [
  * the storefront header in the `(shop)` route group deliberately, so that
  * `app/layout.tsx` carries nothing module-specific and admin and auth render
  * without it — putting a header there would undo that. A home shell shared by
- * both halves of the product (the design has an `Auction | E-commerce` toggle
- * that `SiteHeader` does not have yet) is Dev 1's to define; until then this
- * consumes their presentational header unchanged, so whatever they add to it
- * arrives here for free.
+ * both halves of the product is Dev 1's to define; this consumes their
+ * presentational header unchanged, so whatever they add to it (the
+ * `Auction | E-commerce` gavel nav included) arrives here for free.
  */
 export default function Home() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader activeHref="/" />
+      <SiteHeader />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-330 px-4 pb-16 md:px-6">
