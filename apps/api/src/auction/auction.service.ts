@@ -2,34 +2,63 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
+import { LEADING_BID_ORDER } from '../bid/constants/leading-bid-order.constant';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
+import { RealtimeService } from '../realtime/realtime.service';
+import { toAuctionCancelledEvent } from './auction-cancelled-event.mapper';
+import {
+  auctionCancelledNotification,
+  auctionEndedNotification,
+  auctionWonNotification
+} from './auction-notification.mapper';
+import {
+  settledWinnerSelect,
+  toAuctionEndedEvent
+} from './auction-ended-event.mapper';
 import {
   auctionRowSelect,
   auctionPublishGateSelect,
   toOwnerAuction,
   toPublicAuction
 } from './auction.mapper';
-import { HOT_AUCTION_ORDER } from './constants/hot-auction-order.constant';
+import {
+  AUCTION_SECTION_QUERIES,
+  DEFAULT_AUCTION_SECTION
+} from './constants/auction-section.constant';
+import { MAX_AUCTION_IMAGES } from './constants/auction-image.constant';
+import { StorageService, type StoredImage } from '../storage/storage.service';
+import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
-import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
+import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import {
   assertAuctionIsCancellable,
   assertAuctionIsEditable
 } from './utils/assert-seller-can-change.util';
 import { calculateReserveMet } from './utils/calculate-reserve-met.util';
+import { findAuctionAudience } from './utils/find-auction-audience.util';
 import { validateDraftForPublish } from './utils/validate-draft-for-publish.util';
 
 /** Matches the product catalogue, so both lists page the same way. */
-const DEFAULT_HOT_PAGE_SIZE = 20;
+const DEFAULT_LIST_PAGE_SIZE = 20;
 
 @Injectable()
 export class AuctionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: AuctionGateway,
+    private readonly realtime: RealtimeService,
+    private readonly storage: StorageService
+  ) {}
+
+  private readonly logger = new Logger(AuctionService.name);
 
   /**
    * AUC-001 — a draft is private to its seller and lands in DRAFT, the only
@@ -224,7 +253,7 @@ export class AuctionService {
   async findPublicAuction(id: string, viewerId?: string) {
     const publicStatuses = {
       id,
-      status: { in: ['SCHEDULED', 'ACTIVE', 'SOLD', 'UNSOLD'] },
+      status: { in: PUBLIC_AUCTION_STATUSES },
       deletedAt: null
     } satisfies Prisma.AuctionWhereInput;
 
@@ -268,23 +297,32 @@ export class AuctionService {
   }
 
   /**
-   * AUC-008 — the Hot Auctions list: everything currently running, ranked by
-   * how much bidding it has attracted. Only ACTIVE auctions appear, so a
-   * scheduled one waiting to open is not "hot" yet and a finished one has
-   * dropped off.
+   * AUC-008 — the auction list. Asking for nothing is the Hot Auctions list:
+   * everything currently running, ranked by how much bidding it has
+   * attracted, so a scheduled auction waiting to open is not "hot" yet and a
+   * finished one has dropped off.
    *
-   * The ordering lives in HOT_AUCTION_ORDER and is not a query parameter —
-   * "no special flags or hidden scoring" means a caller cannot ask for a
-   * different arrangement, and there is no promotion or weighting to find.
+   * A `section` picks a different arrangement of what a buyer may already
+   * see — ending soon, starting soon, recently ended — for the four cards on
+   * the home page. Each section's filter and ordering are fixed in
+   * AUCTION_SECTION_QUERIES, so naming a section is the only choice on
+   * offer: there is still no `sort` or `status` to reach for, which is what
+   * keeps "no special flags or hidden scoring" true of the endpoint as a
+   * whole rather than only of its default.
    *
-   * Mapped through toPublicAuction, so the reserve stays out of the list the
-   * same way it stays out of a single read (AUC-003).
+   * Mapped through toPublicAuction, so the reserve stays out of every
+   * section the same way it stays out of a single read (AUC-003).
    */
-  async listHotAuctions(dto: ListHotAuctionsDto) {
+  async listAuctions(dto: ListAuctionsDto) {
     const page = dto.page ?? 1;
-    const limit = dto.limit ?? DEFAULT_HOT_PAGE_SIZE;
+    const limit = dto.limit ?? DEFAULT_LIST_PAGE_SIZE;
+    const section = dto.section ?? DEFAULT_AUCTION_SECTION;
+    const { where: sectionWhere, orderBy } = AUCTION_SECTION_QUERIES[section];
+
+    // Applied here rather than in each section so a section added later
+    // cannot forget it and start listing auctions an admin has removed.
     const where: Prisma.AuctionWhereInput = {
-      status: 'ACTIVE',
+      ...sectionWhere,
       deletedAt: null
     };
 
@@ -292,7 +330,7 @@ export class AuctionService {
       this.prisma.auction.findMany({
         where,
         select: auctionRowSelect,
-        orderBy: HOT_AUCTION_ORDER,
+        orderBy,
         skip: (page - 1) * limit,
         take: limit
       }),
@@ -318,10 +356,40 @@ export class AuctionService {
    * looking at is a separate piece of work.
    */
   async settleAuction(id: string) {
+    const outcome = await this.settleInTransaction(id);
+
+    /**
+     * LIV-004 / SRS section 6 — the room hears the result only once it is on
+     * record. A result is final in a way a price is not: no later event
+     * supersedes it, so announcing one a rollback could take back would leave
+     * a screen showing a sale that never happened.
+     *
+     * A caller that lost the race to settle gets null and announces nothing —
+     * whoever won it has already told the room.
+     */
+    if (outcome) {
+      this.gateway.emitToAuction(id, 'auction:ended', outcome.event);
+      this.deliver(outcome.notifications);
+    }
+
+    return outcome && { sold: outcome.sold };
+  }
+
+  private settleInTransaction(id: string) {
     return this.prisma.$transaction(async (tx) => {
       const auction = await tx.auction.findFirst({
         where: { id, status: 'ACTIVE', deletedAt: null },
-        select: { id: true, currentEndAt: true, reservePrice: true }
+        select: {
+          id: true,
+          currentEndAt: true,
+          reservePrice: true,
+          bidCount: true,
+          // NOT-002 / NOT-003 — a notification has to name the thing it is
+          // about, and reach the seller as well as the bidders.
+          title: true,
+          currency: true,
+          sellerId: true
+        }
       });
 
       // Not running, or still running — either way there is nothing to settle.
@@ -330,10 +398,12 @@ export class AuctionService {
 
       const highestBid = await tx.bid.findFirst({
         where: { auctionId: id },
-        // A tie on amount goes to whoever got there first, which is what the
-        // sequence number records.
-        orderBy: [{ amount: 'desc' }, { sequenceNo: 'asc' }],
-        select: { id: true, bidderId: true, amount: true }
+        // The same order the arena names its leader by (LIV-002), so the
+        // person shown to be winning is the person who actually wins.
+        orderBy: LEADING_BID_ORDER,
+        // The bidder's profile rides along so the announcement below can name
+        // the winner masked, without a second read after the commit.
+        select: { ...settledWinnerSelect, bidderId: true }
       });
 
       const reserveMet =
@@ -341,13 +411,15 @@ export class AuctionService {
         calculateReserveMet(highestBid.amount, auction.reservePrice);
       const sold = highestBid !== null && reserveMet;
 
+      const endedAt = new Date();
+
       const { count } = await tx.auction.updateMany({
         // Guarded on ACTIVE, so two readers arriving at once cannot both settle
         // the same auction and write two ENDED events.
         where: { id, status: 'ACTIVE', deletedAt: null },
         data: {
           status: sold ? 'SOLD' : 'UNSOLD',
-          endedAt: new Date(),
+          endedAt,
           winnerUserId: sold ? highestBid.bidderId : null,
           winningBidId: sold ? highestBid.id : null,
           soldPrice: sold ? highestBid.amount : null,
@@ -362,7 +434,51 @@ export class AuctionService {
         data: { auctionId: id, eventType: 'ENDED', bidId: highestBid?.id }
       });
 
-      return { sold };
+      /**
+       * NOT-002 / NOT-003 — raised in the same transaction that settled the
+       * auction, so a result on record always has its notifications on record
+       * too. A separate write afterwards could fail and leave somebody never
+       * told their auction had ended.
+       */
+      const winnerId = sold ? highestBid.bidderId : null;
+      const audience = await findAuctionAudience(tx, id, [winnerId]);
+
+      const notifications = [
+        ...(sold
+          ? [
+              auctionWonNotification(
+                auction,
+                winnerId!,
+                highestBid.id,
+                highestBid.amount
+              )
+            ]
+          : []),
+        // The seller hears too, and is added here rather than in the audience
+        // query because their id is already known.
+        ...[...new Set([...audience, auction.sellerId])]
+          .filter((userId) => userId !== winnerId)
+          .map((userId) =>
+            auctionEndedNotification(auction, userId, {
+              sold,
+              finalPrice: highestBid?.amount ?? null
+            })
+          )
+      ];
+
+      await tx.notification.createMany({ data: notifications });
+
+      return {
+        sold,
+        notifications,
+        event: toAuctionEndedEvent({
+          id,
+          sold,
+          endedAt,
+          bidCount: auction.bidCount,
+          winner: highestBid
+        })
+      };
     });
   }
 
@@ -466,6 +582,28 @@ export class AuctionService {
    * moderation action and belongs to an admin (ADM-001).
    */
   async cancelOwnAuction(id: string, sellerId: string, reason?: string) {
+    const { auction, event, notifications } = await this.cancelInTransaction(
+      id,
+      sellerId,
+      reason
+    );
+
+    /**
+     * NOT-004 / SRS section 6 — told only once the cancellation has committed.
+     *
+     * The room hears the same `auction:cancelled` an admin cancellation sends
+     * (ADM-001). A seller can only call off a DRAFT or a SCHEDULED auction,
+     * so nobody is mid-bid — but a lobby full of people waiting for one to
+     * start would otherwise count down to an auction that is not coming, and
+     * the event has to mean one thing wherever it comes from.
+     */
+    this.gateway.emitToAuction(id, 'auction:cancelled', event);
+    this.deliver(notifications);
+
+    return auction;
+  }
+
+  private cancelInTransaction(id: string, sellerId: string, reason?: string) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.auction.findFirst({
         where: { id, sellerId, deletedAt: null },
@@ -507,8 +645,37 @@ export class AuctionService {
         select: auctionRowSelect
       });
 
-      return toOwnerAuction(cancelled);
+      /**
+       * NOT-004 — everybody who bid on it or was watching hears, because they
+       * were waiting on something that is not going to happen now. The seller
+       * is excluded: they are the one who just cancelled it.
+       */
+      const audience = await findAuctionAudience(tx, id, [sellerId]);
+      const notifications = audience.map((userId) =>
+        auctionCancelledNotification(cancelled, userId, reason)
+      );
+
+      await tx.notification.createMany({ data: notifications });
+
+      return {
+        auction: toOwnerAuction(cancelled),
+        event: toAuctionCancelledEvent(cancelled),
+        notifications
+      };
     });
+  }
+
+  /**
+   * NOT-001..004 — hands committed notification rows to the realtime side.
+   *
+   * Deliberately after the transaction, like every other announcement (SRS
+   * section 6), and deliberately not awaited into the caller's result: a bell
+   * that fails to light must not undo a settled auction.
+   */
+  private deliver(notifications: Prisma.NotificationCreateManyInput[]): void {
+    for (const notification of notifications) {
+      this.realtime.emitNotificationCreated(notification.userId, notification);
+    }
   }
 
   // ADR-0001 — auctions and products draw from the same category set, so an
@@ -523,5 +690,177 @@ export class AuctionService {
     if (!category.isActive) {
       throw new BadRequestException('Category is not active');
     }
+  }
+
+  /**
+   * AUC-001 — puts an uploaded picture on a draft.
+   *
+   * Only a draft: once an auction is published the pictures buyers have been
+   * looking at are part of what they are bidding on, and swapping them is not
+   * an edit, it is a different listing.
+   *
+   * The upload happens outside the transaction because it is a network call to
+   * somebody else's service, and holding a database transaction open across it
+   * would lock a row for as long as the internet feels like taking. The count
+   * is checked twice for the same reason: once to refuse early, once inside
+   * the transaction where two uploads racing each other cannot both win.
+   *
+   * If the row cannot be written after the file is stored, the file is
+   * removed. Skipping that leaves an image nothing points at, which nothing
+   * will ever clean up because nothing knows it is there.
+   */
+  async addDraftImage(
+    id: string,
+    sellerId: string,
+    file: { buffer: Buffer },
+    altText?: string
+  ) {
+    const draft = await this.prisma.auction.findFirst({
+      where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+      select: { id: true, _count: { select: { images: true } } }
+    });
+
+    if (!draft) throw new NotFoundException('Auction draft not found');
+
+    if (draft._count.images >= MAX_AUCTION_IMAGES) {
+      throw new BadRequestException(
+        `An auction can have at most ${MAX_AUCTION_IMAGES} images`
+      );
+    }
+
+    let stored: StoredImage;
+    try {
+      stored = await this.storage.uploadAuctionImage(file.buffer, id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown';
+      this.logger.error(`Image upload failed for auction ${id}: ${message}`);
+      throw new ServiceUnavailableException(
+        'Image upload is temporarily unavailable'
+      );
+    }
+
+    try {
+      const auction = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.auction.findFirst({
+          where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+          select: {
+            _count: { select: { images: true } },
+            images: {
+              select: { position: true },
+              orderBy: { position: 'desc' },
+              take: 1
+            }
+          }
+        });
+
+        if (!current) throw new NotFoundException('Auction draft not found');
+
+        if (current._count.images >= MAX_AUCTION_IMAGES) {
+          throw new BadRequestException(
+            `An auction can have at most ${MAX_AUCTION_IMAGES} images`
+          );
+        }
+
+        // The next free slot, not the count: a removal leaves a gap, and
+        // reusing it would collide with @@unique([auctionId, position]).
+        const position = (current.images[0]?.position ?? -1) + 1;
+
+        await tx.auctionImage.create({
+          data: {
+            auctionId: id,
+            storageKey: stored.storageKey,
+            url: stored.url,
+            altText: altText ?? null,
+            position,
+            // The first picture on an empty draft is the one the cards show.
+            isPrimary: current._count.images === 0
+          }
+        });
+
+        return tx.auction.update({
+          where: { id },
+          data: { rowVersion: { increment: 1 } },
+          select: auctionRowSelect
+        });
+      });
+
+      return toOwnerAuction(auction);
+    } catch (error: unknown) {
+      try {
+        await this.storage.deleteImage(stored.storageKey);
+      } catch (cleanupError: unknown) {
+        // Nothing left to tell the caller — they are getting the original
+        // failure — so this is logged rather than thrown over the top of it.
+        const message =
+          cleanupError instanceof Error ? cleanupError.message : 'Unknown';
+        this.logger.error(
+          `Failed to remove orphaned image ${stored.storageKey}: ${message}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * AUC-001 — takes a picture off a draft.
+   *
+   * The row goes first and the file second: a file still in the store that no
+   * row points at costs money and nothing else, while a row pointing at a file
+   * that is gone is a broken picture on somebody's screen.
+   *
+   * Removing the primary promotes whichever picture is now first, so a draft
+   * with images always has one to lead with.
+   */
+  async removeDraftImage(id: string, sellerId: string, imageId: string) {
+    const { auction, storageKey } = await this.prisma.$transaction(
+      async (tx) => {
+        const image = await tx.auctionImage.findFirst({
+          where: {
+            id: imageId,
+            auction: { id, sellerId, status: 'DRAFT', deletedAt: null }
+          },
+          select: { id: true, storageKey: true, isPrimary: true }
+        });
+
+        if (!image) throw new NotFoundException('Auction image not found');
+
+        await tx.auctionImage.delete({ where: { id: image.id } });
+
+        if (image.isPrimary) {
+          const next = await tx.auctionImage.findFirst({
+            where: { auctionId: id },
+            orderBy: { position: 'asc' },
+            select: { id: true }
+          });
+
+          if (next) {
+            await tx.auctionImage.update({
+              where: { id: next.id },
+              data: { isPrimary: true }
+            });
+          }
+        }
+
+        const updated = await tx.auction.update({
+          where: { id },
+          data: { rowVersion: { increment: 1 } },
+          select: auctionRowSelect
+        });
+
+        return { auction: updated, storageKey: image.storageKey };
+      }
+    );
+
+    try {
+      // A picture added by URL has a storage key nothing was ever filed
+      // under, and the store treats "not found" as done — so this is safe for
+      // both kinds without having to tell them apart.
+      await this.storage.deleteImage(storageKey);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown';
+      this.logger.error(`Failed to delete image ${storageKey}: ${message}`);
+    }
+
+    return toOwnerAuction(auction);
   }
 }

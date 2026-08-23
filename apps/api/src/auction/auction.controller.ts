@@ -1,16 +1,22 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  ParseFilePipeBuilder,
   ParseUUIDPipe,
   Query,
   Patch,
   Post,
-  Req
+  Req,
+  ServiceUnavailableException,
+  UploadedFile,
+  UseInterceptors
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -18,12 +24,21 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
 import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
-import { ListHotAuctionsDto } from './dtos/list-hot-auctions.dto';
+import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
+import { AddAuctionImageDto } from './dtos/add-auction-image.dto';
+import {
+  AUCTION_IMAGE_MIME_PATTERN,
+  MAX_AUCTION_IMAGE_BYTES
+} from './constants/auction-image.constant';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('auctions')
 export class AuctionController {
-  constructor(private readonly auctionService: AuctionService) {}
+  constructor(
+    private readonly auctionService: AuctionService,
+    private readonly storage: StorageService
+  ) {}
 
   // SRS 2 — admins moderate the marketplace, they never sell in it
   @Roles('USER')
@@ -111,14 +126,72 @@ export class AuctionController {
   }
 
   /**
-   * AUC-008 — Hot Auctions. Public, and paging is the only thing a caller may
-   * ask for: the ranking is fixed by the requirement, so there is no `sort`
-   * parameter to reach for.
+   * AUC-001 — adds a picture to a draft.
+   *
+   * The 503 is decided here, before multer reads anything: whether images can
+   * be stored at all is known at startup, so a request that cannot succeed is
+   * refused without a file crossing the wire. Cloudinary is optional in
+   * `.env` precisely so the rest of the API boots without it.
+   *
+   * The file is validated for type and size twice over — once by multer's own
+   * limit, once by the pipe — because the limit truncates and the pipe
+   * explains.
+   */
+  @Roles('USER')
+  @Post(':id/images')
+  @UseInterceptors(
+    FileInterceptor('image', { limits: { fileSize: MAX_AUCTION_IMAGE_BYTES } })
+  )
+  addImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') sellerId: string,
+    @Body() dto: AddAuctionImageDto,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: AUCTION_IMAGE_MIME_PATTERN })
+        .addMaxSizeValidator({ maxSize: MAX_AUCTION_IMAGE_BYTES })
+        .build({ fileIsRequired: true })
+    )
+    image: Express.Multer.File
+  ) {
+    // Before the ownership check on purpose, and the order is worth stating:
+    // 503 is a fact about this server, 404 is a fact about the request, and a
+    // server that cannot store an image cannot serve any of these calls. It
+    // also happens to leak less — every caller gets the same answer whatever
+    // id they ask about, so the refusal reveals nothing about whose draft it
+    // is. Once configured, the specific 404 comes back.
+    if (!this.storage.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'Image upload is not configured on this server'
+      );
+    }
+
+    return this.auctionService.addDraftImage(id, sellerId, image, dto.altText);
+  }
+
+  /** AUC-001 — removes a picture from a draft. */
+  @Roles('USER')
+  @Delete(':id/images/:imageId')
+  removeImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @CurrentUser('id') sellerId: string
+  ) {
+    return this.auctionService.removeDraftImage(id, sellerId, imageId);
+  }
+
+  /**
+   * AUC-008 — the auction list. Public, and a caller may ask for two things:
+   * which section and which page. No section is the Hot Auctions list, so a
+   * client written before sections existed is unaffected.
+   *
+   * The ranking *within* a section is fixed by the requirement, so there is
+   * still no `sort` parameter to reach for — see AUCTION_SECTION_QUERIES.
    */
   @Public()
   @Get()
-  listHotAuctions(@Query() dto: ListHotAuctionsDto) {
-    return this.auctionService.listHotAuctions(dto);
+  listAuctions(@Query() dto: ListAuctionsDto) {
+    return this.auctionService.listAuctions(dto);
   }
 
   /**

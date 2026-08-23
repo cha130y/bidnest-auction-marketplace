@@ -10,6 +10,16 @@ export const bidSelect = {
   placedAt: true
 } satisfies Prisma.BidSelect;
 
+/**
+ * BID-003 — the same fields plus the bidder's profile, which the broadcast
+ * needs in order to mask a name (BID-005). Only the write path uses it: a
+ * replayed retry announces nothing, so it has no reason to join the profile.
+ */
+export const bidWithBidderSelect = {
+  ...bidSelect,
+  bidder: { select: { profile: { select: { displayName: true } } } }
+} satisfies Prisma.BidSelect;
+
 type BidRow = Prisma.BidGetPayload<{ select: typeof bidSelect }>;
 
 /**
