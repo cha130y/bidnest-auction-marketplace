@@ -23,6 +23,7 @@ import { OrderModule } from './order/order.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { StorageModule } from './storage/storage.module';
 import { ShipmentModule } from './shipment/shipment.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
 import { UsersModule } from './users/users.module';
@@ -55,6 +56,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     PrismaModule,
     MailModule,
     RealtimeModule,
+    StorageModule,
     AuthModule,
     UsersModule,
     AuctionModule,
