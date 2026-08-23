@@ -342,6 +342,7 @@ model Auction {
   @@index([categoryId, status])
   @@index([sellerId, status])
   @@index([status, bidCount]) // AUC-008 Hot Auctions
+  @@index([status, endedAt]) // AUC-008 recently-ended browse section
   @@map("auctions")
 }
 

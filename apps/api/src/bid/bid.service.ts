@@ -7,13 +7,32 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { bidSelect, toOwnBid } from './bid.mapper';
+import { PUBLIC_AUCTION_STATUSES } from '../auction/constants/public-auction-status.constant';
+import { LEADING_BID_ORDER } from './constants/leading-bid-order.constant';
+import { outbidNotification } from '../auction/auction-notification.mapper';
+import { AuctionGateway } from '../realtime/auction.gateway';
+import { RealtimeService } from '../realtime/realtime.service';
+import { toBidAcceptedEvent } from './bid-accepted-event.mapper';
+import { bidHistorySelect, toPublicBid } from './bid-history.mapper';
+import { bidSelect, bidWithBidderSelect, toOwnBid } from './bid.mapper';
+import { ListBidHistoryDto } from './dtos/list-bid-history.dto';
 import { PlaceBidDto } from './dtos/place-bid.dto';
+import {
+  calculateAntiSniping,
+  MAX_EXTENSIONS
+} from './utils/calculate-anti-sniping.util';
 import { calculateMinimumBid } from './utils/calculate-minimum-bid.util';
+
+/** Matches the auction list and the product catalogue, so all three page alike. */
+const DEFAULT_HISTORY_PAGE_SIZE = 20;
 
 @Injectable()
 export class BidService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: AuctionGateway,
+    private readonly realtime: RealtimeService
+  ) {}
 
   /**
    * BID-001 — accepts a bid, or explains why it will not.
@@ -32,10 +51,43 @@ export class BidService {
     const now = new Date();
 
     try {
-      return await this.placeBidInTransaction(auctionId, bidderId, dto, {
-        amount,
-        now
-      });
+      const outcome = await this.placeBidInTransaction(
+        auctionId,
+        bidderId,
+        dto,
+        { amount, now }
+      );
+
+      // BID-003 / SRS section 6 — the broadcast happens here, outside the
+      // transaction, because it is only true once the write has committed.
+      // Announcing from inside would publish a bid a rollback could undo, and
+      // there is no unsending it. A replayed retry rebroadcasts nothing: that
+      // bid was announced when it was first accepted.
+      if (outcome.broadcast) {
+        this.gateway.emitToAuction(auctionId, 'auction:bid', outcome.broadcast);
+      }
+
+      // BID-004 — after the bid event, so a client applies the new price and
+      // then the new deadline in the order they happened.
+      if (outcome.extension) {
+        this.gateway.emitToAuction(
+          auctionId,
+          'auction:extension',
+          outcome.extension
+        );
+      }
+
+      // NOT-001 — the room hears the price; the person who lost the lead hears
+      // it personally. After the commit for the same reason the broadcast is,
+      // and a replayed retry sends nothing: they were told the first time.
+      if (outcome.outbid) {
+        this.realtime.emitNotificationCreated(
+          outcome.outbid.userId,
+          outcome.outbid
+        );
+      }
+
+      return outcome.bid;
     } catch (error: unknown) {
       // BID-002 — two copies of the same retry can both get past the lookup
       // and reach the insert together. The unique index stops the second one,
@@ -46,6 +98,55 @@ export class BidService {
 
       throw error;
     }
+  }
+
+  /**
+   * BID-005 — the public bid history: how much, when, and a masked label for
+   * who, oldest first.
+   *
+   * Only auctions the public may see have a history, checked against the same
+   * status list the REST lookup and the realtime room use — otherwise the
+   * history would be a way to read a draft nobody was meant to see.
+   *
+   * `viewerId` is optional: a signed-out visitor reads the same list, just
+   * without knowing which rows are theirs.
+   */
+  async listBidHistory(
+    auctionId: string,
+    dto: ListBidHistoryDto,
+    viewerId?: string
+  ) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? DEFAULT_HISTORY_PAGE_SIZE;
+
+    const auction = await this.prisma.auction.findFirst({
+      where: {
+        id: auctionId,
+        status: { in: PUBLIC_AUCTION_STATUSES },
+        deletedAt: null
+      },
+      select: { id: true }
+    });
+
+    if (!auction) throw new NotFoundException('Auction not found');
+
+    const [items, total] = await Promise.all([
+      this.prisma.bid.findMany({
+        where: { auctionId },
+        select: bidHistorySelect,
+        // sequenceNo is the order bids were accepted in, and unlike placedAt it
+        // cannot tie: two bids in the same millisecond still sort apart.
+        orderBy: { sequenceNo: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      this.prisma.bid.count({ where: { auctionId } })
+    ]);
+
+    return {
+      items: items.map((bid) => toPublicBid(bid, viewerId)),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
   }
 
   private async placeBidInTransaction(
@@ -68,7 +169,7 @@ export class BidService {
       // which returning an error could not do: they cannot tell a rejected
       // bid from an accepted one they simply did not hear about.
       if (existing) {
-        return replayOrRefuse(existing, auctionId, amount);
+        return { bid: replayOrRefuse(existing, auctionId, amount) };
       }
 
       const auction = await tx.auction.findFirst({
@@ -77,11 +178,16 @@ export class BidService {
           id: true,
           sellerId: true,
           status: true,
+          // NOT-001 — an outbid notification has to name the auction it is
+          // about and the money in the right currency.
+          title: true,
+          currency: true,
           startingPrice: true,
           minBidIncrement: true,
           currentPrice: true,
           bidCount: true,
           currentEndAt: true,
+          extensionCount: true,
           rowVersion: true
         }
       });
@@ -115,6 +221,16 @@ export class BidService {
         );
       }
 
+      // BID-004 — decided before the write so the new end time lands in the
+      // same update as the price, and BID-002's atomicity covers it too.
+      const extension = calculateAntiSniping(
+        {
+          currentEndAt: auction.currentEndAt,
+          extensionCount: auction.extensionCount
+        },
+        now
+      );
+
       const { count } = await tx.auction.updateMany({
         // rowVersion is the whole guard: if anything about this auction changed
         // between the read above and here — another bid, a settlement — the
@@ -130,7 +246,13 @@ export class BidService {
         data: {
           currentPrice: amount,
           bidCount: { increment: 1 },
-          rowVersion: { increment: 1 }
+          rowVersion: { increment: 1 },
+          ...(extension.extends
+            ? {
+                currentEndAt: extension.newEndAt,
+                extensionCount: { increment: 1 }
+              }
+            : {})
         }
       });
 
@@ -145,12 +267,25 @@ export class BidService {
           select: bidSelect
         });
 
-        if (winner) return replayOrRefuse(winner, auctionId, amount);
+        if (winner) {
+          return { bid: replayOrRefuse(winner, auctionId, amount) };
+        }
 
         throw new ConflictException(
           'Somebody bid first — reload and try again'
         );
       }
+
+      /**
+       * NOT-001 — who was leading a moment ago. Read before the new bid
+       * exists, so it cannot pick itself, and by the same order settlement
+       * uses, so "the person who was winning" means one thing everywhere.
+       */
+      const previousLeader = await tx.bid.findFirst({
+        where: { auctionId },
+        orderBy: LEADING_BID_ORDER,
+        select: { bidderId: true }
+      });
 
       const bid = await tx.bid.create({
         data: {
@@ -164,7 +299,7 @@ export class BidService {
           clientRequestId: dto.clientRequestId,
           placedAt: now
         },
-        select: bidSelect
+        select: bidWithBidderSelect
       });
 
       await tx.auctionEvent.create({
@@ -176,7 +311,82 @@ export class BidService {
         }
       });
 
-      return toOwnBid(bid);
+      // BID-004 — "recording every extension" is the criterion, so the row is
+      // written here rather than inferred later from extensionCount. It has to
+      // come after the bid exists, since it points at the bid that caused it.
+      if (extension.extends) {
+        await tx.auctionExtension.create({
+          data: {
+            auctionId,
+            triggeredByBidId: bid.id,
+            extensionNumber: extension.extensionNumber,
+            previousEndAt: extension.previousEndAt,
+            newEndAt: extension.newEndAt
+          }
+        });
+
+        await tx.auctionEvent.create({
+          data: {
+            auctionId,
+            actorUserId: bidderId,
+            bidId: bid.id,
+            eventType: 'EXTENDED'
+          }
+        });
+      }
+
+      // BID-003 — read the auction back rather than assembling the payload from
+      // what was written. Anything the same transaction changed and this code
+      // forgot about would otherwise be broadcast stale; BID-004 is about to
+      // change the end time here, and this stays correct without being touched.
+      const updated = await tx.auction.findUniqueOrThrow({
+        where: { id: auctionId },
+        select: {
+          id: true,
+          currency: true,
+          currentPrice: true,
+          reservePrice: true,
+          bidCount: true,
+          currentEndAt: true,
+          extensionCount: true
+        }
+      });
+
+      /**
+       * NOT-001 — only the person this bid displaced, and only if that is
+       * somebody else. A bidder further down the list was outbid when the bid
+       * above them landed, not now; telling them again every time the price
+       * moves would make the bell useless. Somebody raising their own bid has
+       * outbid nobody.
+       *
+       * Written inside this transaction so a bid on record always has its
+       * notification on record too.
+       */
+      const outbid =
+        previousLeader && previousLeader.bidderId !== bidderId
+          ? outbidNotification(auction, previousLeader.bidderId, bid.id, amount)
+          : null;
+
+      if (outbid) await tx.notification.create({ data: outbid });
+
+      return {
+        bid: toOwnBid(bid),
+        outbid,
+        broadcast: toBidAcceptedEvent(updated, bid),
+        // SRS section 5.2 lists auction:extension among the events the platform
+        // has to emit. A countdown on screen is wrong the moment the end time
+        // moves, so watchers are told separately rather than being left to
+        // notice that currentEndAt changed inside the bid event.
+        extension: extension.extends
+          ? {
+              auctionId,
+              extensionNumber: extension.extensionNumber,
+              previousEndAt: extension.previousEndAt,
+              newEndAt: extension.newEndAt,
+              extensionsRemaining: MAX_EXTENSIONS - extension.extensionNumber
+            }
+          : null
+      };
     });
   }
 

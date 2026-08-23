@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   UnauthorizedException
@@ -10,16 +11,22 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AuthTokensResponse,
+  EmailRequiredResponse,
   PendingTwoFactorResponse
 } from './dto/auth-result.response';
 import { AuthUserResponse } from './dto/auth-user.response';
 import { LoginDto } from './dto/login.dto';
+import { OAuthLoginDto, VerifyOAuthDto } from './dto/oauth.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { HashingService } from './hashing.service';
 import { PasswordResetService } from './password-reset.service';
+import type { AuthProvider } from '../../generated/prisma/enums';
+import type { OAuthTokenVerifier } from './oauth/oauth-profile';
+import { GOOGLE_VERIFIER, LINE_VERIFIER } from './oauth/oauth-profile';
+import { OAuthService } from './oauth/oauth.service';
 import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 
@@ -69,7 +76,10 @@ export class AuthService {
     private readonly hashing: HashingService,
     private readonly twoFactor: TwoFactorService,
     private readonly tokens: TokenService,
-    private readonly passwordReset: PasswordResetService
+    private readonly passwordReset: PasswordResetService,
+    private readonly oauth: OAuthService,
+    @Inject(GOOGLE_VERIFIER) private readonly google: OAuthTokenVerifier,
+    @Inject(LINE_VERIFIER) private readonly line: OAuthTokenVerifier
   ) {}
 
   /**
@@ -266,6 +276,83 @@ export class AuthService {
     this.logger.log(
       `Password reset completed for user ${owner.userId} — all sessions revoked`
     );
+  }
+
+  /**
+   * AUTH-003 / AUTH-006 step one. The provider token is verified with the
+   * provider, the account is resolved or created, and an OTP goes out — no
+   * session yet, because AUTH-007 makes the second factor mandatory on every
+   * login path, provider sign-ins included.
+   */
+  async oauthLogin(
+    provider: AuthProvider,
+    dto: OAuthLoginDto
+  ): Promise<PendingTwoFactorResponse | EmailRequiredResponse> {
+    const resolution = await this.resolveOAuthAccount(provider, dto);
+
+    if (resolution.outcome === 'EMAIL_REQUIRED') {
+      return {
+        status: 'EMAIL_REQUIRED',
+        message:
+          'This Line account has no email address. Send one with the token to finish signing up.'
+      };
+    }
+
+    const cooldown = await this.twoFactor.checkCooldown(resolution.user.id);
+    if (!cooldown.blocked) {
+      await this.twoFactor.issue(resolution.user);
+    }
+
+    return {
+      status: 'PENDING_2FA',
+      expiresInMinutes: this.twoFactor.ttlMinutes,
+      resendAfterSeconds: cooldown.blocked
+        ? cooldown.retryAfterSeconds
+        : this.twoFactor.cooldownSeconds
+    };
+  }
+
+  /**
+   * AUTH-007 step two for a provider login. The token is verified again next
+   * to the code, so a leaked code on its own is worth nothing.
+   */
+  async verifyOAuth(
+    provider: AuthProvider,
+    dto: VerifyOAuthDto
+  ): Promise<AuthTokensResponse> {
+    const resolution = await this.resolveOAuthAccount(provider, dto);
+
+    if (resolution.outcome === 'EMAIL_REQUIRED') {
+      throw new UnauthorizedException('Finish signing up before verifying');
+    }
+
+    const account = resolution.user;
+
+    if (!(await this.twoFactor.consume(account.id, dto.otp))) {
+      throw new UnauthorizedException('Invalid or expired verification code');
+    }
+
+    const { accessToken, refreshToken } = await this.tokens.issue(account);
+
+    await this.prisma.user.update({
+      where: { id: account.id },
+      data: { lastLoginAt: new Date() }
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: await this.currentUser(account.id)
+    };
+  }
+
+  private async resolveOAuthAccount(
+    provider: AuthProvider,
+    dto: OAuthLoginDto
+  ) {
+    const verifier = provider === 'GOOGLE' ? this.google : this.line;
+    const profile = await verifier.verify(dto.idToken);
+    return this.oauth.resolveAccount(profile, dto.email);
   }
 
   /** Re-reads the profile so the refreshed response matches the register one. */

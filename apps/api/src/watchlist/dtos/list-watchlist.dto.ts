@@ -2,11 +2,11 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 /**
- * AUC-008 — paging only. The ordering is fixed by the acceptance criteria and
- * is deliberately not a parameter: "no special flags or hidden scoring" means
- * a caller cannot ask for a different arrangement of the hot list.
+ * WAT-002 — paging only. The order is "most recently watched first", which is
+ * the only arrangement a watchlist has any use for, so it is not something a
+ * caller may change.
  */
-export class ListHotAuctionsDto {
+export class ListWatchlistDto {
   @IsInt()
   @Min(1)
   @IsOptional()

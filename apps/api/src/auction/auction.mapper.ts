@@ -1,4 +1,5 @@
 import type { Prisma } from '../../generated/prisma/client';
+import { calculateMinimumBid } from '../bid/utils/calculate-minimum-bid.util';
 import { calculateReserveMet } from './utils/calculate-reserve-met.util';
 
 /**
@@ -33,10 +34,15 @@ export const auctionRowSelect = {
   startedAt: true,
   endedAt: true,
   extensionCount: true,
+  soldPrice: true,
+  cancellationReason: true,
   createdAt: true,
   updatedAt: true,
   images: {
-    select: { url: true, position: true, isPrimary: true },
+    // The id is here so a seller's own screen can say which picture to
+    // remove. It reaches buyers too, which costs nothing: it identifies a
+    // public image and nothing else.
+    select: { id: true, url: true, position: true, isPrimary: true },
     orderBy: { position: 'asc' }
   },
   category: { select: { id: true, name: true, slug: true } },
@@ -61,6 +67,17 @@ export function toPublicAuction(auction: AuctionRow) {
     startingPrice: auction.startingPrice.toString(),
     minBidIncrement: auction.minBidIncrement.toString(),
     currentPrice: auction.currentPrice.toString(),
+    /**
+     * LIV-002 — the lowest amount this auction will take right now, computed
+     * by the same function BID-001 rejects bids with, so a screen cannot offer
+     * an amount the endpoint will refuse.
+     *
+     * Here rather than only on the arena for the reason `biddingOpen` is here:
+     * the opening bid is measured against the starting price, not against a
+     * `currentPrice` of 0, and a frontend deriving that rule from the fields
+     * would get it wrong on the first bid of every auction.
+     */
+    minimumNextBid: calculateMinimumBid(auction).toString(),
     reserveMet: calculateReserveMet(auction.currentPrice, auction.reservePrice),
     // AUC-005 — a SCHEDULED auction is public to look at, but bidding only
     // opens once it turns ACTIVE. Saying so here keeps the frontend from
@@ -74,12 +91,22 @@ export function toPublicAuction(auction: AuctionRow) {
     startedAt: auction.startedAt,
     endedAt: auction.endedAt,
     extensionCount: auction.extensionCount,
+    /**
+     * LIV-004 — what it sold for, null unless it did. Public the moment it
+     * happens, unlike the reserve: the reserve is what the seller would have
+     * accepted, the sold price is what somebody actually paid.
+     *
+     * Null on an UNSOLD auction because there was no sale, not to hold
+     * anything back — `currentPrice` still shows what the bidding reached.
+     */
+    soldPrice: auction.soldPrice?.toString() ?? null,
     category: auction.category,
     seller: {
       id: auction.seller.id,
       displayName: auction.seller.profile?.displayName ?? null
     },
     images: auction.images.map((image) => ({
+      id: image.id,
       url: image.url,
       position: image.position,
       isPrimary: image.isPrimary

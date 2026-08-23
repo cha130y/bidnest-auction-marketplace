@@ -1,21 +1,27 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
-  Post
+  Post,
+  Query,
+  Req
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { BidService } from './bid.service';
+import { ListBidHistoryDto } from './dtos/list-bid-history.dto';
 import { PlaceBidDto } from './dtos/place-bid.dto';
 
 /**
- * BID-001 — bids live under the auction they belong to (SRS section 5.2), but
- * in their own controller: they have their own lifecycle and, shortly, their
- * own history and realtime routes.
+ * Bids live under the auction they belong to (SRS section 5.2), in their own
+ * controller: placing one and reading the history are different acts with
+ * different audiences.
  */
 @Controller('auctions/:auctionId/bids')
 export class BidController {
@@ -31,5 +37,21 @@ export class BidController {
     @Body() dto: PlaceBidDto
   ) {
     return this.bidService.placeBid(auctionId, bidderId, dto);
+  }
+
+  /**
+   * BID-005 — the bid history, public like the auction it belongs to. A token
+   * is honoured when sent, which is what lets a bidder see which rows are
+   * theirs; `@CurrentUser()` cannot be used here because it throws when nobody
+   * is signed in.
+   */
+  @Public()
+  @Get()
+  listBidHistory(
+    @Param('auctionId', ParseUUIDPipe) auctionId: string,
+    @Query() dto: ListBidHistoryDto,
+    @Req() request: Request
+  ) {
+    return this.bidService.listBidHistory(auctionId, dto, request.user?.id);
   }
 }

@@ -12,6 +12,9 @@ const auctionRow = (
   overrides: {
     currentPrice?: Prisma.Decimal;
     reservePrice?: Prisma.Decimal | null;
+    soldPrice?: Prisma.Decimal | null;
+    status?: 'ACTIVE' | 'SOLD' | 'UNSOLD';
+    bidCount?: number;
   } = {}
 ) => ({
   id: AUCTION_ID,
@@ -34,10 +37,13 @@ const auctionRow = (
   startedAt: null,
   endedAt: null,
   extensionCount: 0,
+  soldPrice: null as Prisma.Decimal | null,
+  cancellationReason: null as string | null,
   createdAt: new Date('2026-08-19T00:00:00.000Z'),
   updatedAt: new Date('2026-08-19T00:00:00.000Z'),
   images: [
     {
+      id: '00000000-0000-4000-8000-0000000007a1',
       url: 'https://placehold.co/600x400?text=Front',
       position: 0,
       isPrimary: true
@@ -108,6 +114,40 @@ describe('auction.mapper (AUC-003)', () => {
 
       expect(Object.keys(withReserve).sort()).toEqual(
         Object.keys(withoutReserve).sort()
+      );
+    });
+  });
+
+  /**
+   * LIV-002 — the arena shows the lowest amount that will be accepted, and it
+   * has to be the same number BID-001 measures a bid against.
+   */
+  describe('minimumNextBid', () => {
+    it('is the starting price before anybody has bid', () => {
+      const publicView = toPublicAuction(
+        auctionRow({ currentPrice: dec(0), bidCount: 0 })
+      );
+
+      expect(publicView.minimumNextBid).toBe('3000');
+    });
+
+    it('is the current price plus the increment once bidding has started', () => {
+      const publicView = toPublicAuction(
+        auctionRow({ currentPrice: dec(3200), bidCount: 4 })
+      );
+
+      expect(publicView.minimumNextBid).toBe('3300');
+    });
+
+    // a currentPrice of 0 means "no price yet", not "the price is zero" —
+    // reading it literally would let the opening bid come in at one increment
+    it('does not let the opening bid undercut the starting price', () => {
+      const publicView = toPublicAuction(
+        auctionRow({ currentPrice: dec(0), bidCount: 0 })
+      );
+
+      expect(Number(publicView.minimumNextBid)).toBeGreaterThanOrEqual(
+        Number(publicView.startingPrice)
       );
     });
   });

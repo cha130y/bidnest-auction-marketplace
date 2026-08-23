@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionGateway } from '../realtime/auction.gateway';
 import { AuctionService } from './auction.service';
 
 /**
@@ -39,7 +40,8 @@ export class AuctionLifecycleService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auctionService: AuctionService
+    private readonly auctionService: AuctionService,
+    private readonly gateway: AuctionGateway
   ) {}
 
   @Interval(LIFECYCLE_INTERVAL_MS)
@@ -86,7 +88,9 @@ export class AuctionLifecycleService {
       },
       orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }],
       take: LIFECYCLE_BATCH_SIZE,
-      select: { id: true }
+      // currentEndAt rides along for the broadcast below — a SCHEDULED auction
+      // has no bids, so nothing can have moved its end time since this read.
+      select: { id: true, currentEndAt: true }
     });
 
     let started = 0;
@@ -118,7 +122,25 @@ export class AuctionLifecycleService {
         return true;
       });
 
-      if (opened) started += 1;
+      if (!opened) continue;
+
+      started += 1;
+
+      /**
+       * LIV-001 — the lobby has to flip to the arena by itself when the clock
+       * runs out, and SRS section 6 puts this after the commit: an auction
+       * announced as open from inside the transaction could still be rolled
+       * back, and there is no unsending that.
+       *
+       * Without it a lobby would only learn the auction had started by asking
+       * again, so the countdown would hit zero and the screen would sit there.
+       */
+      this.gateway.emitToAuction(auction.id, 'auction:started', {
+        auctionId: auction.id,
+        status: 'ACTIVE',
+        startedAt: now,
+        endsAt: auction.currentEndAt
+      });
     }
 
     return started;

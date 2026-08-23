@@ -2,8 +2,9 @@
 # BID — การประมูล (ฝั่ง Dev 4)
 # ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
 #
-# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry
-# BID-003..005 (realtime, anti-sniping, ประวัติ) จะมาต่อในไฟล์นี้
+# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry,
+# BID-003 broadcast realtime, BID-004 anti-sniping, BID-005 ประวัติการประมูล
+# ครบทั้งกลุ่ม BID แล้ว
 #
 # ⚠️ clientRequestId ต้องเป็น UUID และเป็น "ตัวระบุความพยายามครั้งนั้น"
 #    - ยิงซ้ำด้วย id เดิม + ค่าเดิม = retry -> ได้บิดเดิมกลับมา ไม่ใช่ error
@@ -238,3 +239,135 @@ Content-Type: application/json
 
 ### AUC-008 — ประมูลที่มีบิดต้องขึ้นก่อนใน hot list
 GET {{baseUrl}}/auctions
+
+#=============================================================================
+# 5. Realtime broadcast (BID-003)
+#=============================================================================
+# ไฟล์ .http ยิง WebSocket ไม่ได้ — ส่วนนี้เป็นวิธีเทสมือ
+#
+# 1) เปิด browser console ที่หน้าไหนก็ได้ของ apps/web (หรือใช้ node)
+#    แล้ววาง:
+#
+#      const s = io('http://localhost:4000/auctions', { transports: ['websocket'] });
+#      s.on('connect', async () => {
+#        console.log('joined', await s.emitWithAck('auction:join', { auctionId: '<liveId>' }));
+#      });
+#      s.on('auction:bid', (e) => console.log('auction:bid', e));
+#
+# 2) ยิงบล็อก "บิดที่ผ่าน" ข้างบนอีกครั้ง (เปลี่ยน clientRequestId)
+#
+# 3) ต้องเห็น event เด้งใน console ทันที หน้าตาแบบนี้:
+#
+#      {
+#        auctionId, currency, currentPrice, reserveMet, bidCount,
+#        currentEndAt, extensionCount,
+#        bid: { id, amount, sequenceNo, placedAt, bidder: "ส***ย" }
+#      }
+#
+# สิ่งที่ต้องตรวจ:
+#   - ห้ามมี reservePrice ใน payload เด็ดขาด มีแค่ reserveMet (AUC-003)
+#   - bidder ต้องเป็นชื่อปิดบังเท่านั้น ห้ามมี bidderId และห้ามมีชื่อเต็ม
+#   - label ที่ได้ต้องตรงกับที่ GET /auctions/:id/bids ให้มา (ใช้ mask ตัวเดียวกัน)
+#   - join ห้องของ draft (ยังไม่ publish) ต้องได้ error "Auction not found"
+#   - บิดที่ถูกปฏิเสธ (400/403/409) ต้องไม่มี event เด้งเลย
+#   - retry ด้วย clientRequestId เดิม ต้องไม่ยิง event ซ้ำ
+
+#=============================================================================
+# 6. Anti-sniping (BID-004)
+#=============================================================================
+# บิดที่เข้ามาตอนเหลือ ≤ 2 นาที จะดันเวลาจบออกไปอีก 2 นาที สูงสุด 5 ครั้ง
+# และบันทึกทุกครั้งลง auction_extensions
+#
+# ⚠️ ต้องมีประมูลที่ "ใกล้จบ" ซึ่ง publish ตรงๆ ไม่ได้ (AUC-004 ไม่ให้ publish
+#    ของที่หมดเวลาแล้ว) วิธีเทสมือ: publish ปกติก่อน แล้วเปิด prisma studio
+#    ตั้ง current_end_at = now() + 1 minute จากนั้นค่อยยิงบิด
+#
+# สิ่งที่ต้องเห็นหลังบิด:
+#   - current_end_at ขยับไป +2 นาทีจากค่าเดิม (ไม่ใช่ +2 นาทีจากตอนบิด)
+#   - extension_count เพิ่มเป็น 1
+#   - auction_extensions มีแถวใหม่ ชี้ไปที่ bid ที่เพิ่งลง
+#   - auction_events มี EXTENDED ต่อจาก BID_PLACED
+#   - ถ้าเปิด socket ค้างไว้ (ดูบล็อกที่ 5) จะได้ auction:extension ตามหลัง
+#     auction:bid โดยมี extensionsRemaining บอกว่าเหลือกี่ครั้ง
+
+### BID-004 — บิดตอนใกล้จบ (ตั้ง current_end_at ให้ใกล้ก่อน). expect 201
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000001"
+}
+
+### BID-004 — เช็คว่าเวลาจบขยับ. ดู currentEndAt กับ extensionCount
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### BID-004 — บิดซ้ำทันที. expect 201 แต่ extensionCount ต้องไม่ขยับ
+# บิดแรกดันเวลาไป 2 นาที ทำให้บิดนี้อยู่นอกหน้าต่างแล้ว — กัน burst ของบิด
+# ไม่ให้ไล่ต่อเวลากันเป็นทอดๆ
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3300,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000002"
+}
+
+### BID-004 — เพดาน 5 ครั้ง
+# ตั้ง extension_count = 5 และ current_end_at = now() + 1 minute ใน prisma studio
+# แล้วยิงบล็อกนี้: บิดต้องผ่าน (201) แต่เวลาจบต้องไม่ขยับ และไม่มีแถวใน
+# auction_extensions เพิ่ม — เพดานจำกัดการต่อเวลา ไม่ได้จำกัดการบิด
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3400,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000003"
+}
+
+#=============================================================================
+# 7. ประวัติการประมูล (BID-005)
+#=============================================================================
+# สาธารณะเหมือนตัวประมูล — ไม่ต้อง login ก็อ่านได้
+# ส่ง token มาด้วยจะได้ isYours บอกว่าแถวไหนเป็นบิดของตัวเอง
+#
+# สิ่งที่ต้องตรวจทุกครั้ง:
+#   - ห้ามมี bidderId ในผลลัพธ์เด็ดขาด มีแค่ bidder ที่ปิดบังแล้ว (ก***ย)
+#   - ผู้ขายเจ้าของประมูลก็เห็นชื่อแบบปิดบังเหมือนคนนอก ไม่มีสิทธิ์พิเศษ
+#   - คนเดิมบิดหลายครั้ง ต้องได้ label เดียวกันทุกแถว (ตามบิดได้ว่าใครไล่ราคาใคร)
+#   - เรียงจากเก่าไปใหม่ตาม sequenceNo
+
+### BID-005 — คนไม่ได้ login อ่านประวัติ. expect 200 + items เรียงตาม sequenceNo
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+
+### BID-005 — ผู้บิดอ่านเอง. expect 200 + isYours: true เฉพาะบิดของตัวเอง
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+
+### BID-005 — ผู้ขายอ่าน. expect 200 + ชื่อยังปิดบังเหมือนเดิม
+# เจ้าของประมูลไม่มีสิทธิ์เห็นว่าใครบิด
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{sellerAToken}}
+
+### BID-005 — ขอทีละ 2 แถว. expect 200 + items ไม่เกิน 2 + meta.total ครบ
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=1&limit=2
+
+### BID-005 — หน้าที่ 2. expect 200 + ไม่ซ้ำกับหน้าแรก
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=2&limit=2
+
+### BID-005 — ประมูลที่ยังเป็น draft. expect 404
+# แม้เจ้าของยิงเอง — ประวัติต้องไม่กลายเป็นช่องอ่าน draft
+GET {{baseUrl}}/auctions/{{incompleteId}}/bids
+Authorization: Bearer {{sellerAToken}}
+
+### BID-005 — ประมูลที่ไม่มีอยู่จริง. expect 404
+GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000099ff/bids
+
+### BID-005 — limit เกินเพดาน. expect 400
+GET {{baseUrl}}/auctions/{{liveId}}/bids?limit=500
+
+### BID-005 — page เป็น 0. expect 400
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=0

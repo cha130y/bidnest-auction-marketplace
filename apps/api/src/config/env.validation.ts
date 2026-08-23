@@ -26,6 +26,13 @@ const envSchema = z.object({
   // AUTH-005 — single-use password reset link
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 
+  // AUTH-003 / AUTH-006. Only the public identifiers: the server verifies
+  // tokens rather than exchanging them, so the client secrets stay in
+  // apps/web with NextAuth. Optional so the API still boots without them —
+  // the callbacks answer 503 instead of failing at startup.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  LINE_CHANNEL_ID: z.string().optional(),
+
   // Section 6 — rate limits. The generous default is a blanket guard against
   // hammering; the auth window is the one that matters, since login and OTP
   // are the endpoints worth brute forcing.
@@ -45,7 +52,22 @@ const envSchema = z.object({
   AI_NEGOTIATOR_JWT_SECRET: z
     .string()
     .min(1)
-    .default('dev-negotiator-secret-change-me')
+    .default('dev-negotiator-secret-change-me'),
+
+  /**
+   * AUC-001 — where uploaded auction images are kept.
+   *
+   * Optional for the reason GOOGLE_CLIENT_ID is: the API has to boot without
+   * them. Most of the team never touches image upload, and making these
+   * required would mean somebody working on the design system has to open a
+   * Cloudinary account before they can start the server.
+   *
+   * The upload route answers 503 when they are missing, decided before the
+   * request goes anywhere — see StorageService.isConfigured.
+   */
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional()
 });
 
 export function validate(config: Record<string, any>) {
