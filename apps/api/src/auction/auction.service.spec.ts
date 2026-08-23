@@ -1,18 +1,22 @@
 import {
   BadRequestException,
   ConflictException,
-  NotFoundException
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionGateway } from '../realtime/auction.gateway';
 import { RealtimeService } from '../realtime/realtime.service';
+import { StorageService } from '../storage/storage.service';
 import { AuctionService } from './auction.service';
 import {
   AUCTION_SECTIONS,
   AUCTION_SECTION_QUERIES
 } from './constants/auction-section.constant';
+import { MAX_AUCTION_IMAGES } from './constants/auction-image.constant';
 import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 
@@ -69,6 +73,15 @@ type CreateArgs = {
 /** Shape of the `where` clause the owner-scoped reads narrow themselves with. */
 type WhereArgs = { where: Record<string, unknown> };
 
+/** Shape of the row addDraftImage writes. */
+type CreatedImage = {
+  auctionId: string;
+  storageKey: string;
+  url: string;
+  position: number;
+  isPrimary: boolean;
+};
+
 // Money comes back from Prisma as Decimal, and the mapper calls Decimal methods
 // on it to compute reserveMet (AUC-003), so the mock has to use real Decimals.
 const dec = (value: string | number) => new Prisma.Decimal(value);
@@ -121,9 +134,17 @@ describe('AuctionService', () => {
       findUniqueOrThrow: jest.Mock;
       findFirstOrThrow: jest.Mock;
       count: jest.Mock;
+      update: jest.Mock;
     };
     auctionEvent: { createMany: jest.Mock; create: jest.Mock };
-    auctionImage: { deleteMany: jest.Mock; createMany: jest.Mock };
+    auctionImage: {
+      deleteMany: jest.Mock;
+      createMany: jest.Mock;
+      create: jest.Mock;
+      delete: jest.Mock;
+      findFirst: jest.Mock;
+      update: jest.Mock;
+    };
     bid: { findFirst: jest.Mock; findMany: jest.Mock };
     watchlist: { findMany: jest.Mock };
     notification: { createMany: jest.Mock };
@@ -132,6 +153,11 @@ describe('AuctionService', () => {
   };
   let gateway: { emitToAuction: jest.Mock };
   let realtime: { emitNotificationCreated: jest.Mock };
+  let storage: {
+    isConfigured: jest.Mock;
+    uploadAuctionImage: jest.Mock;
+    deleteImage: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -142,10 +168,18 @@ describe('AuctionService', () => {
         updateMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         findFirstOrThrow: jest.fn(),
+        update: jest.fn(),
         count: jest.fn()
       },
       auctionEvent: { createMany: jest.fn(), create: jest.fn() },
-      auctionImage: { deleteMany: jest.fn(), createMany: jest.fn() },
+      auctionImage: {
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+        create: jest.fn(),
+        delete: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn()
+      },
       bid: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       watchlist: { findMany: jest.fn().mockResolvedValue([]) },
       notification: { createMany: jest.fn() },
@@ -156,13 +190,22 @@ describe('AuctionService', () => {
     };
     gateway = { emitToAuction: jest.fn() };
     realtime = { emitNotificationCreated: jest.fn() };
+    storage = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      uploadAuctionImage: jest.fn().mockResolvedValue({
+        storageKey: 'stored/key',
+        url: 'https://cdn/x.jpg'
+      }),
+      deleteImage: jest.fn().mockResolvedValue(undefined)
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuctionService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuctionGateway, useValue: gateway },
-        { provide: RealtimeService, useValue: realtime }
+        { provide: RealtimeService, useValue: realtime },
+        { provide: StorageService, useValue: storage }
       ]
     }).compile();
 
@@ -1834,6 +1877,203 @@ describe('AuctionService', () => {
         const last = orderBy[orderBy.length - 1];
 
         expect(Object.keys(last)).toEqual(['id']);
+      });
+    });
+  });
+
+  /**
+   * AUC-001 — uploaded images. What matters here is not the happy path but
+   * what happens when half of it works: the file store and the database are
+   * two systems, and only one of them can be rolled back.
+   */
+  describe('draft images (AUC-001)', () => {
+    const IMAGE_ID = '00000000-0000-4000-8000-0000000009a1';
+    const file = { buffer: Buffer.from('not really a jpeg') };
+
+    /** A draft that already holds `count` images. */
+    const draftHolding = (count: number, newest = count - 1) => {
+      prisma.auction.findFirst.mockResolvedValue({
+        id: DRAFT_ID,
+        _count: { images: count },
+        images: newest >= 0 ? [{ position: newest }] : []
+      });
+    };
+
+    beforeEach(() => {
+      draftHolding(0, -1);
+      prisma.auctionImage.create.mockResolvedValue({ id: IMAGE_ID });
+      prisma.auctionImage.delete.mockResolvedValue({});
+      prisma.auction.update.mockResolvedValue(draftRow());
+      // Runs the callback against the same mock, so a test can assert on what
+      // the transaction body did. Not `async`: the callback already returns a
+      // promise and wrapping it in another adds nothing.
+      prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn(prisma)
+      );
+    });
+
+    it('stores the file, then records it against the draft', async () => {
+      await service.addDraftImage(DRAFT_ID, SELLER_ID, file);
+
+      expect(storage.uploadAuctionImage).toHaveBeenCalledWith(
+        file.buffer,
+        DRAFT_ID
+      );
+
+      const created = (
+        prisma.auctionImage.create.mock.calls as { data: CreatedImage }[][]
+      )[0][0].data;
+      expect(created).toMatchObject({
+        auctionId: DRAFT_ID,
+        storageKey: 'stored/key',
+        url: 'https://cdn/x.jpg'
+      });
+    });
+
+    // the first picture is the one every card shows
+    it('marks the first image on an empty draft as primary', async () => {
+      await service.addDraftImage(DRAFT_ID, SELLER_ID, file);
+
+      const created = (
+        prisma.auctionImage.create.mock.calls as { data: CreatedImage }[][]
+      )[0][0].data;
+      expect(created).toMatchObject({ position: 0, isPrimary: true });
+    });
+
+    /**
+     * Positions are unique per auction, so a removal leaves a gap that must
+     * not be filled by counting: three images with the middle one gone is
+     * positions 0 and 2, and the next upload belongs at 3.
+     */
+    it('takes the next free position rather than the image count', async () => {
+      draftHolding(2, 5);
+
+      await service.addDraftImage(DRAFT_ID, SELLER_ID, file);
+
+      const created = (
+        prisma.auctionImage.create.mock.calls as { data: CreatedImage }[][]
+      )[0][0].data;
+      expect(created).toMatchObject({ position: 6, isPrimary: false });
+    });
+
+    it('refuses more than the cap, without uploading anything', async () => {
+      draftHolding(MAX_AUCTION_IMAGES);
+
+      await expect(
+        service.addDraftImage(DRAFT_ID, SELLER_ID, file)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(storage.uploadAuctionImage).not.toHaveBeenCalled();
+    });
+
+    it('hides a draft belonging to somebody else behind a 404', async () => {
+      prisma.auction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.addDraftImage(DRAFT_ID, SELLER_ID, file)
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(storage.uploadAuctionImage).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The one that matters. The file is already in somebody else's service by
+     * the time the row fails, and nothing else will ever know it is there —
+     * so the failure path has to take it back out.
+     */
+    it('removes the stored file when the row cannot be written', async () => {
+      prisma.auctionImage.create.mockRejectedValue(new Error('db is down'));
+
+      await expect(
+        service.addDraftImage(DRAFT_ID, SELLER_ID, file)
+      ).rejects.toThrow('db is down');
+      expect(storage.deleteImage).toHaveBeenCalledWith('stored/key');
+    });
+
+    // a cleanup that fails must not replace the error the caller needs to see
+    it('still reports the original failure if cleanup also fails', async () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      prisma.auctionImage.create.mockRejectedValue(new Error('db is down'));
+      storage.deleteImage.mockRejectedValue(new Error('cleanup failed'));
+
+      await expect(
+        service.addDraftImage(DRAFT_ID, SELLER_ID, file)
+      ).rejects.toThrow('db is down');
+    });
+
+    it('answers 503 when the store refuses the upload', async () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      storage.uploadAuctionImage.mockRejectedValue(new Error('provider down'));
+
+      await expect(
+        service.addDraftImage(DRAFT_ID, SELLER_ID, file)
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+
+    describe('removing one', () => {
+      const removing = (isPrimary: boolean, next?: string) => {
+        prisma.auctionImage.findFirst
+          .mockResolvedValueOnce({
+            id: IMAGE_ID,
+            storageKey: 'stored/key',
+            isPrimary
+          })
+          .mockResolvedValueOnce(next ? { id: next } : null);
+      };
+
+      it('deletes the row and then the file', async () => {
+        removing(false);
+
+        await service.removeDraftImage(DRAFT_ID, SELLER_ID, IMAGE_ID);
+
+        expect(prisma.auctionImage.delete).toHaveBeenCalledWith({
+          where: { id: IMAGE_ID }
+        });
+        expect(storage.deleteImage).toHaveBeenCalledWith('stored/key');
+      });
+
+      // a draft with images should always have one to lead with
+      it('promotes the next image when the primary is removed', async () => {
+        removing(true, 'second-image');
+
+        await service.removeDraftImage(DRAFT_ID, SELLER_ID, IMAGE_ID);
+
+        expect(prisma.auctionImage.update).toHaveBeenCalledWith({
+          where: { id: 'second-image' },
+          data: { isPrimary: true }
+        });
+      });
+
+      it('promotes nothing when the last image is removed', async () => {
+        removing(true);
+
+        await service.removeDraftImage(DRAFT_ID, SELLER_ID, IMAGE_ID);
+
+        expect(prisma.auctionImage.update).not.toHaveBeenCalled();
+      });
+
+      it('hides an image on somebody else’s draft behind a 404', async () => {
+        prisma.auctionImage.findFirst.mockResolvedValue(null);
+
+        await expect(
+          service.removeDraftImage(DRAFT_ID, SELLER_ID, IMAGE_ID)
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(storage.deleteImage).not.toHaveBeenCalled();
+      });
+
+      /**
+       * A picture added by URL was never filed anywhere, so its storage key
+       * matches nothing. The store treats that as done, and a failure to
+       * delete must not undo a removal the database has already committed.
+       */
+      it('keeps the removal even if the file cannot be deleted', async () => {
+        jest
+          .spyOn(Logger.prototype, 'error')
+          .mockImplementation(() => undefined);
+        removing(false);
+        storage.deleteImage.mockRejectedValue(new Error('no such file'));
+
+        await expect(
+          service.removeDraftImage(DRAFT_ID, SELLER_ID, IMAGE_ID)
+        ).resolves.toBeDefined();
       });
     });
   });

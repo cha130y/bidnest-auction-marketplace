@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
@@ -30,6 +32,8 @@ import {
   AUCTION_SECTION_QUERIES,
   DEFAULT_AUCTION_SECTION
 } from './constants/auction-section.constant';
+import { MAX_AUCTION_IMAGES } from './constants/auction-image.constant';
+import { StorageService, type StoredImage } from '../storage/storage.service';
 import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListAuctionsDto } from './dtos/list-auctions.dto';
@@ -50,8 +54,11 @@ export class AuctionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: AuctionGateway,
-    private readonly realtime: RealtimeService
+    private readonly realtime: RealtimeService,
+    private readonly storage: StorageService
   ) {}
+
+  private readonly logger = new Logger(AuctionService.name);
 
   /**
    * AUC-001 — a draft is private to its seller and lands in DRAFT, the only
@@ -683,5 +690,177 @@ export class AuctionService {
     if (!category.isActive) {
       throw new BadRequestException('Category is not active');
     }
+  }
+
+  /**
+   * AUC-001 — puts an uploaded picture on a draft.
+   *
+   * Only a draft: once an auction is published the pictures buyers have been
+   * looking at are part of what they are bidding on, and swapping them is not
+   * an edit, it is a different listing.
+   *
+   * The upload happens outside the transaction because it is a network call to
+   * somebody else's service, and holding a database transaction open across it
+   * would lock a row for as long as the internet feels like taking. The count
+   * is checked twice for the same reason: once to refuse early, once inside
+   * the transaction where two uploads racing each other cannot both win.
+   *
+   * If the row cannot be written after the file is stored, the file is
+   * removed. Skipping that leaves an image nothing points at, which nothing
+   * will ever clean up because nothing knows it is there.
+   */
+  async addDraftImage(
+    id: string,
+    sellerId: string,
+    file: { buffer: Buffer },
+    altText?: string
+  ) {
+    const draft = await this.prisma.auction.findFirst({
+      where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+      select: { id: true, _count: { select: { images: true } } }
+    });
+
+    if (!draft) throw new NotFoundException('Auction draft not found');
+
+    if (draft._count.images >= MAX_AUCTION_IMAGES) {
+      throw new BadRequestException(
+        `An auction can have at most ${MAX_AUCTION_IMAGES} images`
+      );
+    }
+
+    let stored: StoredImage;
+    try {
+      stored = await this.storage.uploadAuctionImage(file.buffer, id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown';
+      this.logger.error(`Image upload failed for auction ${id}: ${message}`);
+      throw new ServiceUnavailableException(
+        'Image upload is temporarily unavailable'
+      );
+    }
+
+    try {
+      const auction = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.auction.findFirst({
+          where: { id, sellerId, status: 'DRAFT', deletedAt: null },
+          select: {
+            _count: { select: { images: true } },
+            images: {
+              select: { position: true },
+              orderBy: { position: 'desc' },
+              take: 1
+            }
+          }
+        });
+
+        if (!current) throw new NotFoundException('Auction draft not found');
+
+        if (current._count.images >= MAX_AUCTION_IMAGES) {
+          throw new BadRequestException(
+            `An auction can have at most ${MAX_AUCTION_IMAGES} images`
+          );
+        }
+
+        // The next free slot, not the count: a removal leaves a gap, and
+        // reusing it would collide with @@unique([auctionId, position]).
+        const position = (current.images[0]?.position ?? -1) + 1;
+
+        await tx.auctionImage.create({
+          data: {
+            auctionId: id,
+            storageKey: stored.storageKey,
+            url: stored.url,
+            altText: altText ?? null,
+            position,
+            // The first picture on an empty draft is the one the cards show.
+            isPrimary: current._count.images === 0
+          }
+        });
+
+        return tx.auction.update({
+          where: { id },
+          data: { rowVersion: { increment: 1 } },
+          select: auctionRowSelect
+        });
+      });
+
+      return toOwnerAuction(auction);
+    } catch (error: unknown) {
+      try {
+        await this.storage.deleteImage(stored.storageKey);
+      } catch (cleanupError: unknown) {
+        // Nothing left to tell the caller — they are getting the original
+        // failure — so this is logged rather than thrown over the top of it.
+        const message =
+          cleanupError instanceof Error ? cleanupError.message : 'Unknown';
+        this.logger.error(
+          `Failed to remove orphaned image ${stored.storageKey}: ${message}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * AUC-001 — takes a picture off a draft.
+   *
+   * The row goes first and the file second: a file still in the store that no
+   * row points at costs money and nothing else, while a row pointing at a file
+   * that is gone is a broken picture on somebody's screen.
+   *
+   * Removing the primary promotes whichever picture is now first, so a draft
+   * with images always has one to lead with.
+   */
+  async removeDraftImage(id: string, sellerId: string, imageId: string) {
+    const { auction, storageKey } = await this.prisma.$transaction(
+      async (tx) => {
+        const image = await tx.auctionImage.findFirst({
+          where: {
+            id: imageId,
+            auction: { id, sellerId, status: 'DRAFT', deletedAt: null }
+          },
+          select: { id: true, storageKey: true, isPrimary: true }
+        });
+
+        if (!image) throw new NotFoundException('Auction image not found');
+
+        await tx.auctionImage.delete({ where: { id: image.id } });
+
+        if (image.isPrimary) {
+          const next = await tx.auctionImage.findFirst({
+            where: { auctionId: id },
+            orderBy: { position: 'asc' },
+            select: { id: true }
+          });
+
+          if (next) {
+            await tx.auctionImage.update({
+              where: { id: next.id },
+              data: { isPrimary: true }
+            });
+          }
+        }
+
+        const updated = await tx.auction.update({
+          where: { id },
+          data: { rowVersion: { increment: 1 } },
+          select: auctionRowSelect
+        });
+
+        return { auction: updated, storageKey: image.storageKey };
+      }
+    );
+
+    try {
+      // A picture added by URL has a storage key nothing was ever filed
+      // under, and the store treats "not found" as done — so this is safe for
+      // both kinds without having to tell them apart.
+      await this.storage.deleteImage(storageKey);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown';
+      this.logger.error(`Failed to delete image ${storageKey}: ${message}`);
+    }
+
+    return toOwnerAuction(auction);
   }
 }
