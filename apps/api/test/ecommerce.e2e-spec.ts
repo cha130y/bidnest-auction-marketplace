@@ -37,6 +37,16 @@ describe('E-commerce (e2e)', () => {
 
   const createdProductIds: string[] = [];
 
+  /**
+   * A real JPEG header rather than any old bytes: the file validators read
+   * magic numbers, so a fake would be refused as the wrong type and never
+   * reach the question a test is asking.
+   */
+  const jpeg = Buffer.from(
+    'ffd8ffe000104a46494600010100000100010000ffd9',
+    'hex'
+  );
+
   const address = {
     recipientName: 'Anan B.',
     line1: '123 Sukhumvit Rd',
@@ -291,14 +301,6 @@ describe('E-commerce (e2e)', () => {
         .set('Authorization', authOf(strangerId))
         .expect(403));
 
-    // A real JPEG header rather than any old bytes: the file validator reads
-    // magic numbers, so a fake would be refused as the wrong type and never
-    // reach the question this test is asking.
-    const jpeg = Buffer.from(
-      'ffd8ffe000104a46494600010100000100010000ffd9',
-      'hex'
-    );
-
     // Cloudinary is optional, and the e2e run has no account behind it. The
     // route is expected to say so rather than accept a file it cannot store.
     it('reports upload as unavailable when no store is configured', () =>
@@ -314,6 +316,31 @@ describe('E-commerce (e2e)', () => {
         .set('Authorization', authOf(sellerAId))
         .attach('image', Buffer.from('#!/bin/sh\nrm -rf /'), 'photo.jpg')
         .expect(400));
+  });
+
+  describe('PROD-001 — a picture can be filed before the listing exists', () => {
+    // A listing is created with its pictures and has no draft to hold them in
+    // the meantime, so the file has to be storable before there is a product
+    // id to attach it to.
+    it('refuses an upload from nobody', () =>
+      request(app.getHttpServer())
+        .post('/uploads/images')
+        .attach('image', jpeg, 'photo.jpg')
+        .expect(401));
+
+    it('refuses a file that is not an image', () =>
+      request(app.getHttpServer())
+        .post('/uploads/images')
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', Buffer.from('#!/bin/sh\nrm -rf /'), 'photo.jpg')
+        .expect(400));
+
+    it('reports upload as unavailable when no store is configured', () =>
+      request(app.getHttpServer())
+        .post('/uploads/images')
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', jpeg, 'photo.jpg')
+        .expect(503));
   });
 
   describe('CART-003/PROD-007 — checkout splits per seller and prices lines', () => {

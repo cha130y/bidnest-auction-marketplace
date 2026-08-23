@@ -114,6 +114,24 @@ export class StorageService {
   }
 
   /**
+   * PROD-001 — files an image that has nothing to belong to yet.
+   *
+   * A listing must be created with at least one picture and has no draft
+   * state to hold them in the meantime, so the file has to exist before the
+   * row that points at it does. Filed under the uploader rather than a
+   * listing id, which is the only thing known at this point — and is what
+   * makes an abandoned upload attributable later.
+   */
+  uploadPendingImage(fileBuffer: Buffer, userId: string): Promise<StoredImage> {
+    return this.upload(fileBuffer, {
+      folder: `bidnest/pending/${userId}`,
+      resource_type: 'image',
+      unique_filename: true,
+      overwrite: false
+    });
+  }
+
+  /**
    * Removes a file. Treats "not found" as success: the caller wants the file
    * gone, and it already is.
    */
