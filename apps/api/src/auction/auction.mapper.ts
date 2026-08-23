@@ -39,7 +39,10 @@ export const auctionRowSelect = {
   createdAt: true,
   updatedAt: true,
   images: {
-    select: { url: true, position: true, isPrimary: true },
+    // The id is here so a seller's own screen can say which picture to
+    // remove. It reaches buyers too, which costs nothing: it identifies a
+    // public image and nothing else.
+    select: { id: true, url: true, position: true, isPrimary: true },
     orderBy: { position: 'asc' }
   },
   category: { select: { id: true, name: true, slug: true } },
@@ -103,6 +106,7 @@ export function toPublicAuction(auction: AuctionRow) {
       displayName: auction.seller.profile?.displayName ?? null
     },
     images: auction.images.map((image) => ({
+      id: image.id,
       url: image.url,
       position: image.position,
       isPrimary: image.isPrimary

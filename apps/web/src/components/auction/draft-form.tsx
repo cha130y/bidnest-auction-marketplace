@@ -84,11 +84,15 @@ export function DraftForm({
       const raw = form.get(name)
       return raw === null || raw === "" ? undefined : Number(raw)
     }
-    const images = String(form.get("imageUrls") ?? "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-
+    /**
+     * No images here, on purpose. Pictures are added on the draft's own page
+     * once it exists, because uploading needs an id to upload *to*.
+     *
+     * Do not put a URL field back on this form: `PATCH /auctions/:id` replaces
+     * the whole set when it receives `imageUrls`, which would delete rows
+     * pointing at uploaded files and leave those files in the store with
+     * nothing referencing them — invisible, and never cleaned up.
+     */
     setSubmitting(true)
     try {
       await onSubmit({
@@ -101,7 +105,6 @@ export function DraftForm({
         reservePrice: number("reservePrice"),
         scheduledStartAt: toIso(String(form.get("scheduledStartAt") ?? "")),
         scheduledEndAt: toIso(String(form.get("scheduledEndAt") ?? "")),
-        imageUrls: images.length > 0 ? images : undefined,
       })
     } catch (caught) {
       setError(
@@ -241,21 +244,6 @@ export function DraftForm({
           />
         </Field>
       </div>
-
-      <Field
-        label="ลิงก์รูปภาพ"
-        htmlFor="imageUrls"
-        hint="บรรทัดละหนึ่งลิงก์ · รูปแรกเป็นรูปหลัก"
-      >
-        <textarea
-          id="imageUrls"
-          name="imageUrls"
-          rows={3}
-          defaultValue={initial?.images.map((image) => image.url).join("\n")}
-          placeholder="https://example.com/front.jpg"
-          className="w-full rounded-r3 border border-n-300 bg-white px-4 py-3 font-mono text-xs text-ink outline-none focus:border-amber-500 focus:shadow-focus"
-        />
-      </Field>
 
       {error && (
         <p role="alert" className="text-sm font-medium text-red">

@@ -52,7 +52,22 @@ const envSchema = z.object({
   AI_NEGOTIATOR_JWT_SECRET: z
     .string()
     .min(1)
-    .default('dev-negotiator-secret-change-me')
+    .default('dev-negotiator-secret-change-me'),
+
+  /**
+   * AUC-001 — where uploaded auction images are kept.
+   *
+   * Optional for the reason GOOGLE_CLIENT_ID is: the API has to boot without
+   * them. Most of the team never touches image upload, and making these
+   * required would mean somebody working on the design system has to open a
+   * Cloudinary account before they can start the server.
+   *
+   * The upload route answers 503 when they are missing, decided before the
+   * request goes anywhere — see StorageService.isConfigured.
+   */
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional()
 });
 
 export function validate(config: Record<string, any>) {

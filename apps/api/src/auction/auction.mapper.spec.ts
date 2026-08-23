@@ -43,6 +43,7 @@ const auctionRow = (
   updatedAt: new Date('2026-08-19T00:00:00.000Z'),
   images: [
     {
+      id: '00000000-0000-4000-8000-0000000007a1',
       url: 'https://placehold.co/600x400?text=Front',
       position: 0,
       isPrimary: true
