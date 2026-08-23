@@ -182,6 +182,8 @@ export type AuctionSection =
   | "recently-ended"
 
 export type AuctionImage = {
+  /** Needed to remove one — see removeDraftImage. */
+  id: string
   url: string
   position: number
   isPrimary: boolean
@@ -511,3 +513,18 @@ export type DraftValidation = {
 export type OwnedDraftList = {
   items: OwnerAuction[]
 }
+
+// ── src/auction/constants/auction-image.constant.ts ─────────────────────────
+/**
+ * The upload limits, mirrored so a form can enforce and explain them before a
+ * file leaves the browser. The API checks all three again — these exist to
+ * save a wasted upload, not to be the rule.
+ */
+export const MAX_AUCTION_IMAGES = 8
+export const MAX_AUCTION_IMAGE_BYTES = 5 * 1024 * 1024
+export const AUCTION_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+] as const

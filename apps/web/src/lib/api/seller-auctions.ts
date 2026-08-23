@@ -1,4 +1,5 @@
-import { apiFetch } from "@/lib/api/client"
+import { API_BASE_URL, ApiError, apiFetch } from "@/lib/api/client"
+import { authHeader } from "@/lib/api/auth/token"
 import type {
   Auction,
   DraftValidation,
@@ -89,4 +90,57 @@ export function cancelOwnAuction(id: string, reason: string) {
     method: "POST",
     body: JSON.stringify({ reason }),
   })
+}
+
+/**
+ * AUC-001 — uploads one picture to a draft.
+ *
+ * Sent as multipart, so this bypasses `apiFetch`: that helper sets
+ * `Content-Type: application/json` on everything, and a multipart body needs
+ * the browser to set its own header with the boundary it generated. The token
+ * still comes from the same place.
+ *
+ * Answers 503 when the server has no image storage configured — which is a
+ * deployment fact rather than a mistake by whoever pressed the button, so it
+ * is worth saying so rather than showing a generic failure.
+ */
+export async function uploadDraftImage(
+  auctionId: string,
+  file: File,
+  altText?: string
+): Promise<OwnerAuction> {
+  const form = new FormData()
+  form.append("image", file)
+  if (altText) form.append("altText", altText)
+
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/auctions/${auctionId}/images`, {
+      method: "POST",
+      headers: authHeader(),
+      body: form,
+    })
+  } catch {
+    throw new ApiError(0, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่อีกครั้ง")
+  }
+
+  const body: unknown = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const message =
+      typeof body === "object" && body !== null && "message" in body
+        ? String((body as { message: unknown }).message)
+        : `อัปโหลดไม่สำเร็จ (${response.status})`
+    throw new ApiError(response.status, message, body)
+  }
+
+  return body as OwnerAuction
+}
+
+/** AUC-001 — removes one picture from a draft. */
+export function removeDraftImage(auctionId: string, imageId: string) {
+  return apiFetch<OwnerAuction>(
+    `/auctions/${auctionId}/images/${imageId}`,
+    { method: "DELETE" }
+  )
 }
