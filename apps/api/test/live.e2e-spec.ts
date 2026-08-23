@@ -206,10 +206,14 @@ describe('Live lobby (e2e)', () => {
     ) as INestApplication<App>;
     prisma = app.get(PrismaService);
     lifecycle = app.get(AuctionLifecycleService);
-    await app.init();
+    // Listen once for the whole suite rather than leaving the server idle.
+    // supertest opens an ephemeral listener per request against an idle
+    // server and closes it again straight after; back-to-back requests can
+    // then land on a socket whose listener is already going away.
+    await app.listen(0);
 
-    // No socket server is listening in these tests, so the gateway would drop
-    // every event silently. Spying on it is what makes the broadcasts visible.
+    // No client ever connects to the gateway in these tests, so every event
+    // it emits goes nowhere. Spying on it is what makes the broadcasts visible.
     broadcasts = jest.spyOn(app.get(AuctionGateway), 'emitToAuction');
 
     sellerId = await createUser(sellerEmail, 'USER');

@@ -167,7 +167,11 @@ describe('Watchlist (e2e)', () => {
       moduleFixture.createNestApplication()
     ) as INestApplication<App>;
     prisma = app.get(PrismaService);
-    await app.init();
+    // Listen once for the whole suite rather than leaving the server idle.
+    // supertest opens an ephemeral listener per request against an idle
+    // server and closes it again straight after; back-to-back requests can
+    // then land on a socket whose listener is already going away.
+    await app.listen(0);
 
     sellerId = await createUser(sellerEmail, 'USER');
     buyerId = await createUser(buyerEmail, 'USER');
