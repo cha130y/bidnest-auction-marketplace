@@ -343,6 +343,55 @@ describe('E-commerce (e2e)', () => {
         .expect(503));
   });
 
+  describe('PROD-002 — a seller can find their own listings', () => {
+    let pausedId: string;
+
+    beforeAll(async () => {
+      pausedId = await createProduct(sellerBId);
+      await request(app.getHttpServer())
+        .patch(`/products/${pausedId}/status`)
+        .set('Authorization', authOf(sellerBId))
+        .send({ status: 'INACTIVE' })
+        .expect(200);
+    });
+
+    const listFor = (userId: string) =>
+      request(app.getHttpServer())
+        .get('/products/mine')
+        .set('Authorization', authOf(userId))
+        .expect(200);
+
+    it('is not a public list', () =>
+      request(app.getHttpServer()).get('/products/mine').expect(401));
+
+    // The word "mine" would be read as an id if this route sat below GET :id.
+    it('shows a listing the public catalogue hides', async () => {
+      const response = await listFor(sellerBId);
+      const body = response.body as { items: { id: string; status: string }[] };
+
+      const paused = body.items.find((item) => item.id === pausedId);
+      expect(paused).toMatchObject({ status: 'INACTIVE' });
+
+      const publicList = await request(app.getHttpServer())
+        .get('/products?limit=100')
+        .expect(200);
+      const publicIds = (
+        publicList.body as { items: { id: string }[] }
+      ).items.map((item) => item.id);
+      expect(publicIds).not.toContain(pausedId);
+    });
+
+    it('shows the caller only their own', async () => {
+      const response = await listFor(sellerAId);
+      const body = response.body as { items: { seller: { id: string } }[] };
+
+      expect(body.items.length).toBeGreaterThan(0);
+      expect(body.items.every((item) => item.seller.id === sellerAId)).toBe(
+        true
+      );
+    });
+  });
+
   describe('CART-003/PROD-007 — checkout splits per seller and prices lines', () => {
     let orderIds: string[];
 

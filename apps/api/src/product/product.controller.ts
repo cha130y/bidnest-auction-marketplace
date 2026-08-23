@@ -52,6 +52,21 @@ export class ProductController {
     return this.productService.search(dto);
   }
 
+  /**
+   * PROD-002 — the seller's own listings, whatever state they are in.
+   *
+   * `GET /products` is the public catalogue and shows ACTIVE only, so a seller
+   * cannot find the listing they paused or the one that sold out through it.
+   *
+   * Keep this above `GET :id`, or Nest matches the parameter route first and
+   * ParseUUIDPipe rejects the word "mine" as a malformed id.
+   */
+  @Roles('USER')
+  @Get('mine')
+  listOwn(@CurrentUser('id') sellerId: string) {
+    return this.productService.listOwnProducts(sellerId);
+  }
+
   @Public()
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string, @Req() request: Request) {

@@ -59,6 +59,16 @@ export function uploadPendingImage(file: File) {
   return postImage<StoredImage>("/uploads/images", file)
 }
 
+/**
+ * PROD-002 — the seller's own listings, whatever state they are in.
+ *
+ * `searchProducts` is the public catalogue and shows ACTIVE only, so it cannot
+ * find the listing a seller paused or the one that sold out.
+ */
+export function listOwnProducts() {
+  return apiFetch<{ items: OwnerProduct[] }>("/products/mine")
+}
+
 /** PROD-002 — adds a picture to a listing that already exists. */
 export function addProductImage(id: string, file: File, altText?: string) {
   return postImage<OwnerProduct>(`/products/${id}/images`, file, altText)

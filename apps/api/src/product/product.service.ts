@@ -291,6 +291,27 @@ export class ProductService {
   }
 
   /**
+   * PROD-002 — every listing this seller has, whatever state it is in.
+   *
+   * Unpaginated on purpose: a seller manages their own shelf, and the count
+   * is theirs rather than the catalogue's. If somebody turns up with hundreds,
+   * this grows a page parameter — the screen does not need one to be written
+   * first.
+   *
+   * REMOVED is left out. It is a soft delete kept so order history still
+   * resolves, not a listing the seller can do anything with.
+   */
+  async listOwnProducts(sellerId: string) {
+    const products = await this.prisma.product.findMany({
+      where: { sellerId, status: { not: 'REMOVED' } },
+      orderBy: { updatedAt: 'desc' },
+      select: productOwnerSelect
+    });
+
+    return { items: products.map(toOwnerProduct) };
+  }
+
+  /**
    * PROD-002 — adds a picture to a listing the seller owns.
    *
    * The file goes to the store first and the row second, because a row
