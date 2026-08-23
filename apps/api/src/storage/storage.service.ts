@@ -102,7 +102,18 @@ export class StorageService {
     if (!this.configured) return;
 
     const result: unknown = await cloudinary.uploader.destroy(storageKey, {
-      resource_type: 'image'
+      resource_type: 'image',
+      /**
+       * The asset is destroyed either way — this asks the CDN to stop serving
+       * the copy it may already be holding. Anyone who loaded the picture
+       * before it was removed put it in an edge cache, and without this that
+       * cached copy keeps answering 200 for a while after the delete.
+       *
+       * Not instant: Cloudinary documents invalidation as taking up to an
+       * hour. It narrows the window rather than closing it, which is the
+       * honest description of what a CDN purge can do.
+       */
+      invalidate: true
     });
 
     if (!isDeleteResult(result)) {
