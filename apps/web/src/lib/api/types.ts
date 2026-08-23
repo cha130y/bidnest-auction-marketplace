@@ -480,3 +480,34 @@ export type NotificationPage = {
   unread: number
   meta: { page: number; limit: number; total: number; totalPages: number }
 }
+
+// ── src/auction/utils/validate-draft-for-publish.util.ts ────────────────────
+/**
+ * AUC-002 — one thing standing between a draft and being published.
+ *
+ * `code` is the stable identifier and `message` is already readable, so a
+ * screen shows the message and may key off the code; `field` is what to
+ * highlight in the form.
+ */
+export type DraftIssue = {
+  field: string
+  code: string
+  message: string
+}
+
+/** AUC-002 — `ready` is the whole answer; `issues` is why not. */
+export type DraftValidation = {
+  auctionId: string
+  ready: boolean
+  issues: DraftIssue[]
+}
+
+/**
+ * AUC-001 — the seller's own drafts.
+ *
+ * Not `Paginated<T>`: this route answers with `items` and no `meta`, because a
+ * seller's unpublished drafts are a short list rather than a catalogue.
+ */
+export type OwnedDraftList = {
+  items: OwnerAuction[]
+}
