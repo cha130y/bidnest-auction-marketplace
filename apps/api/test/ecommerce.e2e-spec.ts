@@ -257,6 +257,65 @@ describe('E-commerce (e2e)', () => {
     });
   });
 
+  describe('PROD-002 — a listing keeps a picture to show', () => {
+    let productId: string;
+    let imageId: string;
+
+    beforeAll(async () => {
+      productId = await createProduct(sellerAId);
+
+      const response = await request(app.getHttpServer())
+        .get(`/products/${productId}`)
+        .expect(200);
+
+      const body = response.body as { images: { id: string }[] };
+      imageId = body.images[0].id;
+    });
+
+    // The id is what lets a seller's screen name a picture to remove, so it is
+    // asserted rather than allowed through: dropping it from the mapper would
+    // leave the image manager unable to delete.
+    it('names each picture so a screen can point at one', () => {
+      expect(imageId).toEqual(expect.any(String));
+    });
+
+    it('refuses to remove the only picture a listing has', () =>
+      request(app.getHttpServer())
+        .delete(`/products/${productId}/images/${imageId}`)
+        .set('Authorization', authOf(sellerAId))
+        .expect(400));
+
+    it('will not let a stranger touch the pictures', () =>
+      request(app.getHttpServer())
+        .delete(`/products/${productId}/images/${imageId}`)
+        .set('Authorization', authOf(strangerId))
+        .expect(403));
+
+    // A real JPEG header rather than any old bytes: the file validator reads
+    // magic numbers, so a fake would be refused as the wrong type and never
+    // reach the question this test is asking.
+    const jpeg = Buffer.from(
+      'ffd8ffe000104a46494600010100000100010000ffd9',
+      'hex'
+    );
+
+    // Cloudinary is optional, and the e2e run has no account behind it. The
+    // route is expected to say so rather than accept a file it cannot store.
+    it('reports upload as unavailable when no store is configured', () =>
+      request(app.getHttpServer())
+        .post(`/products/${productId}/images`)
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', jpeg, 'photo.jpg')
+        .expect(503));
+
+    it('refuses a file that is not an image', () =>
+      request(app.getHttpServer())
+        .post(`/products/${productId}/images`)
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', Buffer.from('#!/bin/sh\nrm -rf /'), 'photo.jpg')
+        .expect(400));
+  });
+
   describe('CART-003/PROD-007 — checkout splits per seller and prices lines', () => {
     let orderIds: string[];
 

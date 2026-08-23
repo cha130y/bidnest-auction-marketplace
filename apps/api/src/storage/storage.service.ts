@@ -95,6 +95,25 @@ export class StorageService {
   }
 
   /**
+   * PROD-002 — files a listing image under its own product.
+   *
+   * Same options as an auction's, and a separate folder for the same reason
+   * the ids are separate: a product and an auction can be cleaned up without
+   * either knowing the other exists.
+   */
+  uploadProductImage(
+    fileBuffer: Buffer,
+    productId: string
+  ): Promise<StoredImage> {
+    return this.upload(fileBuffer, {
+      folder: `bidnest/products/${productId}`,
+      resource_type: 'image',
+      unique_filename: true,
+      overwrite: false
+    });
+  }
+
+  /**
    * Removes a file. Treats "not found" as success: the caller wants the file
    * gone, and it already is.
    */
