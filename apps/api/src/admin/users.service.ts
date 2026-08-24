@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { AdminActionType } from '../../generated/prisma/enums';
 import type { UserStatus } from '../../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
@@ -68,7 +72,13 @@ export class AdminUsersService {
       const user = await tx.user.update({
         where: { id: targetUserId },
         data: { status: targetStatus },
-        select: { id: true, email: true, role: true, status: true, createdAt: true }
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true
+        }
       });
 
       // เขียน audit log ในทรานแซคชันเดียวกับการเปลี่ยนสถานะ (ตาม ADR-0001)
@@ -79,7 +89,11 @@ export class AdminUsersService {
       if (targetStatus === 'SUSPENDED') {
         // เพิกถอน session ที่ยังไม่หมดอายุ กัน access token เดิมใช้ต่อได้จนหมดอายุ
         await tx.userSession.updateMany({
-          where: { userId: targetUserId, revokedAt: null, expiresAt: { gt: new Date() } },
+          where: {
+            userId: targetUserId,
+            revokedAt: null,
+            expiresAt: { gt: new Date() }
+          },
           data: { revokedAt: new Date() }
         });
       }

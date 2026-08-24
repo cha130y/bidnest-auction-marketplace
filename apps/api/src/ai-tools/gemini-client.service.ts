@@ -20,7 +20,9 @@ export class GeminiClientService {
       // Said once at startup rather than on every chat message, so a
       // teammate without a Gemini key finds out before they try AI-001,
       // same pattern as StorageService for Cloudinary.
-      this.logger.log('GEMINI_API_KEY is not set; support chat will answer 503');
+      this.logger.log(
+        'GEMINI_API_KEY is not set; support chat will answer 503'
+      );
       this.client = null;
       return;
     }

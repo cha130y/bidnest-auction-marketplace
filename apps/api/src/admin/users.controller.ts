@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query
+} from '@nestjs/common';
 import type { UserStatus } from '../../generated/prisma/enums';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -39,7 +47,12 @@ export class AdminUsersController {
     @CurrentUser('id') adminId: string,
     @Body() dto?: ChangeUserStatusDto
   ) {
-    return this.adminUsersService.changeUserStatus(adminId, userId, 'SUSPENDED', dto?.note);
+    return this.adminUsersService.changeUserStatus(
+      adminId,
+      userId,
+      'SUSPENDED',
+      dto?.note
+    );
   }
 
   /** body: { note?: string } → users.status = ACTIVE */
@@ -49,6 +62,11 @@ export class AdminUsersController {
     @CurrentUser('id') adminId: string,
     @Body() dto?: ChangeUserStatusDto
   ) {
-    return this.adminUsersService.changeUserStatus(adminId, userId, 'ACTIVE', dto?.note);
+    return this.adminUsersService.changeUserStatus(
+      adminId,
+      userId,
+      'ACTIVE',
+      dto?.note
+    );
   }
 }
