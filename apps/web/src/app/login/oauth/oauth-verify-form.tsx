@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { signIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { ApiTokens, PendingResponse } from "@/lib/auth/api-contract"
@@ -32,6 +33,27 @@ import {
  */
 
 const NOT_MY_FAULT = "เกิดข้อผิดพลาด กรุณาลองใหม่"
+
+/** What the browser calls itself, trimmed to something a person can recognise. */
+function deviceLabel(): string | undefined {
+  if (typeof navigator === "undefined") return undefined
+  const ua = navigator.userAgent
+  const browser =
+    /Edg\//.test(ua) ? "Edge"
+    : /OPR\//.test(ua) ? "Opera"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : "Browser"
+  const platform =
+    /Windows/.test(ua) ? "Windows"
+    : /Android/.test(ua) ? "Android"
+    : /iPhone|iPad/.test(ua) ? "iOS"
+    : /Mac OS X/.test(ua) ? "macOS"
+    : /Linux/.test(ua) ? "Linux"
+    : "unknown"
+  return `${browser} on ${platform}`
+}
 
 async function post(url: string, body: unknown) {
   const response = await fetch(url, {
@@ -61,6 +83,7 @@ export function OAuthVerifyForm({
   const label = provider === "line" ? "LINE" : "Google"
 
   const [askEmail, setAskEmail] = useState(needsEmail)
+  const [remember, setRemember] = useState(true)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
@@ -99,7 +122,11 @@ export function OAuthVerifyForm({
   /** AUTH-007 — the code, and then the session. */
   async function submitCode(values: OtpValues) {
     setFailure(null)
-    const result = await post("/api/auth/oauth/verify", { otp: values.otp })
+    const result = await post("/api/auth/oauth/verify", {
+      otp: values.otp,
+      rememberDevice: remember,
+      deviceLabel: remember ? deviceLabel() : undefined
+    })
 
     if (!result.ok) {
       setFailure(messageFrom(result.body, "รหัสยืนยันไม่ถูกต้องหรือหมดอายุแล้ว"))
@@ -215,6 +242,17 @@ export function OAuthVerifyForm({
           </p>
         )}
       </div>
+
+      <label className="flex items-start gap-3 text-sm">
+        <Checkbox checked={remember} onCheckedChange={setRemember} />
+        <span>
+          จำอุปกรณ์นี้ไว้ 30 วัน
+          <span className="mt-0.5 block text-muted-foreground">
+            ครั้งต่อไปจากเครื่องนี้จะไม่ต้องกรอกรหัสจากอีเมลอีก
+            อย่าเลือกถ้าเป็นเครื่องสาธารณะ
+          </span>
+        </span>
+      </label>
 
       {notice && !failure && (
         <p className="text-sm text-muted-foreground">{notice}</p>

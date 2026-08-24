@@ -6,6 +6,7 @@ import {
   type ApiTokens,
   type PendingResponse
 } from "@/lib/auth/api-contract"
+import { readDeviceToken, writeDeviceToken } from "@/lib/auth/device-cookie"
 
 /**
  * AUTH-003 / AUTH-006 — the provider token, in the gap before the code.
@@ -45,7 +46,7 @@ export type PendingOAuth = {
 }
 
 export type StartResult =
-  | { ok: true; body: PendingResponse }
+  | { ok: true; body: PendingResponse | ApiTokens }
   | { ok: false; status: number; message: string }
 
 export type VerifyResult =
@@ -100,11 +101,29 @@ export async function clearPending(): Promise<void> {
  * follows, because AUTH-006's answer to a Line account with no email is to ask
  * the user for one and start over.
  */
-export async function startOAuth(pending: PendingOAuth): Promise<StartResult> {
+export async function startOAuth(
+  pending: PendingOAuth,
+  /**
+   * Offer the trusted-device token, so a browser that has answered a code
+   * before comes straight back with the token pair.
+   *
+   * Off for Line's callback. That leg is a full-page redirect with nowhere to
+   * hand a token pair to — the page it lands on would have to be given them
+   * through yet another cookie — so Line still asks for the code every time.
+   * Worth doing, not worth doing badly in the same change.
+   */
+  options: { withDevice?: boolean } = {}
+): Promise<StartResult> {
   const response = await fetch(`${API_URL}/auth/${pending.provider}/callback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken: pending.idToken, email: pending.email }),
+    body: JSON.stringify({
+      idToken: pending.idToken,
+      email: pending.email,
+      // AUTH-007 — a browser that has answered a code before skips it here
+      // too, and comes back with the tokens instead of PENDING_2FA.
+      deviceToken: options.withDevice ? await readDeviceToken() : undefined
+    }),
     cache: "no-store"
   })
   const result: unknown = await response.json().catch(() => ({}))
@@ -129,7 +148,10 @@ export async function startOAuth(pending: PendingOAuth): Promise<StartResult> {
  * The token comes back out of the cookie rather than off the request, so the
  * browser never holds it and cannot be talked into sending someone else's.
  */
-export async function verifyOAuth(otp: string): Promise<VerifyResult> {
+export async function verifyOAuth(
+  otp: string,
+  remember?: { rememberDevice: boolean; deviceLabel?: string }
+): Promise<VerifyResult> {
   const pending = await readPending()
   if (!pending) {
     return {
@@ -149,7 +171,8 @@ export async function verifyOAuth(otp: string): Promise<VerifyResult> {
       // not consulted. Sending it anyway costs nothing and keeps this request
       // able to stand on its own, rather than on the order of the one before.
       email: pending.email,
-      otp
+      otp,
+      ...remember
     }),
     cache: "no-store"
   })
@@ -166,7 +189,14 @@ export async function verifyOAuth(otp: string): Promise<VerifyResult> {
   // Spent. The token pair is the session now and the provider token is done.
   await clearPending()
 
-  return { ok: true, tokens: result as ApiTokens }
+  const { deviceToken, ...tokens } = result as ApiTokens & {
+    deviceToken?: string
+  }
+  // Straight into the httpOnly cookie, never into the response: the one value
+  // that lets a sign-in skip the second factor must not reach the page.
+  if (deviceToken) await writeDeviceToken(deviceToken)
+
+  return { ok: true, tokens: tokens as ApiTokens }
 }
 
 /**

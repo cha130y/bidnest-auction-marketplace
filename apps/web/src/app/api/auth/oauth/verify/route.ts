@@ -10,13 +10,22 @@ import { verifyOAuth } from "@/lib/auth/oauth-flow"
  * is where it lands, per lib/api/auth/session-contract.ts.
  */
 export async function POST(request: Request) {
-  const { otp } = (await request.json().catch(() => ({}))) as { otp?: string }
+  const body = (await request.json().catch(() => ({}))) as {
+    otp?: string
+    rememberDevice?: boolean
+    deviceLabel?: string
+  }
 
-  if (!otp) {
+  if (!body.otp) {
     return NextResponse.json({ message: "กรอกรหัสยืนยัน" }, { status: 400 })
   }
 
-  const result = await verifyOAuth(otp)
+  const result = await verifyOAuth(
+    body.otp,
+    body.rememberDevice
+      ? { rememberDevice: true, deviceLabel: body.deviceLabel }
+      : undefined
+  )
 
   if (!result.ok) {
     return NextResponse.json(

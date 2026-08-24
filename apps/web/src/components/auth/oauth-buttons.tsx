@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Script from "next/script"
+import { signIn } from "next-auth/react"
 
 import { Separator } from "@/components/ui/separator"
 
@@ -79,6 +80,23 @@ export function OAuthButtons({ lineEnabled }: { lineEnabled: boolean }) {
         setFailure(message ?? "เข้าสู่ระบบด้วย Google ไม่สำเร็จ")
         return
       }
+
+      // AUTH-007 — a browser this account has answered a code from before
+      // gets the tokens here and never sees the code screen.
+      if (body && typeof body === "object" && "accessToken" in body) {
+        const signedIn = await signIn("oauth-tokens", {
+          payload: JSON.stringify(body),
+          redirect: false
+        })
+        if (signedIn?.error) {
+          setFailure("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+          return
+        }
+        router.push(callbackUrl ?? "/")
+        router.refresh()
+        return
+      }
+
       // A Google account always carries a verified address, so EMAIL_REQUIRED
       // cannot happen on this path — straight to the code.
       router.push("/login/oauth")

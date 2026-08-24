@@ -47,12 +47,17 @@ export async function POST(request: Request) {
     )
   }
 
-  const result = await startOAuth({
-    provider,
-    idToken,
-    email: body.email ?? parked?.email,
-    callbackUrl: safeCallback(body.callbackUrl) ?? parked?.callbackUrl
-  })
+  const result = await startOAuth(
+    {
+      provider,
+      idToken,
+      email: body.email ?? parked?.email,
+      callbackUrl: safeCallback(body.callbackUrl) ?? parked?.callbackUrl
+    },
+    // This leg answers the page directly, so it can hand back a token pair —
+    // unlike Line's callback, which only gets to redirect.
+    { withDevice: true }
+  )
 
   if (!result.ok) {
     return NextResponse.json(

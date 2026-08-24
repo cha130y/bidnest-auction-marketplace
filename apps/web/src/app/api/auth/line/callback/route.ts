@@ -107,7 +107,7 @@ export async function GET(request: Request) {
   const verify = new URL("/login/oauth", origin)
   // AUTH-006's own case: Line released no address, so one has to be asked for
   // before there is an account to mail a code to.
-  if (result.body.status === "EMAIL_REQUIRED") {
+  if ("status" in result.body && result.body.status === "EMAIL_REQUIRED") {
     verify.searchParams.set("need", "email")
   }
   return NextResponse.redirect(verify)

@@ -8,10 +8,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { signIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { requestLoginCode, resendLoginCode } from "@/lib/api/auth/auth-api"
+import { resendLoginCode } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
+import type { ApiTokens, PendingResponse } from "@/lib/auth/api-contract"
 import {
   loginSchema,
   otpSchema,
@@ -20,12 +22,19 @@ import {
 } from "@/lib/auth/schemas"
 
 /**
- * AUTH-002 / AUTH-007 — signing in, in the two steps the SRS describes.
+ * AUTH-002 / AUTH-007 — signing in.
  *
- * The password and the emailed code are collected on separate screens but sent
- * together in one `signIn()` call, because NextAuth's Credentials provider runs
- * `authorize()` exactly once. Step one is a plain call to the API, which checks
- * the password and mails a code without issuing anything.
+ * Two steps the first time from a browser: the password, then the code that
+ * was mailed. After that the code step is skipped, because step one comes back
+ * with the tokens already issued — the API recognised the device from a cookie
+ * this page never sees.
+ *
+ * Both steps go through route handlers under /api/auth/password rather than
+ * calling the API directly, which is what makes that cookie possible: it is
+ * httpOnly, so only the server can attach it going out or store it coming
+ * back. NextAuth still owns the session at the end, through the same
+ * `oauth-tokens` provider the Google and Line screens use — the tokens are
+ * already issued by then, and turning them into a session is all that is left.
  *
  * Two forms rather than one: the fields belong to different steps and have
  * different rules, and a single schema would have to call the code optional
@@ -36,6 +45,43 @@ import {
  * render under step one only — once a code has been mailed, starting a second
  * sign-in a different way would just abandon the first.
  */
+
+/** What the browser calls itself, trimmed to something a person can recognise. */
+function deviceLabel(): string | undefined {
+  if (typeof navigator === "undefined") return undefined
+  const ua = navigator.userAgent
+  const browser =
+    /Edg\//.test(ua) ? "Edge"
+    : /OPR\//.test(ua) ? "Opera"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : "Browser"
+  const platform =
+    /Windows/.test(ua) ? "Windows"
+    : /Android/.test(ua) ? "Android"
+    : /iPhone|iPad/.test(ua) ? "iOS"
+    : /Mac OS X/.test(ua) ? "macOS"
+    : /Linux/.test(ua) ? "Linux"
+    : "unknown"
+  return `${browser} on ${platform}`
+}
+
+async function post(url: string, body: unknown) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  })
+  const parsed: unknown = await response.json().catch(() => ({}))
+  return { ok: response.ok, body: parsed }
+}
+
+function messageFrom(body: unknown, fallback: string): string {
+  const message = (body as { message?: unknown }).message
+  return typeof message === "string" ? message : fallback
+}
+
 export function LoginForm({ oauth }: { oauth?: ReactNode }) {
   const router = useRouter()
   const params = useSearchParams()
@@ -43,6 +89,7 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
 
   const [credentials, setCredentials] = useState<LoginValues | null>(null)
   const [expiresIn, setExpiresIn] = useState(10)
+  const [remember, setRemember] = useState(true)
   const [notice, setNotice] = useState<string | null>(null)
   // A provider sign-in that failed comes back as a redirect, so its reason
   // arrives in the URL rather than from a call this page made.
@@ -58,40 +105,64 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
     defaultValues: { otp: "" }
   })
 
+  /** Hands the already-issued tokens to NextAuth and leaves. */
+  async function finish(tokens: ApiTokens) {
+    const signedIn = await signIn("oauth-tokens", {
+      payload: JSON.stringify(tokens),
+      redirect: false
+    })
+
+    if (signedIn?.error) {
+      setFailure("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+      return
+    }
+    router.push(callbackUrl)
+    router.refresh()
+  }
+
   async function sendCode(values: LoginValues) {
     setFailure(null)
-    try {
-      const pending = await requestLoginCode(values)
-      setExpiresIn(pending.expiresInMinutes)
-      setCredentials(values)
-      setNotice(`ส่งรหัสไปที่ ${values.email} แล้ว`)
-    } catch (cause) {
+    const result = await post("/api/auth/password/login", values)
+
+    if (!result.ok) {
       // The API answers "invalid email or password" for a missing account too,
       // so showing its message verbatim gives nothing away.
-      setFailure(
-        cause instanceof ApiError ? cause.message : "เข้าสู่ระบบไม่สำเร็จ"
-      )
+      setFailure(messageFrom(result.body, "เข้าสู่ระบบไม่สำเร็จ"))
+      return
     }
+
+    // A browser this account has been seen on: no code was sent, and the
+    // tokens are already here.
+    const body = result.body as PendingResponse | ApiTokens
+    if ("accessToken" in body) {
+      await finish(body)
+      return
+    }
+
+    setExpiresIn((body as { expiresInMinutes: number }).expiresInMinutes)
+    setCredentials(values)
+    setNotice(`ส่งรหัสไปที่ ${values.email} แล้ว`)
   }
 
   async function completeSignIn(values: OtpValues) {
     if (!credentials) return
     setFailure(null)
 
-    const result = await signIn("credentials", {
+    const result = await post("/api/auth/password/verify", {
       ...credentials,
       otp: values.otp,
-      redirect: false
+      rememberDevice: remember,
+      deviceLabel: remember ? deviceLabel() : undefined
     })
 
-    if (result?.error) {
-      // authorize() returns null rather than a reason on purpose: a wrong code
-      // and a wrong password must not be tellable apart from out here.
-      setFailure("รหัสยืนยันไม่ถูกต้องหรือหมดอายุแล้ว")
+    if (!result.ok) {
+      setFailure(
+        messageFrom(result.body, "รหัสยืนยันไม่ถูกต้องหรือหมดอายุแล้ว")
+      )
       return
     }
-    router.push(callbackUrl)
-    router.refresh()
+
+    await finish(result.body as ApiTokens)
   }
 
   async function resend() {
@@ -140,6 +211,20 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
           )}
         </div>
 
+        <label className="flex items-start gap-3 text-sm">
+          <Checkbox
+            checked={remember}
+            onCheckedChange={(value) => setRemember(value)}
+          />
+          <span>
+            จำอุปกรณ์นี้ไว้ 30 วัน
+            <span className="mt-0.5 block text-muted-foreground">
+              ครั้งต่อไปจากเครื่องนี้จะไม่ต้องกรอกรหัสจากอีเมลอีก —
+              เครื่องอื่นยังต้องกรอกเหมือนเดิม อย่าเลือกถ้าเป็นเครื่องสาธารณะ
+            </span>
+          </span>
+        </label>
+
         {notice && !failure && (
           <p className="text-sm text-muted-foreground">{notice}</p>
         )}
@@ -185,7 +270,7 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
         <div>
           <h1 className="text-xl font-semibold">เข้าสู่ระบบ</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            ทุกบัญชีต้องยืนยันด้วยรหัสทางอีเมลอีกขั้นหนึ่ง
+            ครั้งแรกจากเครื่องนี้ต้องยืนยันด้วยรหัสทางอีเมลอีกขั้นหนึ่ง
           </p>
         </div>
 
