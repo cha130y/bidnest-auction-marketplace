@@ -28,7 +28,7 @@ async function postImage<T>(path: string, file: File, altText?: string) {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
-      headers: authHeader(),
+      headers: await authHeader(),
       body: form,
     })
   } catch {

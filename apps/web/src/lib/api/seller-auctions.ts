@@ -117,7 +117,7 @@ export async function uploadDraftImage(
   try {
     response = await fetch(`${API_BASE_URL}/auctions/${auctionId}/images`, {
       method: "POST",
-      headers: authHeader(),
+      headers: await authHeader(),
       body: form,
     })
   } catch {
