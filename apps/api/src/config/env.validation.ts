@@ -1,6 +1,17 @@
 import { Logger } from '@nestjs/common';
 import z from 'zod';
 
+/**
+ * A key left blank in an env file arrives as `''`, which is not the same as
+ * absent — and for a credential it means the same thing as absent. Folding the
+ * two together lets `.env.example` carry an empty placeholder that documents
+ * the setting without becoming a startup failure the moment it is copied.
+ */
+const blankAsUnset = z
+  .string()
+  .optional()
+  .transform((value) => (value && value.trim() !== '' ? value : undefined));
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -41,10 +52,30 @@ const envSchema = z.object({
   AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(5),
   OTP_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
 
-  // Maildev in development, real SMTP relay in production (SRS section 3)
+  // Maildev in development, a real SMTP relay in production (SRS section 3).
+  // Nothing but these settings changes between the two — see MailService.
   MAIL_HOST: z.string().default('localhost'),
   MAIL_PORT: z.coerce.number().int().max(65535).min(0).default(1025),
   MAIL_FROM: z.string().default('BidNest <no-reply@bidnest.local>'),
+  // Optional because Maildev asks for no login. A relay that does want one
+  // gets it here, and both must be set before the transport will try.
+  //
+  // `MAIL_USER=` in an env file is an empty string, not an absent key, so
+  // these fold blank to undefined rather than refusing to start over a line
+  // that was only ever a placeholder.
+  MAIL_USER: blankAsUnset,
+  MAIL_PASSWORD: blankAsUnset,
+  // Implicit TLS, which is what port 465 means. Providers on 587 leave this
+  // off and upgrade through STARTTLS instead, so MailService follows the port
+  // unless this says otherwise.
+  MAIL_SECURE: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value && value.trim() !== ''
+        ? value.trim().toLowerCase() === 'true'
+        : undefined
+    ),
 
   // AI-001 (Customer Service Chatbot) — Dev 5. Optional for the same reason
   // GOOGLE_CLIENT_ID/CLOUDINARY_* are: the API has to boot without it, so a
