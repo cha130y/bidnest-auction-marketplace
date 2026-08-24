@@ -39,14 +39,15 @@ const ICON: Record<AppNotification["type"], typeof Gavel> = {
 /**
  * Where a row leads, or null for nowhere.
  *
- * Only the auction rows link, because only the auction routes exist. An order
- * or a conversation has no page in `apps/web` yet — those belong to the
- * e-commerce and chat modules — and a link to a 404 is worse than a row that
- * simply does not move when pressed. When those pages land, this map is where
- * they get wired in.
+ * Auction and chat rows link; order rows do not, because an order detail page
+ * has no route in `apps/web` yet — that belongs to the e-commerce module —
+ * and a link to a 404 is worse than a row that simply does not move when
+ * pressed. When that page lands, this is where it gets wired in.
  */
 function destination(notification: AppNotification): string | null {
-  return notification.auctionId ? `/auctions/${notification.auctionId}` : null
+  if (notification.auctionId) return `/auctions/${notification.auctionId}`
+  if (notification.conversationId) return `/chat/${notification.conversationId}`
+  return null
 }
 
 export function NotificationList() {

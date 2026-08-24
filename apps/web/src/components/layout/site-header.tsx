@@ -6,6 +6,7 @@ import {
   Gamepad2,
   Headphones,
   Menu,
+  MessageSquare,
   Monitor,
   ShoppingCart,
   Smartphone,
@@ -89,6 +90,17 @@ function SiteHeader({
           <GavelNav />
 
           <div className="ml-auto flex items-center gap-2 md:gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Messages"
+              className="text-ink"
+              nativeButton={false}
+              render={<Link href="/chat" />}
+            >
+              <MessageSquare className="size-6" />
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
