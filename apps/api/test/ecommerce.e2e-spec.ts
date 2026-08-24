@@ -316,6 +316,29 @@ describe('E-commerce (e2e)', () => {
         .set('Authorization', authOf(sellerAId))
         .attach('image', Buffer.from('#!/bin/sh\nrm -rf /'), 'photo.jpg')
         .expect(400));
+
+    /**
+     * `imageUrls` used to be accepted here and replaced the whole set, which
+     * left the files the old rows pointed at in the store with nothing
+     * referencing them. The field is no longer part of the edit shape, and
+     * `forbidNonWhitelisted` is what turns sending it into an answer instead
+     * of a silent replacement.
+     */
+    it('refuses an edit that tries to replace the pictures', async () => {
+      await request(app.getHttpServer())
+        .patch(`/products/${productId}`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ imageUrls: ['https://placehold.co/600x400?text=Replaced'] })
+        .expect(400);
+
+      const after = await request(app.getHttpServer())
+        .get(`/products/${productId}`)
+        .expect(200);
+
+      const body = after.body as { images: { id: string }[] };
+      expect(body.images).toHaveLength(1);
+      expect(body.images[0].id).toBe(imageId);
+    });
   });
 
   describe('PROD-001 — a picture can be filed before the listing exists', () => {

@@ -12,6 +12,12 @@ export type StoredImage = {
 
 type CloudinaryDeleteResult = { result: string };
 
+/** The only host our own uploads are ever served from. */
+const CLOUDINARY_HOST = 'res.cloudinary.com';
+
+/** Where an upload waits when it has nothing to belong to yet. */
+const PENDING_FOLDER_ROOT = 'bidnest/pending';
+
 function isDeleteResult(value: unknown): value is CloudinaryDeleteResult {
   return (
     typeof value === 'object' &&
@@ -38,6 +44,8 @@ function isDeleteResult(value: unknown): value is CloudinaryDeleteResult {
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly configured: boolean;
+  /** Kept so a url can be recognised as one of ours — see storageKeyFromUrl. */
+  private readonly cloudName?: string;
 
   constructor(config: ConfigService<EnvVariable, true>) {
     const cloudName = config.get('CLOUDINARY_CLOUD_NAME', { infer: true });
@@ -45,6 +53,7 @@ export class StorageService {
     const apiSecret = config.get('CLOUDINARY_API_SECRET', { infer: true });
 
     this.configured = Boolean(cloudName && apiKey && apiSecret);
+    this.cloudName = cloudName;
 
     if (!this.configured) {
       // Said once at startup rather than on every refused upload, so a
@@ -124,11 +133,78 @@ export class StorageService {
    */
   uploadPendingImage(fileBuffer: Buffer, userId: string): Promise<StoredImage> {
     return this.upload(fileBuffer, {
-      folder: `bidnest/pending/${userId}`,
+      folder: `${PENDING_FOLDER_ROOT}/${userId}`,
       resource_type: 'image',
       unique_filename: true,
       overwrite: false
     });
+  }
+
+  /**
+   * The folder `uploadPendingImage` files this user's uploads in, as a prefix a
+   * key can be tested against.
+   *
+   * The trailing slash is what makes `startsWith` mean "inside this user's
+   * folder" rather than "starts with these characters" — without it the key
+   * belonging to user `abc` matches a caller whose id is `ab`.
+   */
+  pendingPrefix(userId: string): string {
+    return `${PENDING_FOLDER_ROOT}/${userId}/`;
+  }
+
+  /**
+   * The key a url was filed under, or null when the url is not one of ours.
+   *
+   * Needed because a picture can reach a listing as a *url* — uploaded first
+   * and attached when the listing is created — and the key is what removing
+   * the file later needs. Recovering it here rather than having the caller
+   * send it back means nobody can claim a key they were never given.
+   *
+   * Matched against the exact shape an upload of ours answers with:
+   *
+   *     https://res.cloudinary.com/<cloud>/image/upload/v<version>/<public_id>.<ext>
+   *
+   * The version segment is required even though the store would serve the url
+   * without it. Every `secure_url` we are handed carries one, and insisting on
+   * it is what rules out a url with a transformation in the path — that names
+   * a *derived* image, and the key underneath it belongs to the original.
+   *
+   * Anything else — another cloud, another host, a url that is not a url —
+   * answers null, and the caller treats the picture as one we did not store.
+   * Failing that way round is the safe one: the cost is a file that outlives
+   * its row, against deleting a file some other row still points at.
+   */
+  storageKeyFromUrl(url: string): string | null {
+    if (!this.cloudName) return null;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return null;
+    }
+
+    if (parsed.hostname !== CLOUDINARY_HOST) return null;
+
+    const segments = parsed.pathname.split('/').filter(Boolean);
+
+    if (segments[0] !== this.cloudName) return null;
+    if (segments[1] !== 'image' || segments[2] !== 'upload') return null;
+
+    if (!/^v\d+$/.test(segments[3] ?? '')) return null;
+
+    const body = segments.slice(4);
+
+    if (body.length === 0) return null;
+
+    // Only the last segment carries the extension, and only its final dot —
+    // a public id is allowed to contain dots of its own.
+    const name = body[body.length - 1];
+    const dot = name.lastIndexOf('.');
+
+    return [...body.slice(0, -1), dot > 0 ? name.slice(0, dot) : name].join(
+      '/'
+    );
   }
 
   /**
