@@ -97,7 +97,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     })
   ],
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       // `user` is only present on the sign-in pass; afterwards the values
       // already on the token are what carry through.
       if (user) {
@@ -105,6 +105,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.refreshToken = user.refreshToken
         token.role = user.role
       }
+
+      // USR-001 — renaming yourself. The header reads the display name off the
+      // session, so without this it would keep the old one until the next sign
+      // in. Only the name is taken: `session` here is whatever the caller
+      // passed to `update()`, which is client input and not to be trusted with
+      // anything that decides access.
+      if (trigger === "update" && session && typeof session === "object") {
+        const patch = session as { name?: unknown }
+        if (typeof patch.name === "string" && patch.name.trim() !== "") {
+          token.name = patch.name
+        }
+      }
+
       return token
     },
     session({ session, token }) {

@@ -55,6 +55,35 @@ export type RegisterValues = z.infer<typeof registerSchema>
 export const forgotPasswordSchema = z.object({ email })
 export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>
 
+/**
+ * USR-001 — the profile form.
+ *
+ * Optional fields accept an empty string here rather than being marked
+ * optional, because a text input never sends `undefined`: clearing one gives
+ * `""`, and the form turns that into the `null` the API reads as "clear this".
+ * Lengths mirror UpdateProfileDto so a too-long bio is caught before it costs
+ * a round trip.
+ */
+export const profileSchema = z.object({
+  firstName: z.string().trim().min(1, "กรอกชื่อจริง").max(100),
+  lastName: z.string().trim().max(100, "นามสกุลยาวเกินไป"),
+  displayName: z.string().trim().min(1, "กรอกชื่อที่แสดง").max(100),
+  // No `.default("")`: a default makes the parsed type differ from the input
+  // one, and RHF's resolver is typed against both at once.
+  avatarUrl: z.union([
+    z.literal(""),
+    z.string().trim().url("ลิงก์รูปไม่ถูกต้อง").max(2048)
+  ]),
+  bio: z.string().trim().max(500, "แนะนำตัวได้ไม่เกิน 500 ตัวอักษร"),
+  phone: z.string().trim().max(30, "เบอร์โทรยาวเกินไป"),
+  location: z.string().trim().max(200, "ที่อยู่ยาวเกินไป"),
+  defaultShippingAddress: z
+    .string()
+    .trim()
+    .max(1000, "ที่อยู่จัดส่งยาวเกินไป")
+})
+export type ProfileValues = z.infer<typeof profileSchema>
+
 export const resetPasswordSchema = z
   .object({
     password: newPassword,
