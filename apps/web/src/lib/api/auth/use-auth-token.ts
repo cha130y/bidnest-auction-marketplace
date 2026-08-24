@@ -34,7 +34,16 @@ function getServerSnapshot(): string | null | undefined {
  * localStorage lives outside React, and this is the primitive for that.
  *
  * Temporary — once NextAuth lands in apps/web (Dev 1) this hook and
- * `authHeader()` are the only two places that need to change.
+ * `authHeader()` are the only two places that need to change (confirmed by
+ * grep: every one of the 17 current call sites goes through one of these two
+ * functions, none touch localStorage directly).
+ *
+ * TODO(AUTH-008, blocked on Dev1's NextAuth setup): swap this whole
+ * implementation for `useSession()` from `next-auth/react` — it already
+ * returns `{ data, status }`, so this becomes
+ * `{ token: data?.accessToken ?? null, ready: status !== 'loading' }` and
+ * every caller of `useAuthToken()` keeps its existing `{ token, ready }`
+ * contract unchanged. See ./session-contract.ts for the `accessToken` shape.
  */
 export function useAuthToken(): AuthTokenState {
   const token = useSyncExternalStore<string | null | undefined>(
