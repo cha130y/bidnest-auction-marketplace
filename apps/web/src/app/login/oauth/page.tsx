@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 
+import { OAuthReady } from "@/app/login/oauth/oauth-ready"
 import { OAuthVerifyForm } from "@/app/login/oauth/oauth-verify-form"
-import { readPending } from "@/lib/auth/oauth-flow"
+import { hasParkedTokens, readPending } from "@/lib/auth/oauth-flow"
 
 export const metadata = { title: "ยืนยันตัวตน · BidNest" }
 
@@ -12,22 +13,35 @@ export const metadata = { title: "ยืนยันตัวตน · BidNest" 
  * gets here by a full-page redirect and needs somewhere to land. Which step to
  * show comes from the query string, which is safe to trust: a forged
  * `?need=email` only shows the address form, and submitting it re-runs step
- * one, which answers PENDING_2FA and puts the user back on the code.
+ * one, which answers PENDING_2FA and puts the user back on the code. A forged
+ * `?ready=1` shows a screen that immediately fails to claim a cookie nobody
+ * parked.
  *
- * The provider token itself is never in the URL — it is in the httpOnly cookie
- * this reads, and its absence means the flow expired or never began.
+ * Neither the provider token nor an issued pair is ever in the URL — both live
+ * in httpOnly cookies this reads, and their absence means the flow expired or
+ * never began.
  */
 export default async function OAuthVerifyPage({
   searchParams
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
+  const params = await searchParams
+
+  // AUTH-007 — the device was already trusted, so apps/api issued the tokens
+  // at the callback and there is no code to ask for.
+  if (params.ready === "1" && (await hasParkedTokens())) {
+    return (
+      <main className="mx-auto w-full max-w-sm px-4 py-16">
+        <OAuthReady label="LINE" />
+      </main>
+    )
+  }
+
   const pending = await readPending()
   if (!pending) {
     redirect(`/login?error=${encodeURIComponent("เซสชันหมดอายุ กรุณาลองใหม่")}`)
   }
-
-  const params = await searchParams
 
   return (
     <main className="mx-auto w-full max-w-sm px-4 py-16">
