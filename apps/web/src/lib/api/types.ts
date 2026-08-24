@@ -438,6 +438,35 @@ export type WatchlistEntry = {
   result: AuctionResult | null
 }
 
+// ── src/product-watchlist/product-watchlist.service.ts ──────────────────────
+/**
+ * The same answer as `WatchToggle`, for a listing rather than an auction.
+ *
+ * Kept as its own type rather than widening that one: the two come from
+ * separate tables and separate routes, and a shared type with an optional
+ * `auctionId` and an optional `productId` would let a screen read the field it
+ * is never going to get.
+ */
+export type ProductWatchToggle = {
+  productId: string
+  watching: boolean
+  /** Present when following; the moment it was first added, not re-stamped. */
+  watchedAt?: string
+  /** Present when unfollowing; false if there was nothing to remove. */
+  removed?: boolean
+}
+
+/**
+ * A row of the followed-listings list.
+ *
+ * No countdown or result: a listing has neither. The product is the public
+ * shape, so `negotiationFloor` is not on it even for the seller (PROD-006).
+ */
+export type ProductWatchlistEntry = {
+  watchedAt: string
+  product: Product
+}
+
 // ── prisma/schema.prisma → NotificationType ─────────────────────────────────
 /**
  * All eight kinds share one table and one route, which is deliberate: the bell

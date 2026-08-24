@@ -213,6 +213,9 @@ describe('E-commerce (e2e)', () => {
     await prisma.adminAction.deleteMany({
       where: { productId: { in: createdProductIds } }
     });
+    await prisma.productWatchlist.deleteMany({
+      where: { userId: { in: userIds } }
+    });
     await prisma.productImage.deleteMany({
       where: { productId: { in: createdProductIds } }
     });
@@ -364,6 +367,142 @@ describe('E-commerce (e2e)', () => {
         .set('Authorization', authOf(sellerAId))
         .attach('image', jpeg, 'photo.jpg')
         .expect(503));
+  });
+
+  /**
+   * Beyond the SRS — the team's addition, shaped after WAT-001/002 but on its
+   * own table, so nothing here touches the auction watchlist.
+   */
+  describe('Following a listing', () => {
+    let productId: string;
+    let pausedId: string;
+    let droppedId: string;
+
+    const follow = (userId: string, id: string) =>
+      request(app.getHttpServer())
+        .post(`/products/${id}/watchlist`)
+        .set('Authorization', authOf(userId));
+
+    const unfollow = (userId: string, id: string) =>
+      request(app.getHttpServer())
+        .delete(`/products/${id}/watchlist`)
+        .set('Authorization', authOf(userId));
+
+    const followed = async (userId: string) => {
+      const response = await request(app.getHttpServer())
+        .get('/watchlist/products')
+        .set('Authorization', authOf(userId))
+        .expect(200);
+
+      return response.body as {
+        items: { watchedAt: string; product: { id: string } }[];
+        meta: { total: number };
+      };
+    };
+
+    const pause = (id: string) =>
+      request(app.getHttpServer())
+        .patch(`/products/${id}/status`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ status: 'INACTIVE' })
+        .expect(200);
+
+    beforeAll(async () => {
+      productId = await createProduct(sellerAId);
+      droppedId = await createProduct(sellerAId);
+      pausedId = await createProduct(sellerAId);
+      await pause(pausedId);
+    });
+
+    it('refuses to follow anything without a token', () =>
+      request(app.getHttpServer())
+        .post(`/products/${productId}/watchlist`)
+        .expect(401));
+
+    // SRS 2 — admins moderate the marketplace, they do not shop in it
+    it('refuses an admin', () => follow(adminId, productId).expect(403));
+
+    it('follows a listing', async () => {
+      const response = await follow(buyerId, productId).expect(200);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({ productId, watching: true })
+      );
+    });
+
+    it('is idempotent — a second follow keeps the first timestamp', async () => {
+      const first = await follow(buyerId, droppedId).expect(200);
+      const second = await follow(buyerId, droppedId).expect(200);
+
+      const at = (response: { body: unknown }) =>
+        (response.body as { watchedAt: string }).watchedAt;
+
+      expect(at(second)).toBe(at(first));
+    });
+
+    it('lists what the caller follows, and nobody else’s', async () => {
+      const mine = await followed(buyerId);
+      const theirs = await followed(strangerId);
+
+      expect(mine.items.map((entry) => entry.product.id)).toEqual(
+        expect.arrayContaining([productId, droppedId])
+      );
+      expect(theirs.items.map((entry) => entry.product.id)).not.toContain(
+        productId
+      );
+    });
+
+    /**
+     * PROD-006 — this is the buyer's list, so it reads a listing exactly as the
+     * catalogue does. The secret floor is not in that shape and must not
+     * arrive by way of a different route.
+     */
+    it('never carries the seller’s private floor', async () => {
+      const withFloor = await createProduct(sellerAId, {
+        negotiationFloor: 500
+      });
+      await follow(buyerId, withFloor).expect(200);
+
+      const mine = await followed(buyerId);
+      const entry = mine.items.find((it) => it.product.id === withFloor);
+
+      expect(entry).toBeDefined();
+      expect(entry?.product).not.toHaveProperty('negotiationFloor');
+    });
+
+    it('will not follow a listing that is not on sale', () =>
+      follow(buyerId, pausedId).expect(404));
+
+    it('will not follow an id that is not a product', () =>
+      follow(buyerId, '00000000-0000-4000-8000-000000000000').expect(404));
+
+    /**
+     * A listing the seller pauses, or an admin takes down, leaves the list
+     * rather than sitting in it as a row that opens onto a 404.
+     */
+    it('drops a listing that stops being on sale', async () => {
+      await pause(droppedId);
+
+      const mine = await followed(buyerId);
+      expect(mine.items.map((entry) => entry.product.id)).not.toContain(
+        droppedId
+      );
+    });
+
+    it('unfollows, and says so only the first time', async () => {
+      const first = await unfollow(buyerId, productId).expect(200);
+      const second = await unfollow(buyerId, productId).expect(200);
+
+      expect(first.body).toEqual(
+        expect.objectContaining({ productId, watching: false, removed: true })
+      );
+      expect(second.body).toEqual(expect.objectContaining({ removed: false }));
+
+      const mine = await followed(buyerId);
+      expect(mine.items.map((entry) => entry.product.id)).not.toContain(
+        productId
+      );
+    });
   });
 
   describe('PROD-002 — a seller can find their own listings', () => {

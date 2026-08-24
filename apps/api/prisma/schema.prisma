@@ -164,12 +164,13 @@ model User {
 
   // E-commerce
   sellingProducts     Product[]
+  productWatchlists   ProductWatchlist[]
   cart                Cart?
   offers              Offer[]
-  sellingOrders       Order[]        @relation("OrderSeller")
-  buyingOrders        Order[]        @relation("OrderBuyer")
-  buyerConversations  Conversation[] @relation("ConversationBuyer")
-  sellerConversations Conversation[] @relation("ConversationSeller")
+  sellingOrders       Order[]            @relation("OrderSeller")
+  buyingOrders        Order[]            @relation("OrderBuyer")
+  buyerConversations  Conversation[]     @relation("ConversationBuyer")
+  sellerConversations Conversation[]     @relation("ConversationSeller")
   messages            Message[]
 
   // Engagement
@@ -441,6 +442,7 @@ model Product {
   category Category @relation(fields: [categoryId], references: [id])
 
   images        ProductImage[]
+  watchlists    ProductWatchlist[]
   cartItems     CartItem[]
   offers        Offer[]
   orderItems    OrderItem[]
@@ -466,6 +468,27 @@ model ProductImage {
 
   @@unique([productId, position])
   @@map("product_images")
+}
+
+// Beyond the SRS: agreed by the team as an addition, not a requirement.
+//
+// Its own table rather than a column on `watchlists` (§5.1), which is an
+// auction's. Widening that one into `(targetType, targetId)` would give up the
+// foreign key — the column could no longer point at one table — and leave the
+// integrity to application code, on top of migrating the rows WAT-001/002
+// already depend on. Two narrow tables keep both lists honest; the screen puts
+// them side by side, which is a question for the UI rather than the schema.
+model ProductWatchlist {
+  userId    String   @map("user_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+  @@index([productId, createdAt])
+  @@map("product_watchlists")
 }
 
 model Cart {
