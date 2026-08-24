@@ -1,26 +1,38 @@
 import Link from "next/link"
-import { Bell, LogIn, Menu, ShoppingCart } from "lucide-react"
+import { Suspense, type ReactNode } from "react"
+import { Bell, Menu, ShoppingCart } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { AccountMenu } from "@/components/auth/account-menu"
 import { GavelNav, GavelNavMobile } from "@/components/layout/gavel-nav"
 
 export type SiteHeaderProps = {
   cartCount?: number
   hasNotifications?: boolean
   onMenuToggle?: () => void
+  /**
+   * The account control at the right-hand end. Defaults to the live one, so
+   * every page that renders `<SiteHeader />` bare gets it; pass something else
+   * where a fixed state is wanted, such as a component gallery.
+   */
+  account?: ReactNode
   className?: string
 }
 
 /**
  * Shared storefront header: logo, gavel-animated Auction/E-commerce nav;
- * logo + menu trigger on mobile. Presentational only — wire auth state,
- * cart count, notifications, and the mobile drawer at the call site.
+ * logo + menu trigger on mobile. Presentational apart from the account
+ * control, which reads the session itself — it is the same on every page,
+ * and threading it through six call sites would only be a longer way of
+ * saying so. Cart count, notifications and the mobile drawer are still
+ * wired from outside.
  */
 function SiteHeader({
   cartCount = 0,
   hasNotifications = false,
   onMenuToggle,
+  account = <AccountMenu />,
   className,
 }: SiteHeaderProps) {
   return (
@@ -51,6 +63,8 @@ function SiteHeader({
               size="icon"
               aria-label="Notifications"
               className="relative text-ink"
+              nativeButton={false}
+              render={<Link href="/notifications" />}
             >
               <Bell className="size-6" />
               {hasNotifications && (
@@ -63,6 +77,8 @@ function SiteHeader({
               size="icon"
               aria-label="Cart"
               className="relative text-ink"
+              nativeButton={false}
+              render={<Link href="/cart" />}
             >
               <ShoppingCart className="size-6" />
               {cartCount > 0 && (
@@ -74,16 +90,15 @@ function SiteHeader({
 
             <span className="hidden h-7 w-px bg-n-200 md:block" />
 
-            <Button
-              variant="primary"
-              size="sm"
-              className="hidden md:inline-flex"
-              nativeButton={false}
-              render={<Link href="/login" />}
-            >
-              <LogIn />
-              Log in
-            </Button>
+            {/*
+              The account control reads the current URL to know where to send
+              someone back to after signing in, and Next wants a boundary
+              around that so the pages using this header can still prerender.
+              The fallback holds the same space the control will take.
+            */}
+            <Suspense fallback={<div className="h-11 w-11 md:w-28" />}>
+              {account}
+            </Suspense>
 
             <button
               type="button"

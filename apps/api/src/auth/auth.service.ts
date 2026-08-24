@@ -28,6 +28,7 @@ import type { OAuthTokenVerifier } from './oauth/oauth-profile';
 import { GOOGLE_VERIFIER, LINE_VERIFIER } from './oauth/oauth-profile';
 import { OAuthService } from './oauth/oauth.service';
 import { TokenService } from './token.service';
+import { TrustedDeviceService } from './trusted-device.service';
 import { TwoFactorService } from './two-factor.service';
 
 /** Prisma raises P2002 when a write violates a unique index. */
@@ -78,6 +79,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly passwordReset: PasswordResetService,
     private readonly oauth: OAuthService,
+    private readonly trustedDevices: TrustedDeviceService,
     @Inject(GOOGLE_VERIFIER) private readonly google: OAuthTokenVerifier,
     @Inject(LINE_VERIFIER) private readonly line: OAuthTokenVerifier
   ) {}
@@ -129,8 +131,17 @@ export class AuthService {
    * AUTH-002 step one. Credentials are checked and an OTP is mailed, but no
    * token is issued yet — that only happens in verifyTwoFactor.
    */
-  async login(dto: LoginDto): Promise<PendingTwoFactorResponse> {
+  async login(
+    dto: LoginDto
+  ): Promise<PendingTwoFactorResponse | AuthTokensResponse> {
     const account = await this.authenticate(dto);
+
+    // AUTH-007 — a browser that has already answered a code for this account
+    // is let through without another one. The password was still checked a
+    // line ago: the device stands in for the second factor, never the first.
+    if (await this.trustedDevices.isTrusted(account.id, dto.deviceToken)) {
+      return this.completeLogin(account);
+    }
 
     // Re-posting the login form inside the cooldown must not mail a second
     // code; the one already in the inbox is still the live one.
@@ -160,14 +171,19 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired verification code');
     }
 
-    const { accessToken, refreshToken } = await this.tokens.issue(account);
+    const result = await this.completeLogin(account);
 
-    await this.prisma.user.update({
-      where: { id: account.id },
-      data: { lastLoginAt: new Date() }
-    });
+    // Only now. A device is trusted on the strength of a code that was
+    // actually answered — trusting it any earlier would hand out the exemption
+    // for exactly the credential the code exists to backstop.
+    if (dto.rememberDevice) {
+      result.deviceToken = await this.trustedDevices.remember(
+        account.id,
+        dto.deviceLabel
+      );
+    }
 
-    return { accessToken, refreshToken, user: this.toAuthUser(account) };
+    return result;
   }
 
   /** AUTH-007 — resend, rate limited so the inbox cannot be flooded. */
@@ -272,9 +288,16 @@ export class AuthService {
     });
 
     await this.tokens.revokeAllSessions(owner.userId);
+    // And every browser that had been let past the code. Revoking the sessions
+    // alone would leave the longer-lived permission standing: whoever caused
+    // the reset could sign in from their remembered browser with the new
+    // password and never be asked for a code — which is precisely the door a
+    // reset is meant to shut.
+    await this.trustedDevices.revokeAll(owner.userId);
 
     this.logger.log(
-      `Password reset completed for user ${owner.userId} — all sessions revoked`
+      `Password reset completed for user ${owner.userId} — all sessions and ` +
+        'trusted devices revoked'
     );
   }
 
@@ -287,7 +310,9 @@ export class AuthService {
   async oauthLogin(
     provider: AuthProvider,
     dto: OAuthLoginDto
-  ): Promise<PendingTwoFactorResponse | EmailRequiredResponse> {
+  ): Promise<
+    PendingTwoFactorResponse | EmailRequiredResponse | AuthTokensResponse
+  > {
     const resolution = await this.resolveOAuthAccount(provider, dto);
 
     if (resolution.outcome === 'EMAIL_REQUIRED') {
@@ -296,6 +321,15 @@ export class AuthService {
         message:
           'This Line account has no email address. Send one with the token to finish signing up.'
       };
+    }
+
+    // AUTH-007 — same exemption the local path gets. The provider already
+    // proved who this is; the code is the second factor, and a browser that
+    // has answered one before stands in for it.
+    if (
+      await this.trustedDevices.isTrusted(resolution.user.id, dto.deviceToken)
+    ) {
+      return this.issueForResolved(resolution.user);
     }
 
     const cooldown = await this.twoFactor.checkCooldown(resolution.user.id);
@@ -332,12 +366,42 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired verification code');
     }
 
+    const result = await this.issueForResolved(account);
+
+    if (dto.rememberDevice) {
+      result.deviceToken = await this.trustedDevices.remember(
+        account.id,
+        dto.deviceLabel
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * The tail of a provider sign-in, where the account came back from
+   * resolveOAuthAccount rather than from a credential check.
+   *
+   * Separate from completeLogin only because that resolution carries fewer
+   * fields than a local login does, so the profile is re-read here to make the
+   * response the same shape either way.
+   */
+  private async issueForResolved(account: {
+    id: string;
+    email: string;
+    role: AuthUserResponse['role'];
+    status: AuthUserResponse['status'];
+  }): Promise<AuthTokensResponse> {
     const { accessToken, refreshToken } = await this.tokens.issue(account);
 
     await this.prisma.user.update({
       where: { id: account.id },
       data: { lastLoginAt: new Date() }
     });
+    // Matters most here. A Line account's address was typed by its owner, not
+    // vouched for by anyone, and this code coming back is the only evidence
+    // the address is really theirs.
+    await this.markEmailVerified(account.id);
 
     return {
       accessToken,
@@ -353,6 +417,44 @@ export class AuthService {
     const verifier = provider === 'GOOGLE' ? this.google : this.line;
     const profile = await verifier.verify(dto.idToken);
     return this.oauth.resolveAccount(profile, dto.email);
+  }
+
+  /**
+   * The last few steps of every successful sign-in, wherever it came from.
+   *
+   * Local, Google and Line all arrive here having proved the account belongs
+   * to the caller, and all three owe the same things afterwards: a token pair,
+   * a login timestamp, and an address that now counts as verified.
+   */
+  private async completeLogin(account: Account): Promise<AuthTokensResponse> {
+    const { accessToken, refreshToken } = await this.tokens.issue(account);
+
+    await this.prisma.user.update({
+      where: { id: account.id },
+      data: { lastLoginAt: new Date() }
+    });
+    await this.markEmailVerified(account.id);
+
+    return { accessToken, refreshToken, user: this.toAuthUser(account) };
+  }
+
+  /**
+   * AUTH-007 — a code that went out by email and came back proves the address.
+   *
+   * Every login path ends here, which is the point: before this, the column was
+   * written once, when an OAuth account was created, and never again. A local
+   * signup stayed unverified forever no matter how many codes its owner had
+   * read, and so did a Line account whose owner typed the address themselves —
+   * exactly the case the column exists to distinguish.
+   *
+   * `updateMany` for the `null` guard: the first code to arrive is the moment
+   * of verification, and a later login must not push that timestamp forward.
+   */
+  private async markEmailVerified(userId: string) {
+    await this.prisma.user.updateMany({
+      where: { id: userId, emailVerifiedAt: null },
+      data: { emailVerifiedAt: new Date() }
+    });
   }
 
   /** Re-reads the profile so the refreshed response matches the register one. */

@@ -141,6 +141,9 @@ describe('Login and 2FA (e2e)', () => {
       // Only the digest is kept, never the token itself (AUTH-004).
       expect(sessions[0].refreshTokenHash).not.toBe(body.refreshToken);
       expect(user!.lastLoginAt).not.toBeNull();
+      // Registration takes an address on trust; this code went to it and came
+      // back, which is the moment that stops being an assumption (AUTH-007).
+      expect(user!.emailVerifiedAt).toBeInstanceOf(Date);
     });
 
     it('will not accept the same code a second time', async () => {

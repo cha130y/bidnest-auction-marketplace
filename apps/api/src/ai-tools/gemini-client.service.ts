@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  GoogleGenerativeAI,
+  Part,
+  ResponseSchema
+} from '@google/generative-ai';
 import { ConfigService } from '@nestjs/config';
+import { EnvVariable } from '../config/env.validation';
 import { GeminiUnavailableException } from './exceptions/gemini-unavailable.exception';
 
 const MAX_RETRIES = 2;
@@ -9,15 +14,73 @@ const RETRY_BASE_DELAY_MS = 1_000;
 @Injectable()
 export class GeminiClientService {
   private readonly logger = new Logger(GeminiClientService.name);
-  private readonly client: GoogleGenerativeAI;
+  private readonly client: GoogleGenerativeAI | null;
   private readonly modelName = 'gemini-flash-lite-latest';
 
-  constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.getOrThrow<string>('GEMINI_API_KEY');
+  constructor(config: ConfigService<EnvVariable, true>) {
+    const apiKey = config.get('GEMINI_API_KEY', { infer: true });
+
+    if (!apiKey) {
+      // Said once at startup rather than on every chat message, so a
+      // teammate without a Gemini key finds out before they try AI-001,
+      // same pattern as StorageService for Cloudinary.
+      this.logger.log(
+        'GEMINI_API_KEY is not set; support chat will answer 503'
+      );
+      this.client = null;
+      return;
+    }
+
     this.client = new GoogleGenerativeAI(apiKey);
   }
 
-  async generateReply(prompt: string, timeoutMs = 15_000): Promise<string> {
+  /** Whether a reply is possible at all — checked before Gemini is ever called. */
+  isConfigured(): boolean {
+    return this.client !== null;
+  }
+
+  generateReply(prompt: string, timeoutMs = 15_000): Promise<string> {
+    return this.runWithRetry(
+      (model) => model.generateContent(prompt),
+      timeoutMs
+    );
+  }
+
+  /**
+   * AI-002 — multimodal request (text + product photos) that asks Gemini to
+   * answer as JSON matching `schema`, so the caller parses a fixed shape
+   * instead of scraping free text out of a chat-style reply.
+   */
+  generateVisionJson(
+    parts: Part[],
+    schema: ResponseSchema,
+    timeoutMs = 20_000
+  ): Promise<string> {
+    return this.runWithRetry(
+      (model) =>
+        model.generateContent({
+          contents: [{ role: 'user', parts }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: schema
+          }
+        }),
+      timeoutMs
+    );
+  }
+
+  private async runWithRetry(
+    call: (
+      model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>
+    ) => ReturnType<
+      ReturnType<GoogleGenerativeAI['getGenerativeModel']>['generateContent']
+    >,
+    timeoutMs: number
+  ): Promise<string> {
+    if (!this.client) {
+      throw new GeminiUnavailableException();
+    }
+
     const model = this.client.getGenerativeModel({ model: this.modelName });
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -26,10 +89,7 @@ export class GeminiClientService {
       });
 
       try {
-        const result = await Promise.race([
-          model.generateContent(prompt),
-          timeoutPromise
-        ]);
+        const result = await Promise.race([call(model), timeoutPromise]);
         return result.response.text();
       } catch (error) {
         const isLastAttempt = attempt === MAX_RETRIES;

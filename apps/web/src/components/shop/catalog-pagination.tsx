@@ -30,6 +30,22 @@ type CatalogPaginationProps = {
 }
 
 /**
+ * "ก่อนหน้า" and "ถัดไป", greyed out when there is nowhere to go.
+ *
+ * `Button` carries `disabled:opacity-45` already, but that compiles to the
+ * `:disabled` pseudo-class, which only ever matches a form element. These two
+ * render as a `<span>` at the ends of the range — see below — so none of the
+ * base styling ever reached them, and "ก่อนหน้า" on page 1 looked exactly like
+ * a button that works.
+ *
+ * Keyed off `aria-disabled` instead, which Base UI puts on the element in both
+ * cases. The page buttons in the middle are unaffected: they are never
+ * disabled, so the variants never match.
+ */
+const edgeButton =
+  "border-0 shadow-sh1 aria-disabled:pointer-events-none aria-disabled:opacity-45 aria-disabled:shadow-none"
+
+/**
  * Plain links rather than the `PaginationLink` primitive: that one renders a
  * bare `<a>`, which would full-reload the catalog on every page change.
  */
@@ -45,7 +61,7 @@ export function CatalogPagination({ search, meta }: CatalogPaginationProps) {
           <Button
             variant="secondary"
             size="md"
-            className="border-0 pl-1.5! shadow-sh1"
+            className={`${edgeButton} pl-1.5!`}
             disabled={meta.page <= 1}
             nativeButton={false}
             render={
@@ -90,7 +106,7 @@ export function CatalogPagination({ search, meta }: CatalogPaginationProps) {
           <Button
             variant="secondary"
             size="md"
-            className="border-0 pr-1.5! shadow-sh1"
+            className={`${edgeButton} pr-1.5!`}
             disabled={meta.page >= meta.totalPages}
             nativeButton={false}
             render={

@@ -36,9 +36,17 @@ export type Paginated<T> = {
 
 // ── src/product/product.mapper.ts → toPublicProduct ─────────────────────────
 export type ProductImage = {
+  // PROD-002 — what a seller's screen names when it asks for one to go.
+  id: string
   url: string
   position: number
   isPrimary: boolean
+}
+
+/** What POST /uploads/images answers with, before any listing exists. */
+export type StoredImage = {
+  url: string
+  storageKey: string
 }
 
 export type Product = {
@@ -430,6 +438,35 @@ export type WatchlistEntry = {
   result: AuctionResult | null
 }
 
+// ── src/product-watchlist/product-watchlist.service.ts ──────────────────────
+/**
+ * The same answer as `WatchToggle`, for a listing rather than an auction.
+ *
+ * Kept as its own type rather than widening that one: the two come from
+ * separate tables and separate routes, and a shared type with an optional
+ * `auctionId` and an optional `productId` would let a screen read the field it
+ * is never going to get.
+ */
+export type ProductWatchToggle = {
+  productId: string
+  watching: boolean
+  /** Present when following; the moment it was first added, not re-stamped. */
+  watchedAt?: string
+  /** Present when unfollowing; false if there was nothing to remove. */
+  removed?: boolean
+}
+
+/**
+ * A row of the followed-listings list.
+ *
+ * No countdown or result: a listing has neither. The product is the public
+ * shape, so `negotiationFloor` is not on it even for the seller (PROD-006).
+ */
+export type ProductWatchlistEntry = {
+  watchedAt: string
+  product: Product
+}
+
 // ── prisma/schema.prisma → NotificationType ─────────────────────────────────
 /**
  * All eight kinds share one table and one route, which is deliberate: the bell
@@ -528,3 +565,11 @@ export const AUCTION_IMAGE_MIME_TYPES = [
   "image/webp",
   "image/avif",
 ] as const
+
+/**
+ * PROD-001/002 — the same figures for a listing. The API shares one ceiling
+ * across both, so these are aliases rather than a second set to keep in step.
+ */
+export const MAX_PRODUCT_IMAGES = 8
+export const MAX_PRODUCT_IMAGE_BYTES = MAX_AUCTION_IMAGE_BYTES
+export const PRODUCT_IMAGE_MIME_TYPES = AUCTION_IMAGE_MIME_TYPES

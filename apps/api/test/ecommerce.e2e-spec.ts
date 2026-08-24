@@ -37,6 +37,16 @@ describe('E-commerce (e2e)', () => {
 
   const createdProductIds: string[] = [];
 
+  /**
+   * A real JPEG header rather than any old bytes: the file validators read
+   * magic numbers, so a fake would be refused as the wrong type and never
+   * reach the question a test is asking.
+   */
+  const jpeg = Buffer.from(
+    'ffd8ffe000104a46494600010100000100010000ffd9',
+    'hex'
+  );
+
   const address = {
     recipientName: 'Anan B.',
     line1: '123 Sukhumvit Rd',
@@ -203,6 +213,9 @@ describe('E-commerce (e2e)', () => {
     await prisma.adminAction.deleteMany({
       where: { productId: { in: createdProductIds } }
     });
+    await prisma.productWatchlist.deleteMany({
+      where: { userId: { in: userIds } }
+    });
     await prisma.productImage.deleteMany({
       where: { productId: { in: createdProductIds } }
     });
@@ -254,6 +267,290 @@ describe('E-commerce (e2e)', () => {
         .expect(200);
 
       expect(response.body).toHaveProperty('negotiationFloor');
+    });
+  });
+
+  describe('PROD-002 — a listing keeps a picture to show', () => {
+    let productId: string;
+    let imageId: string;
+
+    beforeAll(async () => {
+      productId = await createProduct(sellerAId);
+
+      const response = await request(app.getHttpServer())
+        .get(`/products/${productId}`)
+        .expect(200);
+
+      const body = response.body as { images: { id: string }[] };
+      imageId = body.images[0].id;
+    });
+
+    // The id is what lets a seller's screen name a picture to remove, so it is
+    // asserted rather than allowed through: dropping it from the mapper would
+    // leave the image manager unable to delete.
+    it('names each picture so a screen can point at one', () => {
+      expect(imageId).toEqual(expect.any(String));
+    });
+
+    it('refuses to remove the only picture a listing has', () =>
+      request(app.getHttpServer())
+        .delete(`/products/${productId}/images/${imageId}`)
+        .set('Authorization', authOf(sellerAId))
+        .expect(400));
+
+    it('will not let a stranger touch the pictures', () =>
+      request(app.getHttpServer())
+        .delete(`/products/${productId}/images/${imageId}`)
+        .set('Authorization', authOf(strangerId))
+        .expect(403));
+
+    // Cloudinary is optional, and the e2e run has no account behind it. The
+    // route is expected to say so rather than accept a file it cannot store.
+    it('reports upload as unavailable when no store is configured', () =>
+      request(app.getHttpServer())
+        .post(`/products/${productId}/images`)
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', jpeg, 'photo.jpg')
+        .expect(503));
+
+    it('refuses a file that is not an image', () =>
+      request(app.getHttpServer())
+        .post(`/products/${productId}/images`)
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', Buffer.from('#!/bin/sh\nrm -rf /'), 'photo.jpg')
+        .expect(400));
+
+    /**
+     * `imageUrls` used to be accepted here and replaced the whole set, which
+     * left the files the old rows pointed at in the store with nothing
+     * referencing them. The field is no longer part of the edit shape, and
+     * `forbidNonWhitelisted` is what turns sending it into an answer instead
+     * of a silent replacement.
+     */
+    it('refuses an edit that tries to replace the pictures', async () => {
+      await request(app.getHttpServer())
+        .patch(`/products/${productId}`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ imageUrls: ['https://placehold.co/600x400?text=Replaced'] })
+        .expect(400);
+
+      const after = await request(app.getHttpServer())
+        .get(`/products/${productId}`)
+        .expect(200);
+
+      const body = after.body as { images: { id: string }[] };
+      expect(body.images).toHaveLength(1);
+      expect(body.images[0].id).toBe(imageId);
+    });
+  });
+
+  describe('PROD-001 — a picture can be filed before the listing exists', () => {
+    // A listing is created with its pictures and has no draft to hold them in
+    // the meantime, so the file has to be storable before there is a product
+    // id to attach it to.
+    it('refuses an upload from nobody', () =>
+      request(app.getHttpServer())
+        .post('/uploads/images')
+        .attach('image', jpeg, 'photo.jpg')
+        .expect(401));
+
+    it('refuses a file that is not an image', () =>
+      request(app.getHttpServer())
+        .post('/uploads/images')
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', Buffer.from('#!/bin/sh\nrm -rf /'), 'photo.jpg')
+        .expect(400));
+
+    it('reports upload as unavailable when no store is configured', () =>
+      request(app.getHttpServer())
+        .post('/uploads/images')
+        .set('Authorization', authOf(sellerAId))
+        .attach('image', jpeg, 'photo.jpg')
+        .expect(503));
+  });
+
+  /**
+   * Beyond the SRS — the team's addition, shaped after WAT-001/002 but on its
+   * own table, so nothing here touches the auction watchlist.
+   */
+  describe('Following a listing', () => {
+    let productId: string;
+    let pausedId: string;
+    let droppedId: string;
+
+    const follow = (userId: string, id: string) =>
+      request(app.getHttpServer())
+        .post(`/products/${id}/watchlist`)
+        .set('Authorization', authOf(userId));
+
+    const unfollow = (userId: string, id: string) =>
+      request(app.getHttpServer())
+        .delete(`/products/${id}/watchlist`)
+        .set('Authorization', authOf(userId));
+
+    const followed = async (userId: string) => {
+      const response = await request(app.getHttpServer())
+        .get('/watchlist/products')
+        .set('Authorization', authOf(userId))
+        .expect(200);
+
+      return response.body as {
+        items: { watchedAt: string; product: { id: string } }[];
+        meta: { total: number };
+      };
+    };
+
+    const pause = (id: string) =>
+      request(app.getHttpServer())
+        .patch(`/products/${id}/status`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ status: 'INACTIVE' })
+        .expect(200);
+
+    beforeAll(async () => {
+      productId = await createProduct(sellerAId);
+      droppedId = await createProduct(sellerAId);
+      pausedId = await createProduct(sellerAId);
+      await pause(pausedId);
+    });
+
+    it('refuses to follow anything without a token', () =>
+      request(app.getHttpServer())
+        .post(`/products/${productId}/watchlist`)
+        .expect(401));
+
+    // SRS 2 — admins moderate the marketplace, they do not shop in it
+    it('refuses an admin', () => follow(adminId, productId).expect(403));
+
+    it('follows a listing', async () => {
+      const response = await follow(buyerId, productId).expect(200);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({ productId, watching: true })
+      );
+    });
+
+    it('is idempotent — a second follow keeps the first timestamp', async () => {
+      const first = await follow(buyerId, droppedId).expect(200);
+      const second = await follow(buyerId, droppedId).expect(200);
+
+      const at = (response: { body: unknown }) =>
+        (response.body as { watchedAt: string }).watchedAt;
+
+      expect(at(second)).toBe(at(first));
+    });
+
+    it('lists what the caller follows, and nobody else’s', async () => {
+      const mine = await followed(buyerId);
+      const theirs = await followed(strangerId);
+
+      expect(mine.items.map((entry) => entry.product.id)).toEqual(
+        expect.arrayContaining([productId, droppedId])
+      );
+      expect(theirs.items.map((entry) => entry.product.id)).not.toContain(
+        productId
+      );
+    });
+
+    /**
+     * PROD-006 — this is the buyer's list, so it reads a listing exactly as the
+     * catalogue does. The secret floor is not in that shape and must not
+     * arrive by way of a different route.
+     */
+    it('never carries the seller’s private floor', async () => {
+      const withFloor = await createProduct(sellerAId, {
+        negotiationFloor: 500
+      });
+      await follow(buyerId, withFloor).expect(200);
+
+      const mine = await followed(buyerId);
+      const entry = mine.items.find((it) => it.product.id === withFloor);
+
+      expect(entry).toBeDefined();
+      expect(entry?.product).not.toHaveProperty('negotiationFloor');
+    });
+
+    it('will not follow a listing that is not on sale', () =>
+      follow(buyerId, pausedId).expect(404));
+
+    it('will not follow an id that is not a product', () =>
+      follow(buyerId, '00000000-0000-4000-8000-000000000000').expect(404));
+
+    /**
+     * A listing the seller pauses, or an admin takes down, leaves the list
+     * rather than sitting in it as a row that opens onto a 404.
+     */
+    it('drops a listing that stops being on sale', async () => {
+      await pause(droppedId);
+
+      const mine = await followed(buyerId);
+      expect(mine.items.map((entry) => entry.product.id)).not.toContain(
+        droppedId
+      );
+    });
+
+    it('unfollows, and says so only the first time', async () => {
+      const first = await unfollow(buyerId, productId).expect(200);
+      const second = await unfollow(buyerId, productId).expect(200);
+
+      expect(first.body).toEqual(
+        expect.objectContaining({ productId, watching: false, removed: true })
+      );
+      expect(second.body).toEqual(expect.objectContaining({ removed: false }));
+
+      const mine = await followed(buyerId);
+      expect(mine.items.map((entry) => entry.product.id)).not.toContain(
+        productId
+      );
+    });
+  });
+
+  describe('PROD-002 — a seller can find their own listings', () => {
+    let pausedId: string;
+
+    beforeAll(async () => {
+      pausedId = await createProduct(sellerBId);
+      await request(app.getHttpServer())
+        .patch(`/products/${pausedId}/status`)
+        .set('Authorization', authOf(sellerBId))
+        .send({ status: 'INACTIVE' })
+        .expect(200);
+    });
+
+    const listFor = (userId: string) =>
+      request(app.getHttpServer())
+        .get('/products/mine')
+        .set('Authorization', authOf(userId))
+        .expect(200);
+
+    it('is not a public list', () =>
+      request(app.getHttpServer()).get('/products/mine').expect(401));
+
+    // The word "mine" would be read as an id if this route sat below GET :id.
+    it('shows a listing the public catalogue hides', async () => {
+      const response = await listFor(sellerBId);
+      const body = response.body as { items: { id: string; status: string }[] };
+
+      const paused = body.items.find((item) => item.id === pausedId);
+      expect(paused).toMatchObject({ status: 'INACTIVE' });
+
+      const publicList = await request(app.getHttpServer())
+        .get('/products?limit=100')
+        .expect(200);
+      const publicIds = (
+        publicList.body as { items: { id: string }[] }
+      ).items.map((item) => item.id);
+      expect(publicIds).not.toContain(pausedId);
+    });
+
+    it('shows the caller only their own', async () => {
+      const response = await listFor(sellerAId);
+      const body = response.body as { items: { seller: { id: string } }[] };
+
+      expect(body.items.length).toBeGreaterThan(0);
+      expect(body.items.every((item) => item.seller.id === sellerAId)).toBe(
+        true
+      );
     });
   });
 

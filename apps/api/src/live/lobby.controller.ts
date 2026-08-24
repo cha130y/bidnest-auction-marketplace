@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
+import { ReturnsOwnerFields } from '../common/decorators/owner-fields.decorator';
 import { LiveService } from './live.service';
 
 /**
@@ -24,6 +25,7 @@ export class LobbyController {
    * signed in.
    */
   @Public()
+  @ReturnsOwnerFields()
   @Get()
   getLobby(
     @Param('auctionId', ParseUUIDPipe) auctionId: string,

@@ -3,9 +3,9 @@ export const LOGIN_PATH = "/login"
 /**
  * Where to send someone who tried to do something that needs an account.
  *
- * The login screen itself is Dev 1's NextAuth work and does not exist in
- * apps/web yet, so this currently lands on a 404 — the destination is agreed,
- * the page just has not shipped.
+ * `/login` reads the `callbackUrl` back and returns the visitor to where they
+ * were, the same way proxy.ts does when it turns someone away from a route
+ * that needs an account.
  *
  * Reads the current URL from `window` rather than `useSearchParams()` on
  * purpose: it is only ever called from a click handler, and the hook would

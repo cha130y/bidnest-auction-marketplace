@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ReturnsOwnerFields } from '../common/decorators/owner-fields.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ListWatchlistDto } from './dtos/list-watchlist.dto';
 import { WatchlistService } from './watchlist.service';
@@ -14,6 +15,7 @@ export class WatchlistController {
 
   // SRS 2 — admins moderate the marketplace, they do not shop in it
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Get()
   listOwn(@CurrentUser('id') userId: string, @Query() dto: ListWatchlistDto) {
     return this.watchlistService.listOwn(userId, dto);

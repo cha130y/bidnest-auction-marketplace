@@ -38,13 +38,17 @@ export async function apiFetch<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
+  // Resolved before the request so a failure to read the session cannot be
+  // mistaken for a failure to reach the API.
+  const auth = await authHeader()
+
   let response: Response
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        ...authHeader(),
+        ...auth,
         ...init.headers,
       },
     })

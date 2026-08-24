@@ -3,6 +3,7 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "setupFiles": ["<rootDir>/force-maildev.ts"],
   "maxWorkers": 1,
   "workerIdleMemoryLimit": "256MB",
   "testTimeout": 30000,

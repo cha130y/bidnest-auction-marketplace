@@ -2,8 +2,9 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, Search } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 
+import { ProductSearchBox } from "@/components/shop/product-search-box"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -87,14 +88,12 @@ export function ProductFilters({ search, categories }: ProductFiltersProps) {
     >
       <div>
         <h2 className="font-display text-base font-bold text-ink">ค้นหา</h2>
-        <Input
-          pill
-          type="search"
+        <ProductSearchBox
           value={q}
-          onChange={(event) => setQ(event.target.value)}
-          placeholder="ชื่อหรือรายละเอียดสินค้า"
-          startIcon={<Search />}
-          wrapperClassName="mt-3 h-12"
+          onChange={setQ}
+          onSubmit={() => {
+            if (!invalidRange) apply()
+          }}
         />
       </div>
 
