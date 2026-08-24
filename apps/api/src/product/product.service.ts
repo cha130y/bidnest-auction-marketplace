@@ -38,6 +38,8 @@ export class ProductService {
     await this.assertCategoryIsActive(dto.categoryId);
     this.assertDiscountRuleIsComplete(dto);
 
+    const images = await this.resolveImageKeys(sellerId, dto.imageUrls);
+
     const product = await this.prisma.product.create({
       data: {
         sellerId,
@@ -51,14 +53,7 @@ export class ProductService {
         negotiationFloor: dto.negotiationFloor,
         quantityDiscountMinQty: dto.quantityDiscountMinQty,
         quantityDiscountPercent: dto.quantityDiscountPercent,
-        images: {
-          create: dto.imageUrls.map((url, index) => ({
-            storageKey: `${sellerId}/${randomUUID()}/${index}`,
-            url,
-            position: index,
-            isPrimary: index === 0
-          }))
-        }
+        images: { create: images }
       },
       select: productOwnerSelect
     });
@@ -67,6 +62,66 @@ export class ProductService {
       ...toOwnerProduct(product),
       warnings: this.buildFloorWarnings(dto)
     };
+  }
+
+  /**
+   * PROD-001 — what to record as the storage key for each picture on a new
+   * listing.
+   *
+   * A listing is created with its pictures already on it, so they arrive as
+   * urls: uploaded to /uploads/images first, attached here second. Recording
+   * an invented key for those loses the only handle on the file, and removing
+   * the picture later then deletes the row while the file stays in the store
+   * forever — the store reads a key it never issued as "already gone" and
+   * reports success.
+   *
+   * So the real key is recovered from the url, but claimed only when all of
+   * this holds:
+   *
+   * - the url is one we uploaded (anything else has no file of ours behind it);
+   * - it sits in *this seller's* pending folder, so a url belonging to someone
+   *   else cannot be attached to a listing and then deleted out from under them;
+   * - no row holds that key yet, here or in the database — `storageKey` is
+   *   unique, and the row that has it is the one entitled to delete the file.
+   *
+   * Everything else keeps the invented key it has always had. That is not a
+   * fallback that loses anything: those pictures had no file of ours to delete
+   * in the first place.
+   */
+  private async resolveImageKeys(sellerId: string, urls: string[]) {
+    const prefix = this.storage.pendingPrefix(sellerId);
+
+    const candidates = urls.map((url) => {
+      const key = this.storage.storageKeyFromUrl(url);
+      return key?.startsWith(prefix) ? key : null;
+    });
+
+    const claimable = candidates.filter((key): key is string => key !== null);
+
+    const taken = new Set(
+      claimable.length === 0
+        ? []
+        : (
+            await this.prisma.productImage.findMany({
+              where: { storageKey: { in: claimable } },
+              select: { storageKey: true }
+            })
+          ).map((image) => image.storageKey)
+    );
+
+    return urls.map((url, index) => {
+      const key = candidates[index];
+      // Added as we go, so the same url twice in one request claims once.
+      const claimed = key !== null && !taken.has(key);
+      if (key !== null) taken.add(key);
+
+      return {
+        storageKey: claimed ? key : `${sellerId}/${randomUUID()}/${index}`,
+        url,
+        position: index,
+        isPrimary: index === 0
+      };
+    });
   }
 
   async search(dto: SearchProductDto) {
@@ -190,20 +245,7 @@ export class ProductService {
         negotiationFloor: dto.negotiationFloor,
         quantityDiscountMinQty: dto.quantityDiscountMinQty,
         quantityDiscountPercent: dto.quantityDiscountPercent,
-        status: this.resolveStatus(existing.status, nextStock),
-        ...(dto.imageUrls
-          ? {
-              images: {
-                deleteMany: {},
-                create: dto.imageUrls.map((url, index) => ({
-                  storageKey: `${sellerId}/${randomUUID()}/${index}`,
-                  url,
-                  position: index,
-                  isPrimary: index === 0
-                }))
-              }
-            }
-          : {})
+        status: this.resolveStatus(existing.status, nextStock)
       },
       select: productOwnerSelect
     });

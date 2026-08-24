@@ -26,6 +26,7 @@ describe('ProductService — images', () => {
   let service: ProductService;
   let prisma: {
     product: {
+      create: jest.Mock;
       findUnique: jest.Mock;
       findFirst: jest.Mock;
       findUniqueOrThrow: jest.Mock;
@@ -35,8 +36,10 @@ describe('ProductService — images', () => {
       create: jest.Mock;
       delete: jest.Mock;
       findFirst: jest.Mock;
+      findMany: jest.Mock;
       update: jest.Mock;
     };
+    category: { findUnique: jest.Mock };
     orderItem: { count: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -44,6 +47,8 @@ describe('ProductService — images', () => {
     isConfigured: jest.Mock;
     uploadProductImage: jest.Mock;
     deleteImage: jest.Mock;
+    pendingPrefix: jest.Mock;
+    storageKeyFromUrl: jest.Mock;
   };
 
   const file = { buffer: Buffer.from('a photo') };
@@ -84,6 +89,7 @@ describe('ProductService — images', () => {
   beforeEach(async () => {
     prisma = {
       product: {
+        create: jest.fn().mockResolvedValue(productRow()),
         findUnique: jest.fn().mockResolvedValue(ownedProduct()),
         findFirst: jest.fn(),
         findUniqueOrThrow: jest.fn().mockResolvedValue(productRow())
@@ -93,8 +99,10 @@ describe('ProductService — images', () => {
         create: jest.fn(),
         delete: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn()
       },
+      category: { findUnique: jest.fn().mockResolvedValue({ isActive: true }) },
       orderItem: { count: jest.fn() },
       // Hands the callback the same mock, so assertions can read every call the
       // transaction made without a second layer of fakes.
@@ -106,7 +114,11 @@ describe('ProductService — images', () => {
         storageKey: 'bidnest/products/x/abc',
         url: 'https://cdn.example/abc.jpg'
       }),
-      deleteImage: jest.fn().mockResolvedValue(undefined)
+      deleteImage: jest.fn().mockResolvedValue(undefined),
+      pendingPrefix: jest.fn((userId: string) => `bidnest/pending/${userId}/`),
+      // Nothing is one of ours until a test says so, which is what a url like
+      // `placehold.co` — every fixture in the e2e suite — actually is.
+      storageKeyFromUrl: jest.fn().mockReturnValue(null)
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -118,6 +130,110 @@ describe('ProductService — images', () => {
     }).compile();
 
     service = moduleRef.get(ProductService);
+  });
+
+  /**
+   * PROD-001 — which pictures on a new listing get the key that can delete
+   * their file, and which get one that cannot.
+   *
+   * Not reachable end to end: it takes a url the store actually issued, and no
+   * machine on this team has Cloudinary configured to issue one.
+   */
+  describe('create — storage keys', () => {
+    const PENDING = `bidnest/pending/${SELLER_ID}/abc123`;
+    const pendingUrl = (key: string) =>
+      `https://res.cloudinary.com/bidnest/image/upload/v1/${key}.jpg`;
+
+    const dto = (imageUrls: string[]) => ({
+      title: 'A listing',
+      description: 'Described',
+      categoryId: 'category',
+      price: 1000,
+      stockQty: 3,
+      condition: 'NEW' as const,
+      imageUrls
+    });
+
+    /** The image rows `create` asked Prisma to write. */
+    const writtenImages = () => {
+      const args = (
+        prisma.product.create.mock.calls as {
+          data: {
+            images: {
+              create: { url: string; storageKey: string; isPrimary: boolean }[];
+            };
+          };
+        }[][]
+      )[0][0];
+
+      return args.data.images.create;
+    };
+
+    /** Recognises `url` as ours and filed under `key`. */
+    const uploadedAs = (pairs: Record<string, string>) => {
+      storage.storageKeyFromUrl.mockImplementation(
+        (url: string) => pairs[url] ?? null
+      );
+    };
+
+    it('keeps the key the store issued for the seller’s own upload', async () => {
+      const url = pendingUrl(PENDING);
+      uploadedAs({ [url]: PENDING });
+
+      await service.create(SELLER_ID, dto([url]));
+
+      expect(writtenImages()).toEqual([
+        expect.objectContaining({ url, storageKey: PENDING, isPrimary: true })
+      ]);
+    });
+
+    it('invents a key for a picture we did not store', async () => {
+      const url = 'https://placehold.co/600x400';
+
+      await service.create(SELLER_ID, dto([url]));
+
+      const [image] = writtenImages();
+      expect(image.url).toBe(url);
+      expect(image.storageKey).not.toBe(url);
+      expect(image.storageKey.startsWith(SELLER_ID)).toBe(true);
+      // Nothing of ours is behind it, so nothing was looked up either.
+      expect(prisma.productImage.findMany).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The one that matters for safety. Attaching somebody else's upload and
+     * then deleting the picture would destroy their file.
+     */
+    it('will not claim a key from another seller’s folder', async () => {
+      const theirs = 'bidnest/pending/99999999-9999-4999-8999-999999999999/x';
+      const url = pendingUrl(theirs);
+      uploadedAs({ [url]: theirs });
+
+      await service.create(SELLER_ID, dto([url]));
+
+      expect(writtenImages()[0].storageKey).not.toBe(theirs);
+    });
+
+    it('claims a key once when the same picture is sent twice', async () => {
+      const url = pendingUrl(PENDING);
+      uploadedAs({ [url]: PENDING });
+
+      await service.create(SELLER_ID, dto([url, url]));
+
+      const [first, second] = writtenImages();
+      expect(first.storageKey).toBe(PENDING);
+      expect(second.storageKey).not.toBe(PENDING);
+    });
+
+    it('leaves a key alone when another listing already holds it', async () => {
+      const url = pendingUrl(PENDING);
+      uploadedAs({ [url]: PENDING });
+      prisma.productImage.findMany.mockResolvedValue([{ storageKey: PENDING }]);
+
+      await service.create(SELLER_ID, dto([url]));
+
+      expect(writtenImages()[0].storageKey).not.toBe(PENDING);
+    });
   });
 
   describe('addImage', () => {

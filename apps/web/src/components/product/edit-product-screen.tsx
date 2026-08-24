@@ -139,16 +139,10 @@ function DetailsForm({
 
     setSubmitting(true)
     try {
-      /**
-       * No `imageUrls` here, and do not add a URL field that would supply one.
-       *
-       * `PATCH /products/:id` replaces the whole set when it receives
-       * `imageUrls` — it deletes every row and recreates them with invented
-       * storage keys. The files those rows pointed at stay in Cloudinary with
-       * nothing referencing them: invisible, and never cleaned up. Pictures
-       * belong to ProductImageManager, which goes through the routes that know
-       * how to remove the file too.
-       */
+      // Pictures are not part of this form — they go through
+      // ProductImageManager below, which uses the routes that delete the file
+      // alongside the row. `PATCH /products/:id` no longer accepts them at
+      // all, so sending one here would be answered with a 400.
       onSaved(
         await updateProduct(productId, {
           title: String(form.get("title") ?? "").trim(),
