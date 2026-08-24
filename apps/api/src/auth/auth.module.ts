@@ -9,6 +9,7 @@ import { LineTokenVerifier } from './oauth/line-token.verifier';
 import { GOOGLE_VERIFIER, LINE_VERIFIER } from './oauth/oauth-profile';
 import { OAuthService } from './oauth/oauth.service';
 import { TokenService } from './token.service';
+import { TrustedDeviceService } from './trusted-device.service';
 import { TwoFactorService } from './two-factor.service';
 
 @Module({
@@ -23,6 +24,7 @@ import { TwoFactorService } from './two-factor.service';
     TokenService,
     PasswordResetService,
     OAuthService,
+    TrustedDeviceService,
     // Bound through symbols so AuthService depends on the interface rather
     // than on either concrete verifier, which is what lets the tests swap in
     // a fake instead of calling Google and Line for real.

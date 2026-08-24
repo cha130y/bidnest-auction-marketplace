@@ -37,6 +37,11 @@ const envSchema = z.object({
   // AUTH-005 — single-use password reset link
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 
+  // AUTH-007 — how long a browser stays trusted after answering a code once.
+  // Long enough that the second visit is not asked again, short enough that a
+  // browser somebody stops using forgets on its own.
+  TRUSTED_DEVICE_TTL_DAYS: z.coerce.number().int().positive().default(30),
+
   // AUTH-003 / AUTH-006. Only the public identifiers: the server verifies
   // tokens rather than exchanging them, so the client secrets stay in
   // apps/web with NextAuth. Optional so the API still boots without them —

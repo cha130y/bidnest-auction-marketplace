@@ -1,6 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsString, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength
+} from 'class-validator';
 import { LoginDto } from './login.dto';
 
 /**
@@ -18,4 +24,29 @@ export class VerifyTwoFactorDto extends LoginDto {
   @Transform(({ value }: { value: string }) => value?.trim())
   @Matches(/^\d{6}$/, { message: 'otp must be exactly six digits' })
   otp: string;
+
+  @ApiPropertyOptional({
+    description:
+      'AUTH-007 — remember this browser, so the next login from it is not ' +
+      'asked for a code. A device token comes back in the response when set.',
+    default: false
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(
+    ({ value }: { value: unknown }) => value === true || value === 'true'
+  )
+  rememberDevice?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'What to call this browser on a "your devices" screen. Trimmed to the ' +
+      'browser and platform; never anything that identifies a person.',
+    example: 'Chrome on Windows'
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  @Transform(({ value }: { value: string }) => value?.trim())
+  deviceLabel?: string;
 }

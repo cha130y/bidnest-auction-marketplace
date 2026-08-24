@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { firstValueFrom, of } from 'rxjs';
 import { SensitiveFieldsInterceptor } from './sensitive-fields.interceptor';
+import type { EnvVariable } from '../../config/env.validation';
 
 /**
  * The interceptor is a net under everything else, so what matters is that it
@@ -19,7 +20,7 @@ describe('SensitiveFieldsInterceptor (§6)', () => {
     } as unknown as Reflector;
     const config = {
       get: () => env
-    } as unknown as ConfigService;
+    } as unknown as ConfigService<EnvVariable, true>;
 
     const interceptor = new SensitiveFieldsInterceptor(reflector, config);
     const logger = jest
