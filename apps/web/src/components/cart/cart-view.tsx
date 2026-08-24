@@ -286,22 +286,24 @@ function CartSummary({ cart }: { cart: Cart }) {
         </p>
       )}
 
-      {/* Disabled rather than linked: `POST /orders/checkout` is ready, but
-          the screen that collects an address and a payment method (CART-004)
-          is not, and a button that leads to a 404 is worse than one that says
-          so. It becomes a link the moment that page exists. */}
-      <Button
-        variant="primary"
-        size="lg"
-        block
-        className="mt-5"
-        disabled
-      >
-        ดำเนินการชำระเงิน
-      </Button>
-      <p className="mt-2 text-center text-xs text-n-500">
-        ขั้นตอนชำระเงินยังไม่เปิดให้ใช้งาน
-      </p>
+      {/* Still refused while a line has a problem — checkout would be rejected
+          whole, and this is the only screen that can fix it. */}
+      {blockingItems > 0 ? (
+        <Button variant="primary" size="lg" block className="mt-5" disabled>
+          ดำเนินการชำระเงิน
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          size="lg"
+          block
+          className="mt-5"
+          nativeButton={false}
+          render={<Link href="/checkout" />}
+        >
+          ดำเนินการชำระเงิน
+        </Button>
+      )}
 
       <Button
         variant="ghost"
