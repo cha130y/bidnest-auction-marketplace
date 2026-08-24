@@ -1,12 +1,14 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+import { WsException } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserGateway, userRoom } from './user.gateway';
+import { conversationRoom, UserGateway, userRoom } from './user.gateway';
 
 const USER_ID = '00000000-0000-4000-8000-000000000801';
 const OTHER_USER_ID = '00000000-0000-4000-8000-000000000802';
+const CONVERSATION_ID = '00000000-0000-4000-8000-000000000901';
 
 /**
  * SRS 4.1 — the per-person channel. Everything here is addressed to one
@@ -17,8 +19,10 @@ describe('UserGateway', () => {
   let gateway: UserGateway;
   let client: {
     join: jest.Mock;
+    leave: jest.Mock;
     emit: jest.Mock;
     disconnect: jest.Mock;
+    data: Record<string, unknown>;
     handshake: {
       auth: Record<string, unknown>;
       headers: Record<string, unknown>;
@@ -26,20 +30,28 @@ describe('UserGateway', () => {
   };
   let emit: jest.Mock;
   let to: jest.Mock;
-  let prisma: { user: { findUnique: jest.Mock } };
+  let prisma: {
+    user: { findUnique: jest.Mock };
+    conversation: { findUnique: jest.Mock };
+  };
   let jwt: { verifyAsync: jest.Mock };
 
   beforeEach(async () => {
     client = {
       join: jest.fn(),
+      leave: jest.fn(),
       emit: jest.fn(),
       disconnect: jest.fn(),
+      data: {},
       handshake: { auth: { token: 'a-token' }, headers: {} }
     };
     emit = jest.fn();
     to = jest.fn(() => ({ emit }));
 
-    prisma = { user: { findUnique: jest.fn() } };
+    prisma = {
+      user: { findUnique: jest.fn() },
+      conversation: { findUnique: jest.fn() }
+    };
     // a real, active account unless a test says otherwise
     prisma.user.findUnique.mockResolvedValue({
       id: USER_ID,
@@ -178,6 +190,120 @@ describe('UserGateway', () => {
 
       expect(() =>
         gateway.emitToUser(USER_ID, 'notification:created', {})
+      ).not.toThrow();
+    });
+  });
+
+  describe('joining a conversation’s room', () => {
+    const asJoined = async () => {
+      await gateway.handleConnection(asSocket());
+      client.join.mockClear();
+    };
+
+    it('lets a participant in', async () => {
+      await asJoined();
+      prisma.conversation.findUnique.mockResolvedValue({
+        buyerId: USER_ID,
+        sellerId: OTHER_USER_ID
+      });
+
+      const result = await gateway.joinConversation(asSocket(), {
+        conversationId: CONVERSATION_ID
+      });
+
+      expect(client.join).toHaveBeenCalledWith(
+        conversationRoom(CONVERSATION_ID)
+      );
+      expect(result).toEqual({ conversationId: CONVERSATION_ID, joined: true });
+    });
+
+    it('lets the seller side in too', async () => {
+      await asJoined();
+      prisma.conversation.findUnique.mockResolvedValue({
+        buyerId: OTHER_USER_ID,
+        sellerId: USER_ID
+      });
+
+      await gateway.joinConversation(asSocket(), {
+        conversationId: CONVERSATION_ID
+      });
+
+      expect(client.join).toHaveBeenCalledWith(
+        conversationRoom(CONVERSATION_ID)
+      );
+    });
+
+    // not-found rather than forbidden, matching chat.service.ts's own guard
+    it('refuses an outsider', async () => {
+      await asJoined();
+      prisma.conversation.findUnique.mockResolvedValue({
+        buyerId: OTHER_USER_ID,
+        sellerId: 'someone-else'
+      });
+
+      await expect(
+        gateway.joinConversation(asSocket(), {
+          conversationId: CONVERSATION_ID
+        })
+      ).rejects.toBeInstanceOf(WsException);
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('refuses an id that is not a real conversation', async () => {
+      await asJoined();
+      prisma.conversation.findUnique.mockResolvedValue(null);
+
+      await expect(
+        gateway.joinConversation(asSocket(), {
+          conversationId: CONVERSATION_ID
+        })
+      ).rejects.toBeInstanceOf(WsException);
+    });
+
+    // a socket that never proved its identity has nothing to check against
+    it('refuses a socket that never identified itself', async () => {
+      await expect(
+        gateway.joinConversation(asSocket(), {
+          conversationId: CONVERSATION_ID
+        })
+      ).rejects.toBeInstanceOf(WsException);
+      expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('leaves the room unconditionally', async () => {
+      const result = await gateway.leaveConversation(asSocket(), {
+        conversationId: CONVERSATION_ID
+      });
+
+      expect(client.leave).toHaveBeenCalledWith(
+        conversationRoom(CONVERSATION_ID)
+      );
+      expect(result).toEqual({
+        conversationId: CONVERSATION_ID,
+        joined: false
+      });
+    });
+  });
+
+  describe('sending to a room', () => {
+    it('reaches everyone in it', () => {
+      gateway.emitToRoom(conversationRoom(CONVERSATION_ID), 'message:sent', {
+        body: 'hi'
+      });
+
+      expect(to).toHaveBeenCalledWith(conversationRoom(CONVERSATION_ID));
+      expect(emit).toHaveBeenCalledWith('message:sent', { body: 'hi' });
+    });
+
+    it('drops the event rather than throwing when no server is up', () => {
+      (gateway as unknown as { server?: Server }).server = undefined;
+
+      expect(() =>
+        gateway.emitToRoom(
+          conversationRoom(CONVERSATION_ID),
+          'message:sent',
+          {}
+        )
       ).not.toThrow();
     });
   });
