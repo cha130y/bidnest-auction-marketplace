@@ -1,26 +1,29 @@
-const ACCESS_TOKEN_KEY = 'bidnest_access_token';
+import { getSession } from 'next-auth/react';
 
-// TODO(AUTH-008, blocked on Dev1's NextAuth setup): once NextAuth lands,
-// getAuthToken()/authHeader() stop reading localStorage and instead read
-// `session.accessToken` via NextAuth's `getSession()` — see
-// ./session-contract.ts for the exact shape both sides agreed on. That call
-// is async, so authHeader() (and apiFetch() in lib/api/client.ts, its only
-// caller) becomes async too. setAuthToken()/clearAuthToken() go away
-// entirely — signing in/out becomes NextAuth's `signIn()`/`signOut()`.
-export function getAuthToken(): string | null {
+/**
+ * AUTH-008 — the bearer token every API call carries.
+ *
+ * NextAuth holds it in the session cookie now, following the contract in
+ * ./session-contract.ts, so nothing keeps a copy in localStorage: web storage
+ * is readable by any script on the page, while the session cookie is httpOnly
+ * and signed.
+ *
+ * `getSession()` is async and this sits off the client-render path, so
+ * `authHeader()` — and `apiFetch()`, its only caller — are async too. That was
+ * the one real shift the contract called out. Components read the token
+ * through `useAuthToken()` instead, which stays synchronous because
+ * `useSession()` is a hook.
+ *
+ * Signing in and out is `signIn()` / `signOut()` from next-auth/react. The old
+ * `setAuthToken` / `clearAuthToken` are gone: nothing writes a token any more.
+ */
+export async function getAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  const session = await getSession();
+  return session?.accessToken ?? null;
 }
 
-export function setAuthToken(token: string): void {
-  localStorage.setItem(ACCESS_TOKEN_KEY, token);
-}
-
-export function clearAuthToken(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-}
-
-export function authHeader(): Record<string, string> {
-  const token = getAuthToken();
+export async function authHeader(): Promise<Record<string, string>> {
+  const token = await getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

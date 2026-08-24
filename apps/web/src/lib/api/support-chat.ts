@@ -42,7 +42,7 @@ export async function sendSupportChatMessage(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeader(),
+      ...(await authHeader()),
     },
     body: JSON.stringify({ message, sessionId }),
   });
@@ -61,7 +61,7 @@ export async function fetchSupportChatHistory(
   sessionId: string,
 ): Promise<ChatMessage[]> {
   const response = await fetch(`${API_BASE_URL}/support/chat/${sessionId}`, {
-    headers: authHeader(),
+    headers: await authHeader(),
   });
 
   if (!response.ok) {
