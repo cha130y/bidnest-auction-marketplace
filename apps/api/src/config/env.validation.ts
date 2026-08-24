@@ -46,8 +46,11 @@ const envSchema = z.object({
   MAIL_PORT: z.coerce.number().int().max(65535).min(0).default(1025),
   MAIL_FROM: z.string().default('BidNest <no-reply@bidnest.local>'),
 
-  // AI-001 (Customer Service Chatbot) — Dev 5
-  GEMINI_API_KEY: z.string().min(1),
+  // AI-001 (Customer Service Chatbot) — Dev 5. Optional for the same reason
+  // GOOGLE_CLIENT_ID/CLOUDINARY_* are: the API has to boot without it, so a
+  // teammate without a Gemini key isn't blocked from running the app at all —
+  // /support/chat just answers 503 (GeminiClientService.isConfigured).
+  GEMINI_API_KEY: z.string().min(1).optional(),
   // AI-003 (Negotiator accept token) — Dev 5, Optional
   AI_NEGOTIATOR_JWT_SECRET: z
     .string()
