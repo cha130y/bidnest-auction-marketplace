@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -15,6 +15,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { ChatModule } from './chat/chat.module';
 import { AccessTokenGuard } from './common/guards/access-token.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { SensitiveFieldsInterceptor } from './common/interceptors/sensitive-fields.interceptor';
 import { HealthController } from './health/health.controller';
 import { LiveModule } from './live/live.module';
 import { MailModule } from './mail/mail.module';
@@ -92,7 +93,10 @@ import { WatchlistModule } from './watchlist/watchlist.module';
       ? []
       : [{ provide: APP_GUARD, useClass: ThrottlerGuard }]),
     { provide: APP_GUARD, useClass: AccessTokenGuard },
-    { provide: APP_GUARD, useClass: RolesGuard }
+    { provide: APP_GUARD, useClass: RolesGuard },
+    // §6 — the last look at a response before it leaves. Global on purpose:
+    // the routes it protects are the ones nobody has written yet.
+    { provide: APP_INTERCEPTOR, useClass: SensitiveFieldsInterceptor }
   ]
 })
 export class AppModule {}

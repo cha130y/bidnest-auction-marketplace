@@ -6,12 +6,14 @@ import {
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import type { PendingTwoFactorResponse } from './dto/auth-result.response';
 import { RegisterDto } from './dto/register.dto';
 import { HashingService } from './hashing.service';
 import { PasswordResetService } from './password-reset.service';
 import { GOOGLE_VERIFIER, LINE_VERIFIER } from './oauth/oauth-profile';
 import { OAuthService } from './oauth/oauth.service';
 import { TokenService } from './token.service';
+import { TrustedDeviceService } from './trusted-device.service';
 import { TwoFactorService } from './two-factor.service';
 
 const validDto = (): RegisterDto => ({
@@ -50,7 +52,12 @@ const createdRow = {
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: {
-    user: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
+    user: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+    };
   };
   let twoFactor: {
     ttlMinutes: number;
@@ -60,6 +67,11 @@ describe('AuthService', () => {
     consume: jest.Mock;
   };
   let passwordReset: { issue: jest.Mock; consume: jest.Mock };
+  let trustedDevices: {
+    isTrusted: jest.Mock;
+    remember: jest.Mock;
+    revokeAll: jest.Mock;
+  };
   let tokens: {
     issue: jest.Mock;
     lookupRefreshToken: jest.Mock;
@@ -70,7 +82,12 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     prisma = {
-      user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() }
+      user: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
+      }
     };
     twoFactor = {
       ttlMinutes: 10,
@@ -99,6 +116,13 @@ describe('AuthService', () => {
       consume: jest.fn()
     };
 
+    trustedDevices = {
+      // Nothing is trusted unless a test says so — the code stays the default.
+      isTrusted: jest.fn().mockResolvedValue(false),
+      remember: jest.fn().mockResolvedValue('device-token'),
+      revokeAll: jest.fn().mockResolvedValue(undefined)
+    };
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -108,6 +132,7 @@ describe('AuthService', () => {
         { provide: TokenService, useValue: tokens },
         { provide: PasswordResetService, useValue: passwordReset },
         { provide: OAuthService, useValue: { resolveAccount: jest.fn() } },
+        { provide: TrustedDeviceService, useValue: trustedDevices },
         { provide: GOOGLE_VERIFIER, useValue: { verify: jest.fn() } },
         { provide: LINE_VERIFIER, useValue: { verify: jest.fn() } }
       ]
@@ -279,7 +304,67 @@ describe('AuthService', () => {
       const result = await service.login(credentials);
 
       expect(twoFactor.issue).not.toHaveBeenCalled();
-      expect(result.resendAfterSeconds).toBe(42);
+      // Narrowed rather than cast: login can now answer with tokens instead,
+      // and a test that quietly accepted those would be asserting nothing.
+      expect(result).toMatchObject({ status: 'PENDING_2FA' });
+      expect((result as PendingTwoFactorResponse).resendAfterSeconds).toBe(42);
+    });
+
+    describe('a browser that has been here before (AUTH-007)', () => {
+      it('lets a trusted device straight in, with no code mailed', async () => {
+        await seedAccount();
+        trustedDevices.isTrusted.mockResolvedValue(true);
+
+        const result = await service.login({
+          ...credentials,
+          deviceToken: 'a'.repeat(64)
+        });
+
+        expect(twoFactor.issue).not.toHaveBeenCalled();
+        expect(result).toMatchObject({
+          accessToken: 'access',
+          refreshToken: 'refresh'
+        });
+      });
+
+      it('checks the password first all the same', async () => {
+        // The device replaces the second factor, never the first. A trusted
+        // browser with the wrong password is still just a wrong password.
+        await seedAccount();
+        trustedDevices.isTrusted.mockResolvedValue(true);
+
+        await expect(
+          service.login({
+            ...credentials,
+            password: 'WrongPassw0rd',
+            deviceToken: 'a'.repeat(64)
+          })
+        ).rejects.toBeInstanceOf(UnauthorizedException);
+        expect(tokens.issue).not.toHaveBeenCalled();
+      });
+
+      it('asks the device question about this account, not in general', async () => {
+        await seedAccount();
+
+        await service.login({ ...credentials, deviceToken: 'b'.repeat(64) });
+
+        const [userId, token] = trustedDevices.isTrusted.mock
+          .calls[0] as string[];
+        expect(userId).toBe(createdRow.id);
+        expect(token).toBe('b'.repeat(64));
+      });
+
+      it('falls back to the code when the device is not known', async () => {
+        await seedAccount();
+
+        const result = await service.login({
+          ...credentials,
+          deviceToken: 'c'.repeat(64)
+        });
+
+        expect(twoFactor.issue).toHaveBeenCalled();
+        expect(result).toMatchObject({ status: 'PENDING_2FA' });
+      });
     });
   });
 
@@ -347,6 +432,66 @@ describe('AuthService', () => {
         prisma.user.update.mock.calls as [{ data: { lastLoginAt: Date } }][]
       )[0];
       expect(updateArg.data.lastLoginAt).toBeInstanceOf(Date);
+    });
+
+    it('stamps the address as verified — the code went there and came back', async () => {
+      await seedAccount();
+
+      await service.verifyTwoFactor(credentials);
+
+      const [args] = (
+        prisma.user.updateMany.mock.calls as [
+          {
+            where: { id: string; emailVerifiedAt: null };
+            data: { emailVerifiedAt: Date };
+          }
+        ][]
+      )[0];
+      expect(args.where.id).toBe(createdRow.id);
+      // Guarded, so a second login cannot push the original moment forward.
+      expect(args.where.emailVerifiedAt).toBeNull();
+      expect(args.data.emailVerifiedAt).toBeInstanceOf(Date);
+    });
+
+    it('remembers the browser only when asked to', async () => {
+      await seedAccount();
+
+      const plain = await service.verifyTwoFactor(credentials);
+      expect(trustedDevices.remember).not.toHaveBeenCalled();
+      expect(plain.deviceToken).toBeUndefined();
+
+      const remembered = await service.verifyTwoFactor({
+        ...credentials,
+        rememberDevice: true,
+        deviceLabel: 'Chrome on Windows'
+      });
+      expect(trustedDevices.remember).toHaveBeenCalledWith(
+        createdRow.id,
+        'Chrome on Windows'
+      );
+      expect(remembered.deviceToken).toBe('device-token');
+    });
+
+    it('never remembers a browser that failed the code', async () => {
+      // The whole exemption rests on a code having been answered. Handing one
+      // out on a failed attempt would give it away for nothing.
+      await seedAccount();
+      twoFactor.consume.mockResolvedValue(false);
+
+      await expect(
+        service.verifyTwoFactor({ ...credentials, rememberDevice: true })
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(trustedDevices.remember).not.toHaveBeenCalled();
+    });
+
+    it('leaves the address unverified when the code was wrong', async () => {
+      await seedAccount();
+      twoFactor.consume.mockResolvedValue(false);
+
+      await expect(service.verifyTwoFactor(credentials)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -532,6 +677,18 @@ describe('AuthService', () => {
       expect(tokens.revokeAllSessions).toHaveBeenCalledWith('u1');
     });
 
+    it('also stops trusting every browser the account had trusted', async () => {
+      // Cutting the sessions alone would leave the longer-lived permission
+      // standing: whoever prompted the reset could sign in from their own
+      // remembered browser with the new password and never meet a code.
+      passwordReset.consume.mockResolvedValue({ tokenId: 't1', userId: 'u1' });
+      prisma.user.update.mockResolvedValue(createdRow);
+
+      await service.resetPassword(dto);
+
+      expect(trustedDevices.revokeAll).toHaveBeenCalledWith('u1');
+    });
+
     it('rejects a token the service refused to spend', async () => {
       passwordReset.consume.mockResolvedValue(null);
 
@@ -540,6 +697,7 @@ describe('AuthService', () => {
       );
       expect(prisma.user.update).not.toHaveBeenCalled();
       expect(tokens.revokeAllSessions).not.toHaveBeenCalled();
+      expect(trustedDevices.revokeAll).not.toHaveBeenCalled();
     });
   });
 });

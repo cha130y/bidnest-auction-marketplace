@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AuthUserResponse } from './auth-user.response';
 
 /**
@@ -35,6 +35,15 @@ export class AuthTokensResponse {
 
   @ApiProperty({ type: AuthUserResponse })
   user: AuthUserResponse;
+
+  @ApiPropertyOptional({
+    description:
+      'AUTH-007 — present only when the caller asked to be remembered and a ' +
+      'code was actually answered. Keep it in an httpOnly cookie and send it ' +
+      'with the next login to skip the code from this browser. Like the ' +
+      'refresh token, only its digest is stored server-side.'
+  })
+  deviceToken?: string;
 }
 
 /**

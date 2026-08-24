@@ -204,6 +204,18 @@ describe('OAuth sign-in (e2e)', () => {
         expect.any(String)
       );
     });
+
+    it('now counts the address as verified — the code proved it', async () => {
+      // Line vouches for no address, so the one on this account was typed by
+      // whoever was signing up. Reading a code sent there is the only evidence
+      // it was really theirs, and it has now happened.
+      const user = await prisma.user.findUnique({
+        where: { email: lineEmail },
+        select: { emailVerifiedAt: true }
+      });
+
+      expect(user?.emailVerifiedAt).toBeInstanceOf(Date);
+    });
   });
 
   describe('linking rules', () => {

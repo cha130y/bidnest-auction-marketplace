@@ -66,7 +66,9 @@ export class AuthController {
   @ApiOkResponse({ type: PendingTwoFactorResponse })
   @ApiUnauthorizedResponse({ description: 'Invalid email or password' })
   @ApiForbiddenResponse({ description: 'Account is suspended or deactivated' })
-  login(@Body() dto: LoginDto): Promise<PendingTwoFactorResponse> {
+  login(
+    @Body() dto: LoginDto
+  ): Promise<PendingTwoFactorResponse | AuthTokensResponse> {
     return this.authService.login(dto);
   }
 
@@ -138,7 +140,9 @@ export class AuthController {
   @ApiForbiddenResponse({ description: 'Account is suspended or deactivated' })
   googleLogin(
     @Body() dto: OAuthLoginDto
-  ): Promise<PendingTwoFactorResponse | EmailRequiredResponse> {
+  ): Promise<
+    PendingTwoFactorResponse | EmailRequiredResponse | AuthTokensResponse
+  > {
     return this.authService.oauthLogin('GOOGLE', dto);
   }
 
@@ -167,7 +171,9 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Token is not valid for this app' })
   lineLogin(
     @Body() dto: OAuthLoginDto
-  ): Promise<PendingTwoFactorResponse | EmailRequiredResponse> {
+  ): Promise<
+    PendingTwoFactorResponse | EmailRequiredResponse | AuthTokensResponse
+  > {
     return this.authService.oauthLogin('LINE', dto);
   }
 

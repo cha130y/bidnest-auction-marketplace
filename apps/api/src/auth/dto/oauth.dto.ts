@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
@@ -33,6 +34,16 @@ export class OAuthLoginDto {
   @MaxLength(320)
   @Transform(({ value }: { value: string }) => value?.trim().toLowerCase())
   email?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'AUTH-007 — the token apps/web keeps for a browser that has already ' +
+      'answered a code. A match skips straight to the tokens.'
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9a-f]{64}$/, { message: 'deviceToken is not a valid token' })
+  deviceToken?: string;
 }
 
 /**
@@ -46,4 +57,19 @@ export class VerifyOAuthDto extends OAuthLoginDto {
   @Transform(({ value }: { value: string }) => value?.trim())
   @Matches(/^\d{6}$/, { message: 'otp must be exactly six digits' })
   otp: string;
+
+  @ApiPropertyOptional({ description: 'AUTH-007 — remember this browser' })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(
+    ({ value }: { value: unknown }) => value === true || value === 'true'
+  )
+  rememberDevice?: boolean;
+
+  @ApiPropertyOptional({ example: 'Chrome on Windows' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  @Transform(({ value }: { value: string }) => value?.trim())
+  deviceLabel?: string;
 }

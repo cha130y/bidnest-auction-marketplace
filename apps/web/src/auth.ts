@@ -1,74 +1,37 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 
-import {
-  API_URL,
-  apiErrorMessage,
-  type ApiTokens
-} from "@/lib/auth/api-contract"
+import { apiErrorMessage, type ApiTokens } from "@/lib/auth/api-contract"
 
 /**
  * AUTH-002 / AUTH-007 — NextAuth owns the browser session; apps/api stays the
  * source of truth for the tokens themselves (SRS AUTH-004).
  *
- * The Credentials provider calls `authorize()` exactly once, which is why the
- * login screen collects the password and the emailed code over two steps and
- * then posts both together. Step one — mailing the code — is a plain call to
- * POST /auth/login before `signIn()` is ever reached.
+ * One provider, for every way in. Password, Google and Line all finish at a
+ * route handler under /api/auth, which is where the tokens are obtained and
+ * where the httpOnly cookies live — the pending provider token for OAuth, and
+ * the trusted-device token that lets a known browser skip the code. By the
+ * time `signIn()` runs, apps/api has already issued the pair and all that is
+ * left is turning it into a session.
  *
- * OAuth is handled by its own provider below rather than by NextAuth's Google
- * and Line providers: AUTH-007 makes the emailed code mandatory on those paths
- * too, and a provider redirect cannot pause midway to ask for one.
+ * NextAuth's own Google and Line providers are not used: AUTH-007 makes the
+ * emailed code mandatory the first time on any path, and a provider redirect
+ * cannot pause midway to ask for one.
+ *
+ * There used to be a second, `credentials` provider that posted email,
+ * password and code to /auth/2fa/verify from here. It is gone: authorize()
+ * cannot set a cookie, so it had no way to keep a device token, and leaving it
+ * in would have meant two password sign-ins with different security
+ * properties.
  */
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
-    Credentials({
-      id: "credentials",
-      name: "Email and password",
-      credentials: {
-        email: {},
-        password: {},
-        otp: {}
-      },
-      async authorize(raw) {
-        const email = typeof raw.email === "string" ? raw.email : ""
-        const password = typeof raw.password === "string" ? raw.password : ""
-        const otp = typeof raw.otp === "string" ? raw.otp : ""
-        if (!email || !password || !otp) return null
-
-        const response = await fetch(`${API_URL}/auth/2fa/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, otp })
-        })
-        const body: unknown = await response.json().catch(() => ({}))
-
-        if (!response.ok) {
-          // NextAuth turns a thrown CredentialsSignin into a generic error for
-          // the client, so the page reads the real reason from the step-one
-          // call instead. Returning null keeps the message here from leaking
-          // whether it was the password or the code that was wrong.
-          return null
-        }
-
-        const tokens = body as ApiTokens
-        return {
-          id: tokens.user.id,
-          email: tokens.user.email,
-          name: tokens.user.displayName,
-          role: tokens.user.role,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken
-        }
-      }
-    }),
-
     /**
-     * AUTH-003 / AUTH-006 — the provider dance and the emailed code both
-     * finish before this runs, so all it does is turn the token pair apps/api
-     * already issued into a session.
+     * Every sign-in ends here. The provider dance, or the password and the
+     * code, all finish before this runs — so all it does is turn the token
+     * pair apps/api already issued into a session.
      */
     Credentials({
       id: "oauth-tokens",
@@ -97,7 +60,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     })
   ],
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       // `user` is only present on the sign-in pass; afterwards the values
       // already on the token are what carry through.
       if (user) {
@@ -105,6 +68,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.refreshToken = user.refreshToken
         token.role = user.role
       }
+
+      // USR-001 — renaming yourself. The header reads the display name off the
+      // session, so without this it would keep the old one until the next sign
+      // in. Only the name is taken: `session` here is whatever the caller
+      // passed to `update()`, which is client input and not to be trusted with
+      // anything that decides access.
+      if (trigger === "update" && session && typeof session === "object") {
+        const patch = session as { name?: unknown }
+        if (typeof patch.name === "string" && patch.name.trim() !== "") {
+          token.name = patch.name
+        }
+      }
+
       return token
     },
     session({ session, token }) {
