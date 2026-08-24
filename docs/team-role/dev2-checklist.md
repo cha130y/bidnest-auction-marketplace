@@ -7,13 +7,22 @@
 
 ## สถานะ (24 ส.ค. 2569)
 
-Requirement ทั้งหมดที่ Dev 2 รับผิดชอบ — `AUTH-001..008`, `USR-001`, `ADM-003` — **ทำเสร็จและ merge เข้า `dev` แล้ว** ยืนยันด้วย unit 689 เคส และ e2e 417 เคส
+Requirement ทั้งหมดที่ Dev 2 รับผิดชอบ — `AUTH-001..008`, `USR-001`, `ADM-003` — **ทำเสร็จและ merge เข้า `dev` แล้ว** ยืนยันด้วย unit 703 เคส และ e2e 417 เคส
 
-**เหลือข้อเดียว: privacy interceptor (§6)** — เป็นข้อเดียวในลิสต์นี้ที่ยังไม่ติ๊ก
+**ทุกข้อในลิสต์นี้ติ๊กครบแล้ว** ข้อสุดท้าย — privacy interceptor (§6) — ทำเสร็จเป็น `SensitiveFieldsInterceptor` เป็น global interceptor ที่ดูทุก response ก่อนออกจากเซิร์ฟเวอร์
 
-ตอนนี้แต่ละ service ปิดข้อมูลอ่อนไหวของตัวเองอยู่แล้ว (`reserve_price`, `negotiation_floor`, ตะกร้า/คำสั่งซื้อของคนอื่น) ซึ่งใช้งานได้จริง แต่ **ไม่มีอะไรกันคนที่ลืม** — endpoint ใหม่ที่เผลอ select field ตรงๆ จะหลุดทันทีโดยไม่มีสัญญาณเตือน
+แบ่งเป็น 2 ระดับ เพราะเป็นคนละสัญญากัน:
 
-ยังไม่ลงมือเพราะ rule กลางจะไปเปลี่ยน response ของ Dev 3/4/5 ด้วย **ต้องตกลงรูปแบบกับทีมก่อน** ทางเลือกคือ interceptor ที่ตัด field ตาม decorator (opt-in ไม่พังของเดิม) หรือ serialization rule ที่บังคับทั้งระบบ (กันได้แน่นกว่าแต่ต้องแก้ทุก DTO)
+| ระดับ | field | opt-out |
+|---|---|---|
+| **NEVER** | `passwordHash`, `refreshTokenHash`, `codeHash`, `tokenHash`, `resetTokenHash` | ไม่มี — ไม่มีใครมีสิทธิ์อ่าน digest คืน แม้แต่เจ้าของบัญชีหรือ admin |
+| **OWNER_ONLY** | `reservePrice` (AUC-003), `negotiationFloor` (PROD-006) | route ที่ผู้เรียกเป็นเจ้าของจริง แปะ `@ReturnsOwnerFields()` |
+
+เจอแล้วทำอะไร: **ตอนรันเทสจะ throw** (ถ้าแค่ log ไว้ ของที่รั่วก็ยังขึ้น production อยู่ดี) ส่วน dev/production จะ **ตัด field ทิ้ง + log ชื่อ route** ให้ request จริงเสียคุณภาพแทนที่จะเสียความลับ
+
+**ไม่ได้มาแทน mapper** — mapper ของ Dev 3/4 ยังเป็นด่านหลัก และ `auction.mapper` ถึงขั้น build ไม่ผ่านถ้า `reservePrice` โผล่ในชนิดสาธารณะ ตัวนี้เป็น **ตาข่ายรับ route ที่ยังไม่มีใครเขียน** — endpoint ใหม่ที่คืน row ตรงจาก Prisma โดยไม่ผ่าน mapper
+
+**ข้อจำกัดที่ต้องรู้:** route ที่ตัดสินความเป็นเจ้าของ*รายแถว* (เช่น `GET /auctions/:id` ที่คืน reserve ให้เฉพาะผู้ขาย) ต้องแปะ `@ReturnsOwnerFields()` ซึ่งแปลว่าตาข่ายไม่คุ้ม route นั้น — ตรงนั้นยังพึ่ง mapper กับเทสเหมือนเดิม
 
 ### ที่ไม่ใช่งานโค้ดแต่ยังค้าง
 
@@ -169,7 +178,7 @@ Step 1–4 และ 6 ของ Kickoff Guide เป็นความรับ
 - [x] `auctions.reserve_price` (AUC-003)
 - [x] `products.negotiation_floor` (PROD-006)
 - [x] ข้อมูลส่วนตัวผู้ประมูล / ตะกร้า / คำสั่งซื้อของผู้ใช้คนอื่น
-- [ ] เขียนเป็น interceptor หรือ serialization rule กลางให้ทั้งทีมใช้
+- [x] เขียนเป็น interceptor หรือ serialization rule กลางให้ทั้งทีมใช้ (`SensitiveFieldsInterceptor`)
 
 ### Email Delivery
 - [x] `MailService` เป็น interface เดียว — dev ใช้ Maildev, production ใช้ SMTP relay จริง
