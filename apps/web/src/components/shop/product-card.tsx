@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button"
 import { ProductImage } from "@/components/shop/product-image"
+import { ProductCardWatchButton } from "@/components/shop/product-watch-button"
 import { Badge } from "@/components/ui/badge"
 import { categoryLabel } from "@/lib/category-labels"
 import { formatPercent, formatTHB } from "@/lib/format"
@@ -13,7 +14,10 @@ export function ProductCard({ product }: { product: Product }) {
   const soldOut = product.stockQty === 0 || product.status === "OUT_OF_STOCK"
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-r4 bg-white shadow-sh1 transition-shadow hover:shadow-sh2">
+    <article className="group relative flex flex-col overflow-hidden rounded-r4 bg-white shadow-sh1 transition-shadow hover:shadow-sh2">
+      {/* Outside the link on purpose — see ProductCardWatchButton. */}
+      <ProductCardWatchButton productId={product.id} title={product.title} />
+
       <Link href={`/shop/${product.id}`} className="relative block">
         <ProductImage
           src={primaryImage?.url}
