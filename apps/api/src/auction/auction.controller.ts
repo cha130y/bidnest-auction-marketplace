@@ -19,6 +19,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ReturnsOwnerFields } from '../common/decorators/owner-fields.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AuctionService } from './auction.service';
@@ -42,6 +43,7 @@ export class AuctionController {
 
   // SRS 2 — admins moderate the marketplace, they never sell in it
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Post('drafts')
   createDraft(
     @CurrentUser('id') sellerId: string,
@@ -53,12 +55,14 @@ export class AuctionController {
   // Keep every `drafts` route above a future `GET :id`, or Nest matches the
   // literal path against the parameter route first.
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Get('drafts')
   listOwnDrafts(@CurrentUser('id') sellerId: string) {
     return this.auctionService.listOwnDrafts(sellerId);
   }
 
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Get('drafts/:id')
   findOwnDraft(
     @Param('id', ParseUUIDPipe) id: string,
@@ -80,6 +84,7 @@ export class AuctionController {
 
   // AUC-004 — preview is a read, so the draft keeps its status.
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Get('drafts/:id/preview')
   previewOwnDraft(
     @Param('id', ParseUUIDPipe) id: string,
@@ -92,6 +97,7 @@ export class AuctionController {
   // POST default of 201: it moves an auction that already exists.
   @Roles('USER')
   @HttpCode(HttpStatus.OK)
+  @ReturnsOwnerFields()
   @Post('drafts/:id/publish')
   publishDraft(
     @Param('id', ParseUUIDPipe) id: string,
@@ -103,6 +109,7 @@ export class AuctionController {
   // AUC-006 — editing covers DRAFT and SCHEDULED alike, so this sits on the
   // auction path rather than under `drafts`, which only ever matches a DRAFT.
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Patch(':id')
   updateOwnAuction(
     @Param('id', ParseUUIDPipe) id: string,
@@ -116,6 +123,7 @@ export class AuctionController {
   // stays readable as CANCELLED, which is why this is not a DELETE.
   @Roles('USER')
   @HttpCode(HttpStatus.OK)
+  @ReturnsOwnerFields()
   @Post(':id/cancel')
   cancelOwnAuction(
     @Param('id', ParseUUIDPipe) id: string,
@@ -138,6 +146,7 @@ export class AuctionController {
    * explains.
    */
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Post(':id/images')
   @UseInterceptors(
     FileInterceptor('image', { limits: { fileSize: MAX_AUCTION_IMAGE_BYTES } })
@@ -171,6 +180,7 @@ export class AuctionController {
 
   /** AUC-001 — removes a picture from a draft. */
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Delete(':id/images/:imageId')
   removeImage(
     @Param('id', ParseUUIDPipe) id: string,
@@ -205,6 +215,7 @@ export class AuctionController {
    * cannot be used here — it throws when nobody is signed in.
    */
   @Public()
+  @ReturnsOwnerFields()
   @Get(':id')
   findPublicAuction(
     @Param('id', ParseUUIDPipe) id: string,

@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
+import { ReturnsOwnerFields } from '../common/decorators/owner-fields.decorator';
 import { LiveService } from './live.service';
 
 /**
@@ -21,6 +22,7 @@ export class ArenaController {
    * bid and which bids are theirs.
    */
   @Public()
+  @ReturnsOwnerFields()
   @Get()
   getArena(
     @Param('auctionId', ParseUUIDPipe) auctionId: string,

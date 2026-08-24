@@ -17,6 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ReturnsOwnerFields } from '../common/decorators/owner-fields.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { StorageService } from '../storage/storage.service';
@@ -41,6 +42,7 @@ export class ProductController {
 
   // SRS 2 — admins moderate the marketplace, they never sell in it
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Post()
   create(@CurrentUser('id') sellerId: string, @Body() dto: CreateProductDto) {
     return this.productService.create(sellerId, dto);
@@ -62,12 +64,14 @@ export class ProductController {
    * ParseUUIDPipe rejects the word "mine" as a malformed id.
    */
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Get('mine')
   listOwn(@CurrentUser('id') sellerId: string) {
     return this.productService.listOwnProducts(sellerId);
   }
 
   @Public()
+  @ReturnsOwnerFields()
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string, @Req() request: Request) {
     // Public route: the guard only populates request.user when a caller
@@ -75,6 +79,7 @@ export class ProductController {
     return this.productService.findOne(id, request.user?.id);
   }
 
+  @ReturnsOwnerFields()
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -86,6 +91,7 @@ export class ProductController {
 
   // PROD-002 — the seller's own pause switch, kept apart from PATCH :id so a
   // routine edit can never flip a listing off sale by accident
+  @ReturnsOwnerFields()
   @Patch(':id/status')
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
@@ -95,6 +101,7 @@ export class ProductController {
     return this.productService.updateStatus(id, sellerId, dto.status);
   }
 
+  @ReturnsOwnerFields()
   @Patch(':id/stock')
   updateStock(
     @Param('id', ParseUUIDPipe) id: string,
@@ -104,6 +111,7 @@ export class ProductController {
     return this.productService.updateStock(id, sellerId, dto.stockQty);
   }
 
+  @ReturnsOwnerFields()
   @Delete(':id')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
@@ -125,6 +133,7 @@ export class ProductController {
    * explains.
    */
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Post(':id/images')
   @UseInterceptors(
     FileInterceptor('image', { limits: { fileSize: MAX_PRODUCT_IMAGE_BYTES } })
@@ -158,6 +167,7 @@ export class ProductController {
 
   /** PROD-002 — removes a picture from a listing. */
   @Roles('USER')
+  @ReturnsOwnerFields()
   @Delete(':id/images/:imageId')
   removeImage(
     @Param('id', ParseUUIDPipe) id: string,
