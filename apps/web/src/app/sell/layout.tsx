@@ -15,7 +15,7 @@ export default function SellLayout({
 }) {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader activeHref="/sell" />
+      <SiteHeader />
       <main className="flex-1">
         <div className="mx-auto w-full max-w-250 px-4 pb-16 md:px-6">
           {children}

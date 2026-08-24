@@ -1,39 +1,27 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
 import {
+  Bell,
   Camera,
   Gamepad2,
   Headphones,
-  Heart,
+  LogIn,
   Menu,
   Monitor,
-  Search,
   ShoppingCart,
   Smartphone,
-  User,
   Watch,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Input } from "@/components/ui/input"
-
-export type NavLink = {
-  label: string
-  href: string
-}
+import { Button } from "@/components/ui/button"
+import { GavelNav, GavelNavMobile } from "@/components/layout/gavel-nav"
 
 export type CategoryLink = {
   label: string
   href: string
   icon: ReactNode
 }
-
-export const defaultNavLinks: NavLink[] = [
-  { label: "Home", href: "/" },
-  { label: "Auctions", href: "/auctions" },
-  { label: "Shop", href: "/shop" },
-  { label: "Blog", href: "/blog" },
-]
 
 export const defaultCategories: CategoryLink[] = [
   { label: "Phones", href: "/shop?category=phones", icon: <Smartphone /> },
@@ -49,26 +37,23 @@ export const defaultCategories: CategoryLink[] = [
 ]
 
 export type SiteHeaderProps = {
-  navLinks?: NavLink[]
-  activeHref?: string
   categories?: CategoryLink[]
   cartCount?: number
-  wishlistActive?: boolean
+  hasNotifications?: boolean
   onMenuToggle?: () => void
   className?: string
 }
 
 /**
- * Shared storefront header: logo, search, primary nav + category subnav on
- * desktop; logo + menu trigger on mobile. Presentational only — wire auth
- * state, cart count, and the mobile drawer at the call site.
+ * Shared storefront header: logo, gavel-animated Auction/E-commerce nav +
+ * category subnav on desktop; logo + menu trigger on mobile. Presentational
+ * only — wire auth state, cart count, notifications, and the mobile drawer
+ * at the call site.
  */
 function SiteHeader({
-  navLinks = defaultNavLinks,
-  activeHref = "/",
   categories = defaultCategories,
   cartCount = 0,
-  wishlistActive = false,
+  hasNotifications = false,
   onMenuToggle,
   className,
 }: SiteHeaderProps) {
@@ -92,58 +77,60 @@ function SiteHeader({
             BidNest
           </Link>
 
-          <Input
-            pill
-            type="search"
-            placeholder="Search auctions & products"
-            startIcon={<Search />}
-            wrapperClassName="hidden h-12 max-w-[520px] flex-1 md:flex"
-          />
+          <GavelNav />
 
-          <nav className="ml-auto hidden items-center gap-6 md:flex">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "text-base font-medium text-n-500 transition-colors hover:text-ink",
-                  link.href === activeHref && "font-semibold text-ink"
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="hidden items-center gap-5 text-ink md:flex">
-            <Heart
-              className={cn(
-                "size-6 cursor-pointer",
-                wishlistActive
-                  ? "fill-amber-500 text-amber-500"
-                  : "text-ink"
+          <div className="ml-auto flex items-center gap-2 md:gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Notifications"
+              className="relative text-ink"
+            >
+              <Bell className="size-6" />
+              {hasNotifications && (
+                <span className="absolute top-2.25 right-2.75 size-2.25 rounded-full border-2 border-white bg-red" />
               )}
-            />
-            <span className="relative cursor-pointer">
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Cart"
+              className="relative text-ink"
+            >
               <ShoppingCart className="size-6" />
               {cartCount > 0 && (
-                <span className="absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-ink">
+                <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-[7px] border-2 border-white bg-linear-to-b from-amber-400 to-amber-500 px-1 text-[11px] font-extrabold text-ink shadow-sh1">
                   {cartCount > 9 ? "9+" : cartCount}
                 </span>
               )}
-            </span>
-            <User className="size-6 cursor-pointer" />
-          </div>
+            </Button>
 
-          <button
-            type="button"
-            onClick={onMenuToggle}
-            aria-label="Open menu"
-            className="ml-auto flex items-center justify-center text-ink md:hidden"
-          >
-            <Menu className="size-6" />
-          </button>
+            <span className="hidden h-7 w-px bg-n-200 md:block" />
+
+            <Button
+              variant="primary"
+              size="sm"
+              className="hidden md:inline-flex"
+              nativeButton={false}
+              render={<Link href="/login" />}
+            >
+              <LogIn />
+              Log in
+            </Button>
+
+            <button
+              type="button"
+              onClick={onMenuToggle}
+              aria-label="Open menu"
+              className="flex size-11 items-center justify-center rounded-r2 text-ink hover:bg-n-100 md:hidden"
+            >
+              <Menu className="size-6" />
+            </button>
+          </div>
         </div>
+
+        <GavelNavMobile />
 
         <nav className="mt-4 hidden flex-wrap justify-between gap-4 rounded-r3 bg-linear-to-b from-[#2b303b] to-ink px-6 py-4 md:flex">
           {categories.map((category) => (

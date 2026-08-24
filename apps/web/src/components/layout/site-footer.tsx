@@ -99,11 +99,11 @@ function SiteFooter({
   return (
     <footer className={cn("w-full", className)}>
       <div className="mx-auto max-w-330 px-4 py-6 md:px-6 md:py-8">
-        <div className="flex flex-col items-center gap-10 rounded-r4 bg-linear-to-b from-[#262b36] via-ink to-[#181b22] px-6 py-10 text-center text-white md:flex-row md:flex-wrap md:items-start md:gap-16 md:px-10 md:py-12 md:text-left">
+        <div className="flex flex-col items-center gap-10 rounded-r4 bg-white px-6 py-10 text-center shadow-sh2 md:flex-row md:flex-wrap md:items-start md:gap-16 md:px-10 md:py-12 md:text-left">
           <div className="max-w-80">
             <Link
               href="/"
-              className="flex items-center justify-center gap-2 font-display text-xl font-bold text-white md:justify-start"
+              className="flex items-center justify-center gap-2 font-display text-xl font-bold text-ink md:justify-start"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -116,7 +116,7 @@ function SiteFooter({
               </svg>
               BidNest
             </Link>
-            <p className="mt-5 text-[15px] leading-relaxed text-white/60">
+            <p className="mt-5 text-[15px] leading-relaxed text-n-500">
               {description}
             </p>
             <div className="mt-8 flex justify-center gap-4 md:justify-start">
@@ -125,7 +125,7 @@ function SiteFooter({
                   key={social.label}
                   href={social.href}
                   aria-label={social.label}
-                  className="flex size-10 items-center justify-center rounded-full bg-white/8 text-white transition-colors hover:bg-amber-500 hover:text-ink"
+                  className="flex size-10 items-center justify-center rounded-full bg-n-100 text-ink transition-colors hover:bg-amber-500 hover:text-ink"
                 >
                   {social.icon}
                 </a>
@@ -135,7 +135,7 @@ function SiteFooter({
 
           {groups.map((group) => (
             <div key={group.title}>
-              <h4 className="font-display text-[17px] font-semibold">
+              <h4 className="font-display text-[17px] font-semibold text-ink">
                 {group.title}
               </h4>
               <ul className="mt-5 flex flex-col gap-4">
@@ -143,7 +143,7 @@ function SiteFooter({
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-[15px] text-white/60 transition-colors hover:text-amber-400"
+                      className="text-[15px] text-n-500 transition-colors hover:text-ink"
                     >
                       {link.label}
                     </Link>
