@@ -10,14 +10,10 @@ import { Card, CardContent } from '@/components/ui/card';
 /**
  * AI-002 — AI Price Estimator (Optional, owner: Dev 5)
  *
- * Standalone component, not wired into draft-form.tsx (Dev4's file) — drop it
- * in wherever the draft form renders and wire `onApply` to your
- * react-hook-form `setValue`, e.g.:
- *
- *   <PriceSuggestionButton
- *     auctionId={draft.id}
- *     onApply={(e) => setValue('startingPrice', e.suggestedStartingPrice)}
- *   />
+ * Wired into draft-detail-screen.tsx (the draft's own page, after at least
+ * one photo is uploaded) rather than draft-form.tsx: the form has no
+ * `auctionId` yet on creation, and the backend needs the draft's uploaded
+ * images to look at.
  *
  * Requires the draft to already have at least one uploaded photo — the
  * backend 400s with a Thai message otherwise, which just renders as-is.
