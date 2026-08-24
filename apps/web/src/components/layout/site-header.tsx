@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Suspense, type ReactNode } from "react"
-import { Bell, Menu, ShoppingCart } from "lucide-react"
+import { Bell, Heart, Menu, ShoppingCart } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,17 @@ function SiteHeader({
           <GavelNav />
 
           <div className="ml-auto flex items-center gap-2 md:gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Watchlist"
+              className="text-ink"
+              nativeButton={false}
+              render={<Link href="/watchlist" />}
+            >
+              <Heart className="size-6" />
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
