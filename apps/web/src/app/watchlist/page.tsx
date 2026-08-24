@@ -1,25 +1,29 @@
 import type { Metadata } from "next"
 
-import { WatchlistView } from "@/components/auction/watchlist-view"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { SiteHeader } from "@/components/layout/site-header"
+import { WatchlistView } from "@/components/auction/watchlist-view"
+import { ProductWatchlistView } from "@/components/shop/product-watchlist-view"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export const metadata: Metadata = {
   title: "รายการที่ติดตาม · BidNest",
-  description: "การประมูลที่คุณติดตามไว้ พร้อมเวลาปิดและผลการประมูล",
+  description: "การประมูลและสินค้าที่คุณติดตามไว้",
 }
 
 /**
- * WAT-002 — the auctions somebody is following.
+ * WAT-002, and the listings alongside it.
  *
- * The shell is server-rendered; the list itself cannot be. `GET /watchlist`
- * needs a token, and the token lives in localStorage, so `authHeader()` is
- * empty during SSR and a server read would 401 for everybody. `WatchlistView`
- * does the reading once the browser has it.
+ * One page, two tabs, two endpoints. The lists are separate tables with
+ * separate shapes — an auction has a countdown and a result, a listing has
+ * stock and a price — and merging them server-side would mean inventing a
+ * discriminator for a client that already knows which tab it is drawing.
+ * Where they belong together is here, on screen.
  *
- * Dev 1's header no longer carries a wishlist entry point (the `Heart` /
- * `wishlistActive` prop was replaced by the notification bell) — this page
- * has no in-header link to itself for now.
+ * The shell is server-rendered; neither list can be. Both endpoints need a
+ * token, and the token lives in localStorage, so `authHeader()` is empty
+ * during SSR and a server read would 401 for everybody. The two views do the
+ * reading once the browser has it.
  */
 export default function WatchlistPage() {
   return (
@@ -33,12 +37,27 @@ export default function WatchlistPage() {
               รายการที่ติดตาม
             </h1>
             <p className="mt-2 text-base text-n-600">
-              การประมูลที่คุณกดติดตามไว้ จะแจ้งเตือนเมื่อมีคนเสนอราคาแซง
+              สิ่งที่คุณกดหัวใจไว้ — การประมูลจะแจ้งเตือนเมื่อมีคนเสนอราคาแซง
               และเมื่อการประมูลจบลง
             </p>
           </header>
 
-          <WatchlistView />
+          {/* Auctions first: they are the ones that expire, so they are the
+              ones somebody opening this page is more likely to have come for. */}
+          <Tabs defaultValue="auctions">
+            <TabsList>
+              <TabsTrigger value="auctions">การประมูล</TabsTrigger>
+              <TabsTrigger value="products">สินค้า</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="auctions">
+              <WatchlistView />
+            </TabsContent>
+
+            <TabsContent value="products">
+              <ProductWatchlistView />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
 

@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react"
 
 import { ProductGallery } from "@/components/shop/product-gallery"
 import { ProductPurchasePanel } from "@/components/shop/product-purchase-panel"
+import { ProductWatchButton } from "@/components/shop/product-watch-button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ApiError } from "@/lib/api/client"
@@ -154,6 +155,9 @@ export default async function ProductDetailPage({
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <ProductPurchasePanel product={product} />
+          {/* Under the panel rather than inside it: following is not part of
+              buying, and it stays available on a listing that is sold out. */}
+          <ProductWatchButton productId={product.id} className="mt-3" />
         </aside>
       </div>
     </div>

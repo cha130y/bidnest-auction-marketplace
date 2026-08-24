@@ -22,6 +22,7 @@ import { NotificationModule } from './notification/notification.module';
 import { OrderModule } from './order/order.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module';
+import { ProductWatchlistModule } from './product-watchlist/product-watchlist.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { StorageModule } from './storage/storage.module';
 import { UploadsModule } from './uploads/uploads.module';
@@ -66,6 +67,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     LiveModule,
     WatchlistModule,
     ProductModule,
+    ProductWatchlistModule,
     CartModule,
     OrderModule,
     ShipmentModule,
