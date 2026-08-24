@@ -36,9 +36,17 @@ export type Paginated<T> = {
 
 // ── src/product/product.mapper.ts → toPublicProduct ─────────────────────────
 export type ProductImage = {
+  // PROD-002 — what a seller's screen names when it asks for one to go.
+  id: string
   url: string
   position: number
   isPrimary: boolean
+}
+
+/** What POST /uploads/images answers with, before any listing exists. */
+export type StoredImage = {
+  url: string
+  storageKey: string
 }
 
 export type Product = {
@@ -528,3 +536,11 @@ export const AUCTION_IMAGE_MIME_TYPES = [
   "image/webp",
   "image/avif",
 ] as const
+
+/**
+ * PROD-001/002 — the same figures for a listing. The API shares one ceiling
+ * across both, so these are aliases rather than a second set to keep in step.
+ */
+export const MAX_PRODUCT_IMAGES = 8
+export const MAX_PRODUCT_IMAGE_BYTES = MAX_AUCTION_IMAGE_BYTES
+export const PRODUCT_IMAGE_MIME_TYPES = AUCTION_IMAGE_MIME_TYPES

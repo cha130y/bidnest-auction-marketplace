@@ -2,11 +2,16 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { StoredImage } from '../storage/storage.service';
+import { StorageService } from '../storage/storage.service';
+import { MAX_PRODUCT_IMAGES } from './constants/product-image.constant';
 import { ProductSort } from './constants/product-sort.constant';
 import { CreateProductDto } from './dtos/create-product.dto';
 import { SearchProductDto } from './dtos/search-product.dto';
@@ -22,7 +27,12 @@ const DEFAULT_PAGE_SIZE = 20;
 
 @Injectable()
 export class ProductService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService
+  ) {}
 
   async create(sellerId: string, dto: CreateProductDto) {
     await this.assertCategoryIsActive(dto.categoryId);
@@ -278,6 +288,209 @@ export class ProductService {
           ? 'Product is referenced by existing orders and was deactivated instead of removed'
           : 'Product removed'
     };
+  }
+
+  /**
+   * PROD-002 — every listing this seller has, whatever state it is in.
+   *
+   * Unpaginated on purpose: a seller manages their own shelf, and the count
+   * is theirs rather than the catalogue's. If somebody turns up with hundreds,
+   * this grows a page parameter — the screen does not need one to be written
+   * first.
+   *
+   * REMOVED is left out. It is a soft delete kept so order history still
+   * resolves, not a listing the seller can do anything with.
+   */
+  async listOwnProducts(sellerId: string) {
+    const products = await this.prisma.product.findMany({
+      where: { sellerId, status: { not: 'REMOVED' } },
+      orderBy: { updatedAt: 'desc' },
+      select: productOwnerSelect
+    });
+
+    return { items: products.map(toOwnerProduct) };
+  }
+
+  /**
+   * PROD-002 — adds a picture to a listing the seller owns.
+   *
+   * The file goes to the store first and the row second, because a row
+   * pointing at a file that was never stored is worse than a stored file with
+   * no row: the first breaks every page that renders the listing, the second
+   * costs a few kilobytes nobody sees. If the write then fails, the upload is
+   * undone below.
+   */
+  async addImage(
+    id: string,
+    sellerId: string,
+    file: { buffer: Buffer },
+    altText?: string
+  ) {
+    const existing = await this.findOwnedProduct(id, sellerId);
+    this.assertImagesAreEditable(existing.status);
+
+    const imageCount = await this.prisma.productImage.count({
+      where: { productId: id }
+    });
+
+    if (imageCount >= MAX_PRODUCT_IMAGES) {
+      throw new BadRequestException(
+        `A product can have at most ${MAX_PRODUCT_IMAGES} images`
+      );
+    }
+
+    let stored: StoredImage;
+    try {
+      stored = await this.storage.uploadProductImage(file.buffer, id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown';
+      this.logger.error(`Image upload failed for product ${id}: ${message}`);
+      throw new ServiceUnavailableException(
+        'Image upload is temporarily unavailable'
+      );
+    }
+
+    try {
+      const product = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.product.findFirst({
+          where: { id, sellerId },
+          select: {
+            _count: { select: { images: true } },
+            images: {
+              select: { position: true },
+              orderBy: { position: 'desc' },
+              take: 1
+            }
+          }
+        });
+
+        if (!current) throw new NotFoundException('Product not found');
+
+        if (current._count.images >= MAX_PRODUCT_IMAGES) {
+          throw new BadRequestException(
+            `A product can have at most ${MAX_PRODUCT_IMAGES} images`
+          );
+        }
+
+        // The next free slot, not the count: a removal leaves a gap, and
+        // reusing it would collide with @@unique([productId, position]).
+        const position = (current.images[0]?.position ?? -1) + 1;
+
+        await tx.productImage.create({
+          data: {
+            productId: id,
+            storageKey: stored.storageKey,
+            url: stored.url,
+            altText: altText ?? null,
+            position,
+            // The first picture on a listing with none is the one cards show.
+            isPrimary: current._count.images === 0
+          }
+        });
+
+        return tx.product.findUniqueOrThrow({
+          where: { id },
+          select: productOwnerSelect
+        });
+      });
+
+      return toOwnerProduct(product);
+    } catch (error: unknown) {
+      try {
+        await this.storage.deleteImage(stored.storageKey);
+      } catch (cleanupError: unknown) {
+        // Nothing left to tell the caller — they are getting the original
+        // failure — so this is logged rather than thrown over the top of it.
+        const message =
+          cleanupError instanceof Error ? cleanupError.message : 'Unknown';
+        this.logger.error(
+          `Failed to remove orphaned image ${stored.storageKey}: ${message}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PROD-002 — removes a picture from a listing the seller owns.
+   *
+   * Unlike an auction draft, a listing may not end up with none: PROD-001
+   * requires at least one picture, and a listing is already on sale while this
+   * is being called. Replacing the only picture means adding the new one
+   * first.
+   */
+  async removeImage(id: string, sellerId: string, imageId: string) {
+    const existing = await this.findOwnedProduct(id, sellerId);
+    this.assertImagesAreEditable(existing.status);
+
+    const { product, storageKey } = await this.prisma.$transaction(
+      async (tx) => {
+        const image = await tx.productImage.findFirst({
+          where: { id: imageId, product: { id, sellerId } },
+          select: { id: true, storageKey: true, isPrimary: true }
+        });
+
+        if (!image) throw new NotFoundException('Product image not found');
+
+        const remaining = await tx.productImage.count({
+          where: { productId: id }
+        });
+
+        if (remaining <= 1) {
+          throw new BadRequestException(
+            'A product must keep at least one image — add the replacement first'
+          );
+        }
+
+        await tx.productImage.delete({ where: { id: image.id } });
+
+        if (image.isPrimary) {
+          const next = await tx.productImage.findFirst({
+            where: { productId: id },
+            orderBy: { position: 'asc' },
+            select: { id: true }
+          });
+
+          if (next) {
+            await tx.productImage.update({
+              where: { id: next.id },
+              data: { isPrimary: true }
+            });
+          }
+        }
+
+        const updated = await tx.product.findUniqueOrThrow({
+          where: { id },
+          select: productOwnerSelect
+        });
+
+        return { product: updated, storageKey: image.storageKey };
+      }
+    );
+
+    try {
+      // A picture added by URL has a storage key nothing was ever filed
+      // under, and the store treats "not found" as done — so this is safe for
+      // both kinds without having to tell them apart.
+      await this.storage.deleteImage(storageKey);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown';
+      this.logger.error(`Failed to delete image ${storageKey}: ${message}`);
+    }
+
+    return toOwnerProduct(product);
+  }
+
+  /**
+   * PROD-002 — the same gate the rest of the edits use: an admin's suspension
+   * is the admin's to lift, and a removed listing is not edited back to life.
+   */
+  private assertImagesAreEditable(currentStatus: string) {
+    this.assertNotSuspended(currentStatus);
+
+    if (currentStatus === 'REMOVED') {
+      throw new BadRequestException('Removed products cannot be edited');
+    }
   }
 
   private async findOwnedProduct(id: string, sellerId: string) {

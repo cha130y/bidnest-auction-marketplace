@@ -95,6 +95,43 @@ export class StorageService {
   }
 
   /**
+   * PROD-002 — files a listing image under its own product.
+   *
+   * Same options as an auction's, and a separate folder for the same reason
+   * the ids are separate: a product and an auction can be cleaned up without
+   * either knowing the other exists.
+   */
+  uploadProductImage(
+    fileBuffer: Buffer,
+    productId: string
+  ): Promise<StoredImage> {
+    return this.upload(fileBuffer, {
+      folder: `bidnest/products/${productId}`,
+      resource_type: 'image',
+      unique_filename: true,
+      overwrite: false
+    });
+  }
+
+  /**
+   * PROD-001 — files an image that has nothing to belong to yet.
+   *
+   * A listing must be created with at least one picture and has no draft
+   * state to hold them in the meantime, so the file has to exist before the
+   * row that points at it does. Filed under the uploader rather than a
+   * listing id, which is the only thing known at this point — and is what
+   * makes an abandoned upload attributable later.
+   */
+  uploadPendingImage(fileBuffer: Buffer, userId: string): Promise<StoredImage> {
+    return this.upload(fileBuffer, {
+      folder: `bidnest/pending/${userId}`,
+      resource_type: 'image',
+      unique_filename: true,
+      overwrite: false
+    });
+  }
+
+  /**
    * Removes a file. Treats "not found" as success: the caller wants the file
    * gone, and it already is.
    */
