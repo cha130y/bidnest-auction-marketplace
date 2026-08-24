@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  GoogleGenerativeAI,
+  Part,
+  ResponseSchema
+} from '@google/generative-ai';
 import { ConfigService } from '@nestjs/config';
 import { EnvVariable } from '../config/env.validation';
 import { GeminiUnavailableException } from './exceptions/gemini-unavailable.exception';
@@ -35,7 +39,44 @@ export class GeminiClientService {
     return this.client !== null;
   }
 
-  async generateReply(prompt: string, timeoutMs = 15_000): Promise<string> {
+  generateReply(prompt: string, timeoutMs = 15_000): Promise<string> {
+    return this.runWithRetry(
+      (model) => model.generateContent(prompt),
+      timeoutMs
+    );
+  }
+
+  /**
+   * AI-002 — multimodal request (text + product photos) that asks Gemini to
+   * answer as JSON matching `schema`, so the caller parses a fixed shape
+   * instead of scraping free text out of a chat-style reply.
+   */
+  generateVisionJson(
+    parts: Part[],
+    schema: ResponseSchema,
+    timeoutMs = 20_000
+  ): Promise<string> {
+    return this.runWithRetry(
+      (model) =>
+        model.generateContent({
+          contents: [{ role: 'user', parts }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: schema
+          }
+        }),
+      timeoutMs
+    );
+  }
+
+  private async runWithRetry(
+    call: (
+      model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>
+    ) => ReturnType<
+      ReturnType<GoogleGenerativeAI['getGenerativeModel']>['generateContent']
+    >,
+    timeoutMs: number
+  ): Promise<string> {
     if (!this.client) {
       throw new GeminiUnavailableException();
     }
@@ -48,10 +89,7 @@ export class GeminiClientService {
       });
 
       try {
-        const result = await Promise.race([
-          model.generateContent(prompt),
-          timeoutPromise
-        ]);
+        const result = await Promise.race([call(model), timeoutPromise]);
         return result.response.text();
       } catch (error) {
         const isLastAttempt = attempt === MAX_RETRIES;
