@@ -166,6 +166,7 @@ export class AuthService {
       where: { id: account.id },
       data: { lastLoginAt: new Date() }
     });
+    await this.markEmailVerified(account.id);
 
     return { accessToken, refreshToken, user: this.toAuthUser(account) };
   }
@@ -338,6 +339,10 @@ export class AuthService {
       where: { id: account.id },
       data: { lastLoginAt: new Date() }
     });
+    // Matters most here. A Line account's address was typed by its owner, not
+    // vouched for by anyone, and this code coming back is the only evidence
+    // the address is really theirs.
+    await this.markEmailVerified(account.id);
 
     return {
       accessToken,
@@ -353,6 +358,25 @@ export class AuthService {
     const verifier = provider === 'GOOGLE' ? this.google : this.line;
     const profile = await verifier.verify(dto.idToken);
     return this.oauth.resolveAccount(profile, dto.email);
+  }
+
+  /**
+   * AUTH-007 — a code that went out by email and came back proves the address.
+   *
+   * Every login path ends here, which is the point: before this, the column was
+   * written once, when an OAuth account was created, and never again. A local
+   * signup stayed unverified forever no matter how many codes its owner had
+   * read, and so did a Line account whose owner typed the address themselves —
+   * exactly the case the column exists to distinguish.
+   *
+   * `updateMany` for the `null` guard: the first code to arrive is the moment
+   * of verification, and a later login must not push that timestamp forward.
+   */
+  private async markEmailVerified(userId: string) {
+    await this.prisma.user.updateMany({
+      where: { id: userId, emailVerifiedAt: null },
+      data: { emailVerifiedAt: new Date() }
+    });
   }
 
   /** Re-reads the profile so the refreshed response matches the register one. */

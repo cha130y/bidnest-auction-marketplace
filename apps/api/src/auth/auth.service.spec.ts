@@ -50,7 +50,12 @@ const createdRow = {
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: {
-    user: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
+    user: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+    };
   };
   let twoFactor: {
     ttlMinutes: number;
@@ -70,7 +75,12 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     prisma = {
-      user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() }
+      user: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
+      }
     };
     twoFactor = {
       ttlMinutes: 10,
@@ -347,6 +357,35 @@ describe('AuthService', () => {
         prisma.user.update.mock.calls as [{ data: { lastLoginAt: Date } }][]
       )[0];
       expect(updateArg.data.lastLoginAt).toBeInstanceOf(Date);
+    });
+
+    it('stamps the address as verified — the code went there and came back', async () => {
+      await seedAccount();
+
+      await service.verifyTwoFactor(credentials);
+
+      const [args] = (
+        prisma.user.updateMany.mock.calls as [
+          {
+            where: { id: string; emailVerifiedAt: null };
+            data: { emailVerifiedAt: Date };
+          }
+        ][]
+      )[0];
+      expect(args.where.id).toBe(createdRow.id);
+      // Guarded, so a second login cannot push the original moment forward.
+      expect(args.where.emailVerifiedAt).toBeNull();
+      expect(args.data.emailVerifiedAt).toBeInstanceOf(Date);
+    });
+
+    it('leaves the address unverified when the code was wrong', async () => {
+      await seedAccount();
+      twoFactor.consume.mockResolvedValue(false);
+
+      await expect(service.verifyTwoFactor(credentials)).rejects.toBeInstanceOf(
+        UnauthorizedException
+      );
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 
