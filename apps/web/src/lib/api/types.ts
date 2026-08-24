@@ -528,28 +528,3 @@ export const AUCTION_IMAGE_MIME_TYPES = [
   "image/webp",
   "image/avif",
 ] as const
-
-// prisma/schema.prisma
-export type UserRole = "USER" | "ADMIN"
-export type UserStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED"
-
-// ── src/users/users.service.ts → profileSelect ──────────────────────────────
-/** USR-001 — the signed-in user's own profile. Only `GET/PATCH /users/me` return this shape. */
-export type Me = {
-  id: string
-  email: string
-  role: UserRole
-  status: UserStatus
-  createdAt: string
-  profile: {
-    firstName: string
-    lastName: string | null
-    displayName: string
-    avatarUrl: string | null
-    bio: string | null
-    phone: string | null
-    location: string | null
-    defaultShippingAddress: string | null
-    updatedAt: string
-  }
-}
