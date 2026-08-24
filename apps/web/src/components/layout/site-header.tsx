@@ -85,6 +85,8 @@ function SiteHeader({
               size="icon"
               aria-label="Notifications"
               className="relative text-ink"
+              nativeButton={false}
+              render={<Link href="/notifications" />}
             >
               <Bell className="size-6" />
               {hasNotifications && (
@@ -97,6 +99,8 @@ function SiteHeader({
               size="icon"
               aria-label="Cart"
               className="relative text-ink"
+              nativeButton={false}
+              render={<Link href="/cart" />}
             >
               <ShoppingCart className="size-6" />
               {cartCount > 0 && (
