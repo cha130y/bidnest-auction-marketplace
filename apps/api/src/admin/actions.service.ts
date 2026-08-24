@@ -1,4 +1,12 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import type { AdminActionType } from '../../generated/prisma/enums';
+import { PrismaService } from '../prisma/prisma.service';
+
+interface ListActionsQuery {
+  cursor?: string;
+  limit?: number;
+  actionType?: AdminActionType;
+}
 
 /**
  * ADM-004 — Audit log viewer (owner: Dev 5)
@@ -8,11 +16,20 @@ import { Injectable, NotImplementedException } from '@nestjs/common';
  * ที่เกี่ยวข้องกับความปลอดภัย)
  *
  * `admin_actions` มี index `[adminUserId, createdAt]` และ `[actionType, createdAt]`
- * อยู่แล้ว ให้ออกแบบ query/pagination ให้ใช้ index เหล่านี้
+ * อยู่แล้ว — cursor-based pagination ด้านล่างใช้ index เหล่านี้ผ่าน orderBy createdAt
  */
 @Injectable()
 export class AdminActionsService {
-  listActions(): never {
-    throw new NotImplementedException('ADM-004 listActions');
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listActions(query: ListActionsQuery = {}) {
+    const limit = query.limit ?? 20;
+
+    return this.prisma.adminAction.findMany({
+      where: query.actionType ? { actionType: query.actionType } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {})
+    });
   }
 }

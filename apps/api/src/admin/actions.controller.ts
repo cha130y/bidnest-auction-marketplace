@@ -1,4 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import type { AdminActionType } from '../../generated/prisma/enums';
+import { Roles } from '../common/decorators/roles.decorator';
 import { AdminActionsService } from './actions.service';
 
 /**
@@ -11,10 +13,8 @@ import { AdminActionsService } from './actions.service';
  * controller นี้อ่านอย่างเดียว ส่วนการ **เขียน** audit เป็นหน้าที่ของแต่ละ
  * service ที่ทำ action นั้นๆ โดยเขียนใน transaction เดียวกับการเปลี่ยนข้อมูล
  * (Dev 2 = category, Dev 3 = product, Dev 4 = auction, Dev 5 = user)
- *
- * TODO(Dev 5): เมื่อ AUTH-008 พร้อม ใส่ guard ที่ระดับ class
- *   `@UseGuards(AccessTokenGuard, RolesGuard)` + `@Roles(UserRole.ADMIN)`
  */
+@Roles('ADMIN')
 @Controller('admin/actions')
 export class AdminActionsController {
   constructor(private readonly adminActionsService: AdminActionsService) {}
@@ -24,7 +24,15 @@ export class AdminActionsController {
    * คืน admin ที่ทำ, ประเภทการกระทำ, เป้าหมาย, หมายเหตุ, เวลา ตาม ADM-004
    */
   @Get()
-  listActions() {
-    return this.adminActionsService.listActions();
+  listActions(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('actionType') actionType?: AdminActionType
+  ) {
+    return this.adminActionsService.listActions({
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+      actionType
+    });
   }
 }

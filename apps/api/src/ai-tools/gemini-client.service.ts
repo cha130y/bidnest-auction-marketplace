@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ConfigService } from '@nestjs/config';
+import { EnvVariable } from '../config/env.validation';
 import { GeminiUnavailableException } from './exceptions/gemini-unavailable.exception';
 
 const MAX_RETRIES = 2;
@@ -9,15 +10,36 @@ const RETRY_BASE_DELAY_MS = 1_000;
 @Injectable()
 export class GeminiClientService {
   private readonly logger = new Logger(GeminiClientService.name);
-  private readonly client: GoogleGenerativeAI;
+  private readonly client: GoogleGenerativeAI | null;
   private readonly modelName = 'gemini-flash-lite-latest';
 
-  constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.getOrThrow<string>('GEMINI_API_KEY');
+  constructor(config: ConfigService<EnvVariable, true>) {
+    const apiKey = config.get('GEMINI_API_KEY', { infer: true });
+
+    if (!apiKey) {
+      // Said once at startup rather than on every chat message, so a
+      // teammate without a Gemini key finds out before they try AI-001,
+      // same pattern as StorageService for Cloudinary.
+      this.logger.log(
+        'GEMINI_API_KEY is not set; support chat will answer 503'
+      );
+      this.client = null;
+      return;
+    }
+
     this.client = new GoogleGenerativeAI(apiKey);
   }
 
+  /** Whether a reply is possible at all — checked before Gemini is ever called. */
+  isConfigured(): boolean {
+    return this.client !== null;
+  }
+
   async generateReply(prompt: string, timeoutMs = 15_000): Promise<string> {
+    if (!this.client) {
+      throw new GeminiUnavailableException();
+    }
+
     const model = this.client.getGenerativeModel({ model: this.modelName });
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
