@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
@@ -30,8 +30,13 @@ import {
  * Two forms rather than one: the fields belong to different steps and have
  * different rules, and a single schema would have to call the code optional
  * right where it is required.
+ *
+ * The provider buttons arrive as `oauth` rather than being imported, because
+ * whether Line can be offered is a server-side question (see ./page.tsx). They
+ * render under step one only — once a code has been mailed, starting a second
+ * sign-in a different way would just abandon the first.
  */
-export function LoginForm() {
+export function LoginForm({ oauth }: { oauth?: ReactNode }) {
   const router = useRouter()
   const params = useSearchParams()
   const callbackUrl = params.get("callbackUrl") ?? "/"
@@ -39,7 +44,9 @@ export function LoginForm() {
   const [credentials, setCredentials] = useState<LoginValues | null>(null)
   const [expiresIn, setExpiresIn] = useState(10)
   const [notice, setNotice] = useState<string | null>(null)
-  const [failure, setFailure] = useState<string | null>(null)
+  // A provider sign-in that failed comes back as a redirect, so its reason
+  // arrives in the URL rather than from a call this page made.
+  const [failure, setFailure] = useState<string | null>(params.get("error"))
 
   const stepOne = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -169,66 +176,70 @@ export function LoginForm() {
 
   const busy = stepOne.formState.isSubmitting
   return (
-    <form
-      onSubmit={stepOne.handleSubmit(sendCode)}
-      className="space-y-4"
-      noValidate
-    >
-      <div>
-        <h1 className="text-xl font-semibold">เข้าสู่ระบบ</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          ทุกบัญชีต้องยืนยันด้วยรหัสทางอีเมลอีกขั้นหนึ่ง
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="email">อีเมล</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          autoFocus
-          {...stepOne.register("email")}
-        />
-        {stepOne.formState.errors.email && (
-          <p className="text-sm text-destructive">
-            {stepOne.formState.errors.email.message}
+    <div className="space-y-6">
+      <form
+        onSubmit={stepOne.handleSubmit(sendCode)}
+        className="space-y-4"
+        noValidate
+      >
+        <div>
+          <h1 className="text-xl font-semibold">เข้าสู่ระบบ</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            ทุกบัญชีต้องยืนยันด้วยรหัสทางอีเมลอีกขั้นหนึ่ง
           </p>
-        )}
-      </div>
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password">รหัสผ่าน</Label>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          {...stepOne.register("password")}
-        />
-        {stepOne.formState.errors.password && (
-          <p className="text-sm text-destructive">
-            {stepOne.formState.errors.password.message}
-          </p>
-        )}
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">อีเมล</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            autoFocus
+            {...stepOne.register("email")}
+          />
+          {stepOne.formState.errors.email && (
+            <p className="text-sm text-destructive">
+              {stepOne.formState.errors.email.message}
+            </p>
+          )}
+        </div>
 
-      {failure && <p className="text-sm text-destructive">{failure}</p>}
+        <div className="space-y-2">
+          <Label htmlFor="password">รหัสผ่าน</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            {...stepOne.register("password")}
+          />
+          {stepOne.formState.errors.password && (
+            <p className="text-sm text-destructive">
+              {stepOne.formState.errors.password.message}
+            </p>
+          )}
+        </div>
 
-      <Button type="submit" className="w-full" disabled={busy}>
-        {busy ? "กำลังตรวจสอบ..." : "ถัดไป"}
-      </Button>
+        {failure && <p className="text-sm text-destructive">{failure}</p>}
 
-      <div className="flex justify-between text-sm">
-        <Link
-          href="/forgot-password"
-          className="text-muted-foreground underline"
-        >
-          ลืมรหัสผ่าน
-        </Link>
-        <Link href="/register" className="text-muted-foreground underline">
-          สมัครสมาชิก
-        </Link>
-      </div>
-    </form>
+        <Button type="submit" className="w-full" disabled={busy}>
+          {busy ? "กำลังตรวจสอบ..." : "ถัดไป"}
+        </Button>
+
+        <div className="flex justify-between text-sm">
+          <Link
+            href="/forgot-password"
+            className="text-muted-foreground underline"
+          >
+            ลืมรหัสผ่าน
+          </Link>
+          <Link href="/register" className="text-muted-foreground underline">
+            สมัครสมาชิก
+          </Link>
+        </div>
+      </form>
+
+      {oauth}
+    </div>
   )
 }

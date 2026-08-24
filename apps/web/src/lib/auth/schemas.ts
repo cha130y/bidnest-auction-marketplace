@@ -36,6 +36,13 @@ export const otpSchema = z.object({
 })
 export type OtpValues = z.infer<typeof otpSchema>
 
+/**
+ * AUTH-006 — the address a first-time Line user supplies when Line released
+ * none. Nothing else: the identity is already settled by the provider token.
+ */
+export const oauthEmailSchema = z.object({ email })
+export type OAuthEmailValues = z.infer<typeof oauthEmailSchema>
+
 export const registerSchema = z.object({
   email,
   password: newPassword,
