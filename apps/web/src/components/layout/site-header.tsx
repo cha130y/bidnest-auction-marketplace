@@ -1,43 +1,11 @@
 import Link from "next/link"
-import type { ReactNode } from "react"
-import {
-  Bell,
-  Camera,
-  Gamepad2,
-  Headphones,
-  LogIn,
-  Menu,
-  Monitor,
-  ShoppingCart,
-  Smartphone,
-  Watch,
-} from "lucide-react"
+import { Bell, LogIn, Menu, ShoppingCart } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { GavelNav, GavelNavMobile } from "@/components/layout/gavel-nav"
 
-export type CategoryLink = {
-  label: string
-  href: string
-  icon: ReactNode
-}
-
-export const defaultCategories: CategoryLink[] = [
-  { label: "Phones", href: "/shop?category=phones", icon: <Smartphone /> },
-  { label: "Computers", href: "/shop?category=computers", icon: <Monitor /> },
-  { label: "Watches", href: "/shop?category=watches", icon: <Watch /> },
-  { label: "Cameras", href: "/shop?category=cameras", icon: <Camera /> },
-  {
-    label: "Headphones",
-    href: "/shop?category=headphones",
-    icon: <Headphones />,
-  },
-  { label: "Gaming", href: "/shop?category=gaming", icon: <Gamepad2 /> },
-]
-
 export type SiteHeaderProps = {
-  categories?: CategoryLink[]
   cartCount?: number
   hasNotifications?: boolean
   onMenuToggle?: () => void
@@ -45,13 +13,11 @@ export type SiteHeaderProps = {
 }
 
 /**
- * Shared storefront header: logo, gavel-animated Auction/E-commerce nav +
- * category subnav on desktop; logo + menu trigger on mobile. Presentational
- * only — wire auth state, cart count, notifications, and the mobile drawer
- * at the call site.
+ * Shared storefront header: logo, gavel-animated Auction/E-commerce nav;
+ * logo + menu trigger on mobile. Presentational only — wire auth state,
+ * cart count, notifications, and the mobile drawer at the call site.
  */
 function SiteHeader({
-  categories = defaultCategories,
   cartCount = 0,
   hasNotifications = false,
   onMenuToggle,
@@ -131,19 +97,6 @@ function SiteHeader({
         </div>
 
         <GavelNavMobile />
-
-        <nav className="mt-4 hidden flex-wrap justify-between gap-4 rounded-r3 bg-linear-to-b from-[#2b303b] to-ink px-6 py-4 md:flex">
-          {categories.map((category) => (
-            <Link
-              key={category.href}
-              href={category.href}
-              className="flex items-center gap-2 text-sm text-white/75 transition-colors hover:text-amber-400 [&_svg]:size-4.5"
-            >
-              {category.icon}
-              {category.label}
-            </Link>
-          ))}
-        </nav>
       </div>
     </header>
   )
