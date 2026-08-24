@@ -11,15 +11,18 @@ import { Input } from '@/components/ui/input';
 /**
  * AI-003 — AI Negotiator (Optional, owner: Dev 5)
  *
- * Standalone component, not wired into the product detail page (Dev3's
- * file) — drop it next to NegotiateButton wherever `negotiationFloor` is
- * known to be set on the listing (the floor itself never reaches the client;
- * showing this form on every product would just get REJECTED every time on
- * ones with no floor, which is a fine fallback but a wasted request).
+ * Wired into product-purchase-panel.tsx, next to NegotiateButton. Shown on
+ * every listing since the buyer-facing `Product` never carries
+ * `negotiationFloor` (SRS §6) — there is no client-side signal to gate on, so
+ * a listing with no floor set just answers "This listing does not accept
+ * offers" on submit rather than the form being hidden up front.
  *
  * On ACCEPTED, `onAccepted` hands the caller the offer (with `acceptToken`)
  * so checkout (CART-004, Dev3) can use it — this component does not navigate
- * to checkout itself, that flow is Dev3's to own.
+ * to checkout itself, and as of 2026-08-24 CART-004 does not yet call
+ * `verifyAndConsumeAcceptToken()` to redeem it, so `onAccepted` is currently
+ * unused here; the accepted-offer card still explains the countdown so the
+ * buyer knows to check out in time.
  */
 export function NegotiationOfferForm({
   productId,
