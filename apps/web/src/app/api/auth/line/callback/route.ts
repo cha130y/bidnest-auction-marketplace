@@ -4,6 +4,8 @@ import { timingSafeEqual } from "node:crypto"
 
 import {
   LINE_STATE_COOKIE,
+  clearPending,
+  parkTokens,
   safeCallback,
   siteOrigin,
   startOAuth
@@ -94,20 +96,31 @@ export async function GET(request: Request) {
     return fail(origin, "LINE ไม่ได้ส่ง ID token กลับมา")
   }
 
-  const result = await startOAuth({
-    provider: "line",
-    idToken,
-    callbackUrl: safeCallback(expected.callbackUrl)
-  })
+  const callbackUrl = safeCallback(expected.callbackUrl)
+  const result = await startOAuth(
+    { provider: "line", idToken, callbackUrl },
+    // AUTH-007 — this browser may have answered a code for the account before.
+    { withDevice: true }
+  )
 
   if (!result.ok) {
     return fail(origin, result.message)
   }
 
   const verify = new URL("/login/oauth", origin)
+
+  // Recognised: apps/api issued the pair rather than mailing a code. A
+  // redirect cannot carry it, so it waits in a cookie the landing page claims.
+  if ("accessToken" in result.body) {
+    await clearPending()
+    await parkTokens({ tokens: result.body, callbackUrl })
+    verify.searchParams.set("ready", "1")
+    return NextResponse.redirect(verify)
+  }
+
   // AUTH-006's own case: Line released no address, so one has to be asked for
   // before there is an account to mail a code to.
-  if ("status" in result.body && result.body.status === "EMAIL_REQUIRED") {
+  if (result.body.status === "EMAIL_REQUIRED") {
     verify.searchParams.set("need", "email")
   }
   return NextResponse.redirect(verify)

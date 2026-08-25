@@ -43,13 +43,22 @@ export type OtpValues = z.infer<typeof otpSchema>
 export const oauthEmailSchema = z.object({ email })
 export type OAuthEmailValues = z.infer<typeof oauthEmailSchema>
 
-export const registerSchema = z.object({
-  email,
-  password: newPassword,
-  firstName: z.string().trim().min(1, "กรอกชื่อจริง").max(100),
-  lastName: z.string().trim().max(100).optional(),
-  displayName: z.string().trim().min(1, "กรอกชื่อที่แสดง").max(100)
-})
+export const registerSchema = z
+  .object({
+    email,
+    password: newPassword,
+    // AUTH-001 — typed twice, because a typo in a box you cannot read locks
+    // you out of the account you just made and the only way back is the reset
+    // link. The API neither wants nor sees this field.
+    confirm: z.string().min(1, "ยืนยันรหัสผ่านอีกครั้ง"),
+    firstName: z.string().trim().min(1, "กรอกชื่อจริง").max(100),
+    lastName: z.string().trim().max(100).optional(),
+    displayName: z.string().trim().min(1, "กรอกชื่อที่แสดง").max(100)
+  })
+  .refine((values) => values.password === values.confirm, {
+    message: "รหัสผ่านทั้งสองช่องไม่ตรงกัน",
+    path: ["confirm"]
+  })
 export type RegisterValues = z.infer<typeof registerSchema>
 
 export const forgotPasswordSchema = z.object({ email })
