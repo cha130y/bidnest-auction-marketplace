@@ -25,9 +25,23 @@ export class CartController {
     return this.cartService.getCart(userId);
   }
 
+  /**
+   * CART-001 — adds to the quantity already in the cart rather than replacing
+   * it, so pressing "เพิ่มลงตะกร้า" twice on a listing leaves two of it. Worth
+   * saying out loud: the request looks like it sets a quantity, and the stock
+   * ceiling is therefore checked against the resulting total, not against the
+   * number in the body. `PATCH items/:itemId` is the one that sets.
+   */
   @Post('items')
   addItem(@CurrentUser('id') userId: string, @Body() dto: AddCartItemDto) {
     return this.cartService.addItem(userId, dto.productId, dto.quantity);
+  }
+
+  // CART-002 — empties the cart. Removing lines one at a time still works and
+  // is what the per-line bin does; this is for "start again".
+  @Delete()
+  clear(@CurrentUser('id') userId: string) {
+    return this.cartService.clear(userId);
   }
 
   @Patch('items/:itemId')

@@ -693,6 +693,47 @@ describe('E-commerce (e2e)', () => {
       expect((await cartOf(buyerId)).items[0].issue).toBeNull();
       await emptyCart(buyerId);
     });
+
+    describe('emptying it in one call', () => {
+      const clear = (userId: string) =>
+        request(app.getHttpServer())
+          .delete('/cart')
+          .set('Authorization', authOf(userId));
+
+      it('answers with the empty cart rather than nothing', async () => {
+        await addToCart(buyerId, sellerAProduct, 2).expect(201);
+        await addToCart(buyerId, scarce, 1).expect(201);
+
+        const response = await clear(buyerId).expect(200);
+        const body = response.body as {
+          items: unknown[];
+          summary: { total: string };
+        };
+
+        expect(body.items).toHaveLength(0);
+        expect(body.summary.total).toBe('0.00');
+      });
+
+      it('leaves it empty', async () => {
+        expect((await cartOf(buyerId)).items).toHaveLength(0);
+      });
+
+      it('is fine to call on a cart that is already empty', () =>
+        clear(buyerId).expect(200));
+
+      it('reaches nobody else’s cart', async () => {
+        await emptyCart(strangerId);
+        await addToCart(strangerId, sellerAProduct, 1).expect(201);
+
+        await clear(buyerId).expect(200);
+
+        expect((await cartOf(strangerId)).items).toHaveLength(1);
+        await emptyCart(strangerId);
+      });
+
+      it('is not a public route', () =>
+        request(app.getHttpServer()).delete('/cart').expect(401));
+    });
   });
 
   describe('CART-003/PROD-007 — checkout splits per seller and prices lines', () => {
