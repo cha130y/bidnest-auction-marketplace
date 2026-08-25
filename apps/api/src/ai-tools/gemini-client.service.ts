@@ -39,9 +39,21 @@ export class GeminiClientService {
     return this.client !== null;
   }
 
+  /**
+   * AI-001 — a low, fixed temperature rather than the model's default
+   * (~1.0): this is a lookup against a fixed FAQ, not creative writing, and
+   * at the default temperature the model would sometimes claim an exact FAQ
+   * match "isn't covered" (or the reverse — answer confidently off the FAQ)
+   * on nothing but sampling luck. Found live: the same question, sent
+   * unchanged, answered correctly about half the time before this.
+   */
   generateReply(prompt: string, timeoutMs = 15_000): Promise<string> {
     return this.runWithRetry(
-      (model) => model.generateContent(prompt),
+      (model) =>
+        model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2 }
+        }),
       timeoutMs
     );
   }

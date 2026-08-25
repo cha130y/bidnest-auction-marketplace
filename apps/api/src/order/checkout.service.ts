@@ -6,6 +6,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import { calculateLineTotal } from '../cart/utils/calculate-line-total.util';
+import { ChatService } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MockPaymentProvider } from '../payment/payment.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -26,7 +27,8 @@ export class CheckoutService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly payment: MockPaymentProvider,
-    private readonly realtime: RealtimeService
+    private readonly realtime: RealtimeService,
+    private readonly chat: ChatService
   ) {}
 
   async checkout(buyerId: string, dto: CheckoutDto) {
@@ -68,7 +70,12 @@ export class CheckoutService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const bySeller = this.groupBySeller(lines);
-      const orders: { id: string; sellerId: string; subtotal: string }[] = [];
+      const orders: {
+        id: string;
+        sellerId: string;
+        subtotal: string;
+        productId: string;
+      }[] = [];
 
       for (const [sellerId, sellerLines] of bySeller) {
         const subtotal = sellerLines.reduce(
@@ -106,7 +113,11 @@ export class CheckoutService {
         orders.push({
           id: order.id,
           sellerId,
-          subtotal: subtotal.toFixed(2)
+          subtotal: subtotal.toFixed(2),
+          // CHAT-004 — the auto-reply needs *a* listing to attach its thread
+          // to; the first line in the order is as good a choice as any when
+          // a seller sold several products in the same checkout.
+          productId: sellerLines[0].productId
         });
       }
 
@@ -130,6 +141,16 @@ export class CheckoutService {
     // Emitted after commit so no one is notified about a rolled-back order
     for (const notification of result.notifications) {
       this.realtime.emitNotificationCreated(notification.userId, notification);
+    }
+
+    // CHAT-004 — same reason: a seller's auto-reply should never appear to
+    // have been sent for an order that did not, in the end, go through.
+    for (const order of result.orders) {
+      void this.chat.sendPurchaseAutoReply(
+        order.sellerId,
+        buyerId,
+        order.productId
+      );
     }
 
     return {

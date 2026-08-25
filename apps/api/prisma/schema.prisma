@@ -135,15 +135,19 @@ enum ChatRole {
 // ============================================================
 
 model User {
-  id              String     @id @default(uuid()) @db.Uuid
-  email           String     @unique @db.VarChar(320)
-  passwordHash    String?    @map("password_hash") @db.VarChar(255)
-  role            UserRole   @default(USER)
-  status          UserStatus @default(ACTIVE)
-  emailVerifiedAt DateTime?  @map("email_verified_at")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  id               String     @id @default(uuid()) @db.Uuid
+  email            String     @unique @db.VarChar(320)
+  passwordHash     String?    @map("password_hash") @db.VarChar(255)
+  role             UserRole   @default(USER)
+  status           UserStatus @default(ACTIVE)
+  emailVerifiedAt  DateTime?  @map("email_verified_at")
+  lastLoginAt      DateTime?  @map("last_login_at")
+  /// CHAT-004 — sent automatically, once, the first time a buyer's order for
+  /// one of this seller's listings is placed. Per-seller rather than
+  /// per-listing: one shop voice, not one to maintain per product.
+  autoReplyMessage String?    @map("auto_reply_message") @db.VarChar(500)
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   // Identity
   profile             UserProfile?
@@ -368,6 +372,7 @@ model Auction {
   participants  AuctionParticipant[]
   notifications Notification[]
   adminActions  AdminAction[]
+  conversations Conversation[]
 
   @@index([status, scheduledStartAt])
   @@index([status, currentEndAt])
@@ -629,21 +634,29 @@ model PaymentTransaction {
   @@map("payment_transactions")
 }
 
+/// CHAT-001 — a thread is about exactly one listing, a product or an
+/// auction, never both. Two nullable FKs rather than one polymorphic one: the
+/// app enforces "exactly one of the two is set" (see chat.service.ts), and a
+/// real FK to each keeps referential integrity Prisma can check instead of
+/// trusting a discriminator column.
 model Conversation {
   id        String   @id @default(uuid()) @db.Uuid
-  productId String   @map("product_id") @db.Uuid
+  productId String?  @map("product_id") @db.Uuid
+  auctionId String?  @map("auction_id") @db.Uuid
   buyerId   String   @map("buyer_id") @db.Uuid
   sellerId  String   @map("seller_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
-  product Product @relation(fields: [productId], references: [id])
-  buyer   User    @relation("ConversationBuyer", fields: [buyerId], references: [id])
-  seller  User    @relation("ConversationSeller", fields: [sellerId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+  auction Auction? @relation(fields: [auctionId], references: [id])
+  buyer   User     @relation("ConversationBuyer", fields: [buyerId], references: [id])
+  seller  User     @relation("ConversationSeller", fields: [sellerId], references: [id])
 
   messages      Message[]
   notifications Notification[]
 
   @@unique([productId, buyerId, sellerId])
+  @@unique([auctionId, buyerId, sellerId])
   @@map("conversations")
 }
 

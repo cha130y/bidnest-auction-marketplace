@@ -4,17 +4,17 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { ChatService } from './chat.service';
 
 @Roles('USER')
-@Controller('products')
-export class ProductConversationController {
+@Controller('auctions')
+export class AuctionConversationController {
   constructor(private readonly chatService: ChatService) {}
 
-  // CHAT-001 — opened from the product detail page; returns the existing
-  // thread when one is already open for this buyer and listing.
+  // CHAT-004 — opened from the auction detail page; mirrors
+  // ProductConversationController for the auction side of the platform.
   @Post(':id/conversations')
   open(
-    @Param('id', ParseUUIDPipe) productId: string,
+    @Param('id', ParseUUIDPipe) auctionId: string,
     @CurrentUser('id') buyerId: string
   ) {
-    return this.chatService.openProductConversation(productId, buyerId);
+    return this.chatService.openAuctionConversation(auctionId, buyerId);
   }
 }
