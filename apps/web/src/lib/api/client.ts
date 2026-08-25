@@ -42,18 +42,36 @@ export async function apiFetch<T>(
   // mistaken for a failure to reach the API.
   const auth = await authHeader()
 
-  let response: Response
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...auth,
-        ...init.headers,
-      },
-    })
-  } catch {
-    throw new ApiError(0, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่อีกครั้ง")
+  const send = async (headers: Record<string, string>) => {
+    try {
+      return await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+          ...init.headers,
+        },
+      })
+    } catch {
+      throw new ApiError(0, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่อีกครั้ง")
+    }
+  }
+
+  let response = await send(auth)
+
+  // AUTH-004 — the access token expired between being read and being used.
+  // Reading the session again runs the jwt callback, which renews it, so the
+  // second attempt carries a live token. Only worth doing when the token
+  // actually changed: retrying with the same one would just fail again, and
+  // `init.body` is a JSON string here, so it is safe to send twice.
+  if (response.status === 401 && auth.Authorization) {
+    const renewed = await authHeader()
+    if (
+      renewed.Authorization &&
+      renewed.Authorization !== auth.Authorization
+    ) {
+      response = await send(renewed)
+    }
   }
 
   if (response.status === 204) return undefined as T

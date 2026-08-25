@@ -2,6 +2,7 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 
 import { apiErrorMessage, type ApiTokens } from "@/lib/auth/api-contract"
+import { needsRefresh, refreshTokens } from "@/lib/auth/refresh"
 
 /**
  * AUTH-002 / AUTH-007 — NextAuth owns the browser session; apps/api stays the
@@ -60,13 +61,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     })
   ],
   callbacks: {
-    jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session }) {
       // `user` is only present on the sign-in pass; afterwards the values
       // already on the token are what carry through.
       if (user) {
         token.accessToken = user.accessToken
         token.refreshToken = user.refreshToken
         token.role = user.role
+        // A fresh sign-in clears whatever went wrong last time.
+        delete token.error
       }
 
       // USR-001 — renaming yourself. The header reads the display name off the
@@ -81,6 +84,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
       }
 
+      // AUTH-004 — renew before the 15 minutes are up. This runs on every
+      // session read, which is what makes it invisible: by the time any caller
+      // looks at `accessToken`, it is one that still has life in it.
+      //
+      // Read through a narrow local type for the reason the session callback
+      // below does: the JWT augmentation in types/next-auth.d.ts cannot reach
+      // this signature, so the fields arrive as `unknown` however they are
+      // declared.
+      const held = token as { accessToken?: string; refreshToken?: string }
+
+      if (held.refreshToken && needsRefresh(held.accessToken)) {
+        const renewed = await refreshTokens(held.refreshToken)
+
+        if (renewed) {
+          token.accessToken = renewed.accessToken
+          token.refreshToken = renewed.refreshToken
+          // Taken from the API's answer rather than kept, so a role changed by
+          // an admin lands within the hour instead of at the next sign-in.
+          token.role = renewed.user.role
+          delete token.error
+        } else {
+          // The refresh token is spent, expired or revoked — the session is
+          // genuinely over. Drop both tokens rather than carry a dead one that
+          // every request would spend a round trip discovering: with no
+          // accessToken the header already shows Log in, and `error` is what
+          // sends the browser to the login page to say why.
+          delete token.accessToken
+          delete token.refreshToken
+          token.error = "RefreshFailed"
+        }
+      }
+
       return token
     },
     session({ session, token }) {
@@ -92,9 +127,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const carried = token as {
         accessToken?: string
         role?: "USER" | "ADMIN"
+        error?: "RefreshFailed"
       }
       session.accessToken = carried.accessToken
       session.role = carried.role
+      session.error = carried.error
       if (session.user) session.user.id = token.sub ?? ""
       return session
     }

@@ -41,6 +41,18 @@ function Editor({ productId }: { productId: string }) {
   const [categories, setCategories] = useState<CategoryTree[]>([])
   const [loadError, setLoadError] = useState<unknown>(null)
 
+  /**
+   * What the form fills itself in from, written once when the listing loads
+   * and never again.
+   *
+   * `product` moves whenever something else on this screen writes — pausing
+   * the listing, adding a picture — and the form's inputs are uncontrolled, so
+   * handing it a fresh `defaultValue` after it has mounted is both a Base UI
+   * warning and a real hazard: anything typed and not yet saved would be at
+   * the mercy of a button elsewhere on the page.
+   */
+  const [seed, setSeed] = useState<OwnerProduct | null>(null)
+
   useEffect(() => {
     let cancelled = false
 
@@ -48,6 +60,8 @@ function Editor({ productId }: { productId: string }) {
       .then(([loaded, trees]) => {
         if (cancelled) return
         setProduct(loaded as OwnerProduct)
+        // Only ever set here, which is what keeps the form's defaults still.
+        setSeed(loaded as OwnerProduct)
         setCategories(trees)
       })
       .catch((caught: unknown) => {
@@ -93,7 +107,7 @@ function Editor({ productId }: { productId: string }) {
 
       <DetailsForm
         productId={productId}
-        product={product}
+        product={seed ?? product}
         categories={categories}
         onSaved={setProduct}
       />
