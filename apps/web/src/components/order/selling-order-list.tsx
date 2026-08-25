@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { Package } from "lucide-react"
 
 import {
@@ -61,9 +61,13 @@ export function SellingOrderList() {
         limit: PAGE_SIZE,
         ...(statuses ? { shipmentStatus: statuses } : {}),
       }),
-    // Hold the rows already on screen while the next page is fetched, rather
-    // than dropping to the skeleton and back for every press of the pager.
-    placeholderData: keepPreviousData,
+    // Hold the rows already on screen while the *next page* is fetched, rather
+    // than dropping to the skeleton and back for every press of the pager —
+    // but only within one group. `keepPreviousData` answers for any change of
+    // key, so switching to "รอจัดส่ง" used to show every order sitting under
+    // that tab until the real answer arrived: not stale, wrong.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === group ? previous : undefined,
     // A 401 will not fix itself by trying again
     retry: false,
   })
@@ -145,8 +149,9 @@ export function SellingOrderList() {
         ))}
       </ul>
 
+      {/* The local `page` rather than `data.meta.page`: see order-list.tsx. */}
       <PageNav
-        page={data.meta.page}
+        page={page}
         totalPages={data.meta.totalPages}
         onChange={setPage}
       />

@@ -46,7 +46,7 @@ export function BuyNowButton({
   const queryClient = useQueryClient()
   const { isAuthenticated, isAuthReady } = useCart()
 
-  const { mutate, isPending, error, reset } = useMutation({
+  const { mutate, isPending, isSuccess, error, reset } = useMutation({
     mutationFn: () => addCartItem(productId, quantity),
     onSuccess: (cart) => {
       // The API answers with the whole cart, so the badge is right before the
@@ -67,11 +67,15 @@ export function BuyNowButton({
 
   return (
     <div className={cn("flex w-full flex-col gap-1.5", className)}>
+      {/* Stays down through `isSuccess` too. The mutation settles the moment
+          the line is added, but the browser is still on its way to
+          `/checkout` — a second press in that gap would add the listing to the
+          cart twice. */}
       <Button
         variant="dark"
         size="lg"
         block
-        disabled={disabled || isPending}
+        disabled={disabled || isPending || isSuccess}
         onClick={() => {
           if (needsLogin) {
             router.push(loginHref())
@@ -82,7 +86,7 @@ export function BuyNowButton({
         }}
       >
         <Zap />
-        {isPending ? "กำลังไปหน้าชำระเงิน…" : "ซื้อเลย"}
+        {isPending || isSuccess ? "กำลังไปหน้าชำระเงิน…" : "ซื้อเลย"}
       </Button>
       {error instanceof ApiError && (
         <p className="text-xs text-red">{error.message}</p>

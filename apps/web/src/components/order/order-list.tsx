@@ -80,8 +80,13 @@ export function OrderList() {
         ))}
       </ul>
 
+      {/* The local `page`, not `data.meta.page`. Under `keepPreviousData`
+          `data` is still the previous page's while the next one is in flight,
+          so highlighting from it left the pressed number un-highlighted until
+          the response landed — the rows do not move either, so the press
+          looked like it had done nothing at all. */}
       <PageNav
-        page={data.meta.page}
+        page={page}
         totalPages={data.meta.totalPages}
         onChange={setPage}
       />
