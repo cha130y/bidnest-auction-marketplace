@@ -28,8 +28,6 @@ describe('E-commerce hardening (e2e)', () => {
   let categoryId: string;
   let authOf: (userId: string) => string;
 
-  const createdProductIds: string[] = [];
-
   const address = {
     recipientName: 'Anan B.',
     line1: '123 Sukhumvit Rd',
@@ -67,9 +65,7 @@ describe('E-commerce hardening (e2e)', () => {
       })
       .expect(201);
 
-    const body = response.body as { id: string };
-    createdProductIds.push(body.id);
-    return body.id;
+    return (response.body as { id: string }).id;
   };
 
   const search = async (query: string) => {
@@ -106,48 +102,89 @@ describe('E-commerce hardening (e2e)', () => {
   });
 
   afterAll(async () => {
-    const userIds = [sellerId, strangerId, buyerId];
+    /**
+     * Matched by pattern rather than by the three ids this run made, so a run
+     * whose cleanup died half way through is swept by the next one.
+     *
+     * It has happened: an early version of this block called
+     * `paymentTransaction.deleteMany({ where: { userId } })`, which is not a
+     * column on that table. The throw took the rest of the cleanup with it and
+     * left three users, eight listings and a category behind — and the
+     * category turned up in the shop's own filter list, named after a Unix
+     * timestamp.
+     */
+    const leftovers = await prisma.user.findMany({
+      where: { email: { startsWith: 'hard-', endsWith: '@example.com' } },
+      select: { id: true }
+    });
+    const userIds = leftovers.map((user) => user.id);
+
+    // Every listing those users ever made, not just the ids this run
+    // collected — a crashed run left its own behind and knows nothing of them.
+    const stale = await prisma.product.findMany({
+      where: { sellerId: { in: userIds } },
+      select: { id: true }
+    });
+    const productIds = stale.map((product) => product.id);
 
     await prisma.message.deleteMany({
-      where: { conversation: { productId: { in: createdProductIds } } }
+      where: { conversation: { productId: { in: productIds } } }
     });
     await prisma.conversation.deleteMany({
-      where: { productId: { in: createdProductIds } }
+      where: { productId: { in: productIds } }
     });
     await prisma.notification.deleteMany({
       where: { userId: { in: userIds } }
     });
+    /**
+     * Either side of the order, not just the buyer.
+     *
+     * `orders.seller_id` is ON DELETE RESTRICT, so an order somebody else
+     * placed against one of these fixture sellers pins that user in place —
+     * and the throw at `user.deleteMany` took the rest of the sweep with it,
+     * which is how a second run made the residue bigger rather than smaller.
+     * An order only exists because a fixture did, whoever pressed pay.
+     */
+    const orderScope = {
+      OR: [{ buyerId: { in: userIds } }, { sellerId: { in: userIds } }]
+    };
+
     await prisma.shipmentEvent.deleteMany({
-      where: { shipment: { order: { buyerId: { in: userIds } } } }
+      where: { shipment: { order: orderScope } }
     });
-    await prisma.shipment.deleteMany({
-      where: { order: { buyerId: { in: userIds } } }
-    });
-    await prisma.orderItem.deleteMany({
-      where: { order: { buyerId: { in: userIds } } }
-    });
-    await prisma.orderAddress.deleteMany({
-      where: { order: { buyerId: { in: userIds } } }
-    });
+    await prisma.shipment.deleteMany({ where: { order: orderScope } });
+    await prisma.orderItem.deleteMany({ where: { order: orderScope } });
+    await prisma.orderAddress.deleteMany({ where: { order: orderScope } });
     // A payment row is keyed by its checkout session, not by a user, so the
     // orders have to name theirs before they go.
     const orders = await prisma.order.findMany({
-      where: { buyerId: { in: userIds } },
+      where: orderScope,
       select: { paymentTransactionId: true }
     });
-    await prisma.order.deleteMany({ where: { buyerId: { in: userIds } } });
+    await prisma.order.deleteMany({ where: orderScope });
     await prisma.paymentTransaction.deleteMany({
       where: { id: { in: orders.map((order) => order.paymentTransactionId) } }
     });
     await prisma.cartItem.deleteMany({
-      where: { cart: { userId: { in: userIds } } }
+      where: {
+        // A fixture listing can be sitting in a real shopper's cart too.
+        OR: [
+          { cart: { userId: { in: userIds } } },
+          { productId: { in: productIds } }
+        ]
+      }
     });
     await prisma.cart.deleteMany({ where: { userId: { in: userIds } } });
-    await prisma.productImage.deleteMany({
-      where: { productId: { in: createdProductIds } }
+    await prisma.productWatchlist.deleteMany({
+      where: { productId: { in: productIds } }
     });
-    await prisma.product.deleteMany({ where: { sellerId: { in: userIds } } });
-    await prisma.category.delete({ where: { id: categoryId } });
+    await prisma.productImage.deleteMany({
+      where: { productId: { in: productIds } }
+    });
+    await prisma.product.deleteMany({ where: { id: { in: productIds } } });
+    await prisma.category.deleteMany({
+      where: { name: { startsWith: 'Hardening ' } }
+    });
     await prisma.userProfile.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 
