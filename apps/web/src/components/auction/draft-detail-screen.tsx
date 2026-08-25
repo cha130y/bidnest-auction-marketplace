@@ -7,6 +7,7 @@ import { AlertTriangle, Check } from "lucide-react"
 
 import { AuctionImage } from "@/components/auction/auction-image"
 import { DraftImageManager } from "@/components/auction/draft-image-manager"
+import { PriceSuggestionButton } from "@/components/auction/price-suggestion-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api/client"
@@ -16,6 +17,7 @@ import {
   cancelOwnAuction,
   getOwnDraft,
   publishDraft,
+  updateAuction,
   validateDraft,
 } from "@/lib/api/seller-auctions"
 import type { DraftValidation, OwnerAuction } from "@/lib/api/types"
@@ -163,6 +165,25 @@ export function DraftDetail({ auctionId }: { auctionId: string }) {
           <p className="mt-4 text-sm leading-6 whitespace-pre-line text-n-600">
             {draft.description}
           </p>
+
+          {/* AI-002 — needs at least one uploaded photo, same gate the API
+              enforces; hidden rather than shown-then-erroring since the image
+              count is already known here. */}
+          {draft.images.length > 0 && (
+            <div className="mt-4 border-t border-n-200 pt-4">
+              <PriceSuggestionButton
+                auctionId={draft.id}
+                onApply={(estimate) =>
+                  void run(async () => {
+                    await updateAuction(draft.id, {
+                      startingPrice: estimate.suggestedStartingPrice,
+                    })
+                    await load()
+                  })
+                }
+              />
+            </div>
+          )}
         </section>
 
         <section className="rounded-r4 bg-white p-6 shadow-sh1">

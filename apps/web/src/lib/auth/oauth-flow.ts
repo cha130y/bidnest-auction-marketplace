@@ -27,8 +27,24 @@ const PENDING_COOKIE = "bidnest_oauth_pending"
 /** Ties Line's callback to the browser that started it. */
 export const LINE_STATE_COOKIE = "bidnest_line_state"
 
+/**
+ * Where a token pair waits when Line's callback obtained one.
+ *
+ * Only Line needs this. Its leg is a redirect, so the route that receives the
+ * tokens can hand the page nothing but a URL — and putting a bearer token in a
+ * URL would spread it through history and every access log on the way. So it
+ * goes in an httpOnly cookie and the page claims it back through a route.
+ *
+ * Seconds, not minutes: the page claims it on mount, and a pair still sitting
+ * here a minute later means the browser never arrived.
+ */
+const READY_COOKIE = "bidnest_oauth_ready"
+
 /** Comfortably past the code's own lifetime, so this is never why a login fails. */
 const PENDING_MAX_AGE = 15 * 60
+
+/** Long enough for a redirect and a mount, short enough to be a non-event. */
+const READY_MAX_AGE = 60
 
 export type OAuthProvider = "google" | "line"
 
@@ -90,6 +106,43 @@ export async function readPending(): Promise<PendingOAuth | null> {
 
 export async function clearPending(): Promise<void> {
   ;(await cookies()).delete(PENDING_COOKIE)
+}
+
+export type ParkedTokens = { tokens: ApiTokens; callbackUrl?: string }
+
+/** Leaves an issued pair for the page that is about to be redirected to. */
+export async function parkTokens(parked: ParkedTokens): Promise<void> {
+  ;(await cookies()).set(READY_COOKIE, JSON.stringify(parked), {
+    ...cookieOptions(),
+    maxAge: READY_MAX_AGE
+  })
+}
+
+/**
+ * Takes the parked pair and spends the cookie.
+ *
+ * One shot: a pair that has been claimed must not be claimable again, and the
+ * page that claims it turns it into a session immediately. Route handlers only
+ * — a Server Component cannot delete a cookie during render.
+ */
+export async function claimTokens(): Promise<ParkedTokens | null> {
+  const jar = await cookies()
+  const raw = jar.get(READY_COOKIE)?.value
+  if (!raw) return null
+
+  jar.delete(READY_COOKIE)
+
+  try {
+    const parsed = JSON.parse(raw) as ParkedTokens
+    return parsed?.tokens?.accessToken ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/** Whether a pair is waiting, without spending it — for the page to decide what to render. */
+export async function hasParkedTokens(): Promise<boolean> {
+  return Boolean((await cookies()).get(READY_COOKIE)?.value)
 }
 
 /**

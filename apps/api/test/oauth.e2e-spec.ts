@@ -29,6 +29,8 @@ describe('OAuth sign-in (e2e)', () => {
 
   let googleProfile: OAuthProfile;
   let lineProfile: OAuthProfile;
+  /** Minted by the Google verify case, spent by the one after it. */
+  let googleDeviceToken: string;
 
   const readOtp = async (email: string): Promise<string> => {
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -120,15 +122,57 @@ describe('OAuth sign-in (e2e)', () => {
 
       const response = await request(server)
         .post('/auth/google/verify')
-        .send({ idToken: 'a-google-id-token-long-enough', otp })
+        // Remembering the browser rides along here rather than in a test of
+        // its own: the resend cooldown means only one fresh code exists per
+        // run, and a second verify would be reading a spent one.
+        .send({
+          idToken: 'a-google-id-token-long-enough',
+          otp,
+          rememberDevice: true,
+          deviceLabel: 'Chrome on Windows'
+        })
         .expect(200);
 
       const body = response.body as {
         accessToken: string;
         refreshToken: string;
+        deviceToken?: string;
       };
       expect(body.accessToken).toEqual(expect.any(String));
       expect(body.refreshToken).toEqual(expect.any(String));
+      expect(body.deviceToken).toEqual(expect.stringMatching(/^[0-9a-f]{64}$/));
+
+      googleDeviceToken = body.deviceToken!;
+    });
+
+    it('skips the code entirely on a browser it remembers', async () => {
+      // AUTH-007 — the provider proved who this is; the code is the second
+      // factor, and a browser that has answered one stands in for it. The
+      // callback answers with the pair rather than PENDING_2FA, which is what
+      // lets the screens skip the code screen.
+      const response = await request(server)
+        .post('/auth/google/callback')
+        .send({
+          idToken: 'a-google-id-token-long-enough',
+          deviceToken: googleDeviceToken
+        })
+        .expect(200);
+
+      const body = response.body as { accessToken?: string; status?: string };
+      expect(body.accessToken).toEqual(expect.any(String));
+      expect(body.status).toBeUndefined();
+    });
+
+    it('still asks for the code when the device is not known', async () => {
+      const response = await request(server)
+        .post('/auth/google/callback')
+        .send({
+          idToken: 'a-google-id-token-long-enough',
+          deviceToken: 'f'.repeat(64)
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({ status: 'PENDING_2FA' });
     });
 
     it('refuses a wrong code', async () => {

@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/auth/password-input"
 import { Label } from "@/components/ui/label"
 import { register as createAccount } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
@@ -29,6 +30,7 @@ export function RegisterForm() {
     defaultValues: {
       email: "",
       password: "",
+      confirm: "",
       firstName: "",
       lastName: "",
       displayName: ""
@@ -38,8 +40,14 @@ export function RegisterForm() {
   async function submit(values: RegisterValues) {
     setFailure(null)
     try {
+      // `confirm` is a question this form asks itself. The API has no field
+      // for it, and its ValidationPipe runs with whitelist on, so sending one
+      // would be rejected rather than ignored.
       await createAccount({
-        ...values,
+        email: values.email,
+        password: values.password,
+        firstName: values.firstName,
+        displayName: values.displayName,
         // The column is nullable; an empty box should leave it that way.
         lastName: values.lastName?.trim() || undefined
       })
@@ -79,9 +87,8 @@ export function RegisterForm() {
 
       <div className="space-y-2">
         <Label htmlFor="password">รหัสผ่าน</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="new-password"
           {...form.register("password")}
         />
@@ -91,6 +98,18 @@ export function RegisterForm() {
           <p className="text-xs text-muted-foreground">
             อย่างน้อย 8 ตัวอักษร มีทั้งตัวอักษรและตัวเลข
           </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirm">ยืนยันรหัสผ่าน</Label>
+        <PasswordInput
+          id="confirm"
+          autoComplete="new-password"
+          {...form.register("confirm")}
+        />
+        {errors.confirm && (
+          <p className="text-sm text-destructive">{errors.confirm.message}</p>
         )}
       </div>
 
