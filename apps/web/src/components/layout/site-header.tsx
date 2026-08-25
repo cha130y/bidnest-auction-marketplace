@@ -107,7 +107,7 @@ function SiteHeader({
               around that so the pages using this header can still prerender.
               The fallback holds the same space the control will take.
             */}
-            <Suspense fallback={<div className="h-11 w-11 md:w-28" />}>
+            <Suspense fallback={<div className="h-11 w-11 lg:w-28" />}>
               {account}
             </Suspense>
 
