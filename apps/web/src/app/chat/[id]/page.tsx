@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { ConversationThread } from "@/components/chat/conversation-thread"
 import { SiteFooter } from "@/components/layout/site-footer"
-import { SiteHeader } from "@/components/layout/site-header"
+import { AppHeader } from "@/components/layout/app-header"
 
 export const metadata: Metadata = {
   title: "บทสนทนา · BidNest",
@@ -21,7 +21,7 @@ export default async function ConversationPage({
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader />
+      <AppHeader />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-250 px-4 py-8 md:px-6">

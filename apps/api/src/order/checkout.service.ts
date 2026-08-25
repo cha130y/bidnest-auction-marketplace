@@ -32,7 +32,7 @@ export class CheckoutService {
   ) {}
 
   async checkout(buyerId: string, dto: CheckoutDto) {
-    const lines = await this.priceCart(buyerId);
+    const lines = await this.priceCart(buyerId, dto.cartItemIds);
     const grandTotal = lines.reduce(
       (sum, line) => sum.plus(line.subtotal),
       new Prisma.Decimal(0)
@@ -166,9 +166,21 @@ export class CheckoutService {
    * Reads the cart and prices every line against the seller's current price.
    * Nothing here is trusted from the client.
    */
-  private async priceCart(buyerId: string): Promise<PricedLine[]> {
+  private async priceCart(
+    buyerId: string,
+    cartItemIds?: string[]
+  ): Promise<PricedLine[]> {
+    // The buyer's own cart is always part of the filter, so an id belonging to
+    // somebody else's cart matches nothing here rather than being fetched and
+    // then rejected — there is no version of this that reads another person's
+    // line, not even to refuse it.
+    const selected = cartItemIds ? [...new Set(cartItemIds)] : undefined;
+
     const items = await this.prisma.cartItem.findMany({
-      where: { cart: { userId: buyerId } },
+      where: {
+        cart: { userId: buyerId },
+        ...(selected ? { id: { in: selected } } : {})
+      },
       include: {
         product: {
           select: {
@@ -187,7 +199,20 @@ export class CheckoutService {
     });
 
     if (items.length === 0) {
-      throw new BadRequestException('Cart is empty');
+      throw new BadRequestException(
+        selected ? 'No selected item is in your cart' : 'Cart is empty'
+      );
+    }
+
+    // A line that was removed, or bought in another tab, between selecting and
+    // paying. Charging for what is left would be charging for something other
+    // than what the buyer confirmed, so this refuses instead and the screen
+    // re-reads the cart.
+    if (selected && items.length !== selected.length) {
+      const found = new Set(items.map((item) => item.id));
+      throw new BadRequestException(
+        `${selected.filter((id) => !found.has(id)).length} selected item(s) are no longer in your cart`
+      );
     }
 
     return items.map(({ id: cartItemId, product, quantity }) => {

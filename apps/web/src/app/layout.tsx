@@ -36,6 +36,11 @@ export default function RootLayout({
     <html
       lang="th"
       className={`${poppins.variable} ${jakarta.variable} ${notoSansThai.variable} h-full antialiased`}
+      // Grammar-checker extensions (LanguageTool and friends) stamp their own
+      // attributes onto <html> before React hydrates, which reads as a mismatch
+      // no one can fix from here. This only reaches one level deep, so every
+      // child is still checked normally.
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
         <Providers>

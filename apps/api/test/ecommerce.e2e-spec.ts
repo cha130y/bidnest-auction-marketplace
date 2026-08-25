@@ -99,11 +99,29 @@ describe('E-commerce (e2e)', () => {
       .set('Authorization', authOf(userId))
       .send({ productId, quantity });
 
-  const checkout = (userId: string, paymentMethod = 'CARD') =>
+  const checkout = (
+    userId: string,
+    paymentMethod = 'CARD',
+    cartItemIds?: string[]
+  ) =>
     request(app.getHttpServer())
       .post('/orders/checkout')
       .set('Authorization', authOf(userId))
-      .send({ paymentMethod, shippingAddress: address });
+      .send({
+        paymentMethod,
+        shippingAddress: address,
+        ...(cartItemIds ? { cartItemIds } : {})
+      });
+
+  const cartOf = async (userId: string) => {
+    const response = await request(app.getHttpServer())
+      .get('/cart')
+      .set('Authorization', authOf(userId));
+    return response.body as {
+      items: { id: string; product: { id: string }; subtotal: string }[];
+      summary: { total: string };
+    };
+  };
 
   const emptyCart = async (userId: string) => {
     const cart = await request(app.getHttpServer())
@@ -630,6 +648,84 @@ describe('E-commerce (e2e)', () => {
         .expect(404);
 
       await request(app.getHttpServer()).get(`/orders/${orderId}`).expect(401);
+    });
+  });
+
+  describe('CART-003 — paying for part of the cart', () => {
+    let wantedId: string;
+    let leftBehindId: string;
+
+    beforeAll(async () => {
+      await emptyCart(buyerId);
+      const wanted = await createProduct(sellerAId, {
+        price: 700,
+        stockQty: 5
+      });
+      const leftBehind = await createProduct(sellerBId, {
+        price: 900,
+        stockQty: 5
+      });
+
+      await addToCart(buyerId, wanted, 2).expect(201);
+      await addToCart(buyerId, leftBehind, 1).expect(201);
+
+      const cart = await cartOf(buyerId);
+      wantedId = cart.items.find((item) => item.product.id === wanted)!.id;
+      leftBehindId = cart.items.find(
+        (item) => item.product.id === leftBehind
+      )!.id;
+    });
+
+    it('charges for the selected lines only', async () => {
+      const response = await checkout(buyerId, 'CARD', [wantedId]).expect(201);
+      const body = response.body as {
+        total: string;
+        orders: { id: string }[];
+      };
+
+      // 2 x 700, and none of the 900 line that was not selected
+      expect(body.total).toBe('1400.00');
+      expect(body.orders).toHaveLength(1);
+    });
+
+    it('leaves the unselected line in the cart', async () => {
+      const cart = await cartOf(buyerId);
+
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].id).toBe(leftBehindId);
+    });
+
+    it('refuses a line that is no longer in the cart', async () => {
+      // `wantedId` was cleared by the checkout above, so this is exactly the
+      // stale selection a second tab would send.
+      await checkout(buyerId, 'CARD', [leftBehindId, wantedId]).expect(400);
+
+      // and nothing was taken while refusing
+      const cart = await cartOf(buyerId);
+      expect(cart.items).toHaveLength(1);
+    });
+
+    it("refuses another buyer's cart line", async () => {
+      await emptyCart(strangerId);
+      const theirs = await createProduct(sellerAId, {
+        price: 100,
+        stockQty: 5
+      });
+      await addToCart(strangerId, theirs, 1).expect(201);
+      const strangerCart = await cartOf(strangerId);
+
+      await checkout(buyerId, 'CARD', [strangerCart.items[0].id]).expect(400);
+
+      // theirs is untouched: refusing must not reach into another cart
+      const after = await cartOf(strangerId);
+      expect(after.items).toHaveLength(1);
+    });
+
+    it('still pays for everything when no selection is sent', async () => {
+      const response = await checkout(buyerId).expect(201);
+
+      expect((response.body as { total: string }).total).toBe('900.00');
+      expect((await cartOf(buyerId)).items).toHaveLength(0);
     });
   });
 

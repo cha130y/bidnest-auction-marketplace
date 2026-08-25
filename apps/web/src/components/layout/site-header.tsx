@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button"
 import { AccountMenu } from "@/components/auth/account-menu"
 import { GavelNav, GavelNavMobile } from "@/components/layout/gavel-nav"
 
+/** Shared by the cart and watchlist badges so the two cannot drift apart. */
+const BADGE_CLASS =
+  "absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-[7px] border-2 border-white bg-linear-to-b from-amber-400 to-amber-500 px-1 text-[11px] font-extrabold text-ink shadow-sh1"
+
 export type SiteHeaderProps = {
   cartCount?: number
+  watchlistCount?: number
   hasNotifications?: boolean
   onMenuToggle?: () => void
   /**
@@ -30,6 +35,7 @@ export type SiteHeaderProps = {
  */
 function SiteHeader({
   cartCount = 0,
+  watchlistCount = 0,
   hasNotifications = false,
   onMenuToggle,
   account = <AccountMenu />,
@@ -73,11 +79,16 @@ function SiteHeader({
               variant="ghost"
               size="icon"
               aria-label="Watchlist"
-              className="text-ink"
+              className="relative text-ink"
               nativeButton={false}
               render={<Link href="/watchlist" />}
             >
               <Heart className="size-6" />
+              {watchlistCount > 0 && (
+                <span className={BADGE_CLASS}>
+                  {watchlistCount > 9 ? "9+" : watchlistCount}
+                </span>
+              )}
             </Button>
 
             <Button
@@ -104,7 +115,7 @@ function SiteHeader({
             >
               <ShoppingCart className="size-6" />
               {cartCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-[7px] border-2 border-white bg-linear-to-b from-amber-400 to-amber-500 px-1 text-[11px] font-extrabold text-ink shadow-sh1">
+                <span className={BADGE_CLASS}>
                   {cartCount > 9 ? "9+" : cartCount}
                 </span>
               )}
