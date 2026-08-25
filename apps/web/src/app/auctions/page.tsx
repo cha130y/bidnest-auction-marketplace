@@ -4,7 +4,7 @@ import { AuctionCard } from "@/components/auction/auction-card"
 import { AuctionPagination } from "@/components/auction/auction-pagination"
 import { AuctionSectionTabs } from "@/components/auction/auction-section-tabs"
 import { SiteFooter } from "@/components/layout/site-footer"
-import { SiteHeader } from "@/components/layout/site-header"
+import { AppHeader } from "@/components/layout/app-header"
 import { listAuctions } from "@/lib/api/auctions"
 import { ApiError } from "@/lib/api/client"
 import {
@@ -60,7 +60,7 @@ export default async function AuctionsPage({
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader />
+      <AppHeader />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-330 px-4 pb-16 md:px-6">

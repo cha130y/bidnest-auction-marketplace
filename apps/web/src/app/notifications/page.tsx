@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { NotificationList } from "@/components/notification/notification-list"
 import { SiteFooter } from "@/components/layout/site-footer"
-import { SiteHeader } from "@/components/layout/site-header"
+import { AppHeader } from "@/components/layout/app-header"
 
 export const metadata: Metadata = {
   title: "การแจ้งเตือน · BidNest",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 export default function NotificationsPage() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader />
+      <AppHeader />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-250 px-4 pb-16 md:px-6">

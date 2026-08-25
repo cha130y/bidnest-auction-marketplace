@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { AlertTriangle, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
@@ -7,9 +8,11 @@ import { AlertTriangle, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
 import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { removeCartItem, updateCartItem } from "@/lib/api/cart"
 import { ApiError } from "@/lib/api/client"
+import { checkoutHref, totalsOf } from "@/lib/cart-selection"
 import { formatPercent, formatTHB } from "@/lib/format"
 import type { Cart, CartItem } from "@/lib/api/types"
 
@@ -65,15 +68,72 @@ export function CartView() {
     )
   }
 
+  return <CartBody cart={cart} />
+}
+
+function CartBody({ cart }: { cart: Cart }) {
+  /**
+   * What the buyer has *un*ticked, rather than what they have ticked.
+   *
+   * Everything starts selected — they came here to pay for their cart, and
+   * making them select it first would add a step for the sake of the times
+   * they want less. Holding the negative is what keeps that true as the cart
+   * changes: a line added in another tab is selected because it is absent from
+   * this set, with nothing to remember to do about it.
+   */
+  const [unselected, setUnselected] = useState<Set<string>>(() => new Set())
+
+  // Ids of lines that are gone — removed here or in another tab — are filtered
+  // out as the selection is read rather than pruned by an effect. An effect
+  // would mean a second render to correct the first, and the stale id in state
+  // harms nothing once nothing reads it. Without this, one unticked line that
+  // was then deleted would keep "select all" half-ticked over a cart that is
+  // entirely ticked.
+  const selected = new Set(
+    cart.items.map((item) => item.id).filter((id) => !unselected.has(id))
+  )
+
+  const toggle = (id: string, checked: boolean) =>
+    setUnselected((current) => {
+      const next = new Set(current)
+      if (checked) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const allSelected = selected.size === cart.items.length
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
-      <ul className="space-y-4">
-        {cart.items.map((item) => (
-          <CartLine key={item.id} item={item} />
-        ))}
-      </ul>
+      <div className="space-y-4">
+        <label className="flex cursor-pointer items-center gap-3 rounded-r4 bg-white px-4 py-3 shadow-sh1">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={selected.size > 0 && !allSelected}
+            onCheckedChange={(checked) =>
+              setUnselected(
+                checked ? new Set() : new Set(cart.items.map((item) => item.id))
+              )
+            }
+          />
+          <span className="text-sm font-semibold text-ink">
+            เลือกทั้งหมด ({cart.items.length} รายการ)
+          </span>
+        </label>
 
-      <CartSummary cart={cart} />
+        <ul className="space-y-4">
+          {cart.items.map((item) => (
+            <CartLine
+              key={item.id}
+              item={item}
+              selected={selected.has(item.id)}
+              onSelectedChange={(checked) => toggle(item.id, checked)}
+            />
+          ))}
+        </ul>
+      </div>
+
+      <CartSummary cart={cart} selected={selected} />
     </div>
   )
 }
@@ -109,7 +169,15 @@ function issueText(item: CartItem): string | null {
   }
 }
 
-function CartLine({ item }: { item: CartItem }) {
+function CartLine({
+  item,
+  selected,
+  onSelectedChange,
+}: {
+  item: CartItem
+  selected: boolean
+  onSelectedChange: (checked: boolean) => void
+}) {
   const queryClient = useQueryClient()
 
   // Both routes answer with the whole cart, so the result is written straight
@@ -140,6 +208,13 @@ function CartLine({ item }: { item: CartItem }) {
   return (
     <li className="rounded-r4 bg-white p-4 shadow-sh1">
       <div className="flex gap-4">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelectedChange}
+          className="mt-1 shrink-0"
+          aria-label={`เลือก ${item.product.title} มาชำระเงิน`}
+        />
+
         <Link href={`/shop/${item.product.id}`} className="shrink-0">
           <ProductImage
             src={item.product.imageUrl}
@@ -241,8 +316,21 @@ function CartLine({ item }: { item: CartItem }) {
   )
 }
 
-function CartSummary({ cart }: { cart: Cart }) {
-  const blockingItems = cart.items.filter((item) => item.issue !== null).length
+function CartSummary({
+  cart,
+  selected,
+}: {
+  cart: Cart
+  selected: Set<string>
+}) {
+  const chosen = cart.items.filter((item) => selected.has(item.id))
+  const totals = totalsOf(chosen)
+
+  // Only what is being paid for can block the payment. A broken line the buyer
+  // has unticked is not in this checkout and holds nothing up — which is now
+  // the quickest way past one, and better than the old advice to delete it.
+  const blockingItems = chosen.filter((item) => item.issue !== null).length
+  const nothingChosen = chosen.length === 0
 
   return (
     <aside className="rounded-r4 bg-white p-6 shadow-sh1 lg:sticky lg:top-6">
@@ -251,13 +339,23 @@ function CartSummary({ cart }: { cart: Cart }) {
       <dl className="mt-4 space-y-2 text-sm">
         <div className="flex justify-between">
           <dt className="text-n-600">จำนวนสินค้า</dt>
-          <dd className="font-semibold text-ink">{cart.summary.itemCount} ชิ้น</dd>
+          <dd className="font-semibold text-ink">{totals.itemCount} ชิ้น</dd>
         </div>
-        {Number(cart.summary.discountTotal) > 0 && (
+        {Number(totals.discountTotal) > 0 && (
           <div className="flex justify-between">
             <dt className="text-n-600">ส่วนลด</dt>
             <dd className="font-semibold text-green">
-              −{formatTHB(cart.summary.discountTotal)}
+              −{formatTHB(totals.discountTotal)}
+            </dd>
+          </div>
+        )}
+        {/* Said plainly rather than left to be inferred from a total that
+            dropped: the cart still holds things this payment will not cover. */}
+        {chosen.length < cart.items.length && (
+          <div className="flex justify-between">
+            <dt className="text-n-600">ไม่ได้เลือก</dt>
+            <dd className="font-semibold text-n-500">
+              {cart.items.length - chosen.length} รายการ
             </dd>
           </div>
         )}
@@ -266,31 +364,33 @@ function CartSummary({ cart }: { cart: Cart }) {
       <div className="mt-4 flex items-baseline justify-between border-t border-n-200 pt-4">
         <span className="font-semibold text-ink">ยอดรวม</span>
         <span className="font-display text-2xl font-extrabold text-ink">
-          {formatTHB(cart.summary.total)}
+          {formatTHB(totals.total)}
         </span>
       </div>
 
       {/* CART-003 — said before checkout rather than discovered after it: the
-          server splits one payment into an order per seller. */}
-      {cart.sellerCount > 1 && (
+          server splits one payment into an order per seller. Counted over the
+          selection, since that is what will be split. */}
+      {totals.sellerCount > 1 && (
         <p className="mt-3 rounded-r3 bg-n-100 px-3 py-2 text-xs text-n-600">
-          ตะกร้านี้มีสินค้าจาก {cart.sellerCount} ร้าน
-          เมื่อชำระเงินจะถูกแยกเป็น {cart.sellerCount} คำสั่งซื้อ
+          รายการที่เลือกมีสินค้าจาก {totals.sellerCount} ร้าน
+          เมื่อชำระเงินจะถูกแยกเป็น {totals.sellerCount} คำสั่งซื้อ
           และจัดส่งแยกกัน
         </p>
       )}
 
       {blockingItems > 0 && (
         <p className="mt-3 rounded-r3 bg-red-50 px-3 py-2 text-xs font-medium text-red">
-          มี {blockingItems} รายการที่สั่งซื้อไม่ได้ — แก้จำนวนหรือเอาออกก่อน
+          มี {blockingItems} รายการที่เลือกไว้สั่งซื้อไม่ได้ —
+          แก้จำนวน เอาออก หรือติ๊กออกก่อน
         </p>
       )}
 
-      {/* Still refused while a line has a problem — checkout would be rejected
-          whole, and this is the only screen that can fix it. */}
-      {blockingItems > 0 ? (
+      {/* Still refused while a selected line has a problem — checkout would be
+          rejected whole, and this is the only screen that can fix it. */}
+      {nothingChosen || blockingItems > 0 ? (
         <Button variant="primary" size="lg" block className="mt-5" disabled>
-          ดำเนินการชำระเงิน
+          {nothingChosen ? "ยังไม่ได้เลือกรายการ" : "ดำเนินการชำระเงิน"}
         </Button>
       ) : (
         <Button
@@ -299,7 +399,7 @@ function CartSummary({ cart }: { cart: Cart }) {
           block
           className="mt-5"
           nativeButton={false}
-          render={<Link href="/checkout" />}
+          render={<Link href={checkoutHref(cart, selected)} />}
         >
           ดำเนินการชำระเงิน
         </Button>

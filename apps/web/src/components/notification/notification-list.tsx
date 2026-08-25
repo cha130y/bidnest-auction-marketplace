@@ -3,9 +3,11 @@
 import { useCallback, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import { Gavel, Package, MessageSquare, Trophy, XCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { unreadNotificationsQueryKey } from "@/components/layout/shop-header"
 import { ApiError } from "@/lib/api/client"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
@@ -52,6 +54,7 @@ function destination(notification: AppNotification): string | null {
 
 export function NotificationList() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { token, ready } = useAuthToken()
   const [page, setPage] = useState<NotificationPage | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -64,7 +67,14 @@ export function NotificationList() {
         setError(null)
       })
       .catch((caught: unknown) => setError(caught))
-  }, [])
+
+    // The header's dot is a React Query read of `/notifications/unread-count`,
+    // and this list is not. Marking rows read here would otherwise leave the
+    // dot lit above the very page that just cleared them — every path that
+    // changes what is unread comes through here, so this is the one place it
+    // has to be said.
+    void queryClient.invalidateQueries({ queryKey: unreadNotificationsQueryKey })
+  }, [queryClient])
 
   // Reads on connect and on every event, so an outbid notification appears
   // while the page is open rather than on the next reload.

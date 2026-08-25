@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   AlertTriangle,
@@ -18,9 +19,15 @@ import { Label } from "@/components/ui/label"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { ApiError } from "@/lib/api/client"
 import { checkout } from "@/lib/api/orders"
+import {
+  SELECTION_PARAM,
+  parseSelection,
+  selectedItems,
+  totalsOf,
+} from "@/lib/cart-selection"
 import { formatTHB } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { CheckoutResult, PaymentMethod } from "@/lib/api/types"
+import type { CartItem, CheckoutResult, PaymentMethod } from "@/lib/api/types"
 
 /**
  * How long the "processing" screen stays up at minimum.
@@ -64,6 +71,9 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string; hint: string }[] =
 export function CheckoutView() {
   const { cart, isLoading, isAuthenticated, isAuthReady } = useCart()
   const [result, setResult] = useState<CheckoutResult | null>(null)
+  // CART-003 — which lines the buyer ticked in the cart. Absent means all of
+  // them, which is what every link into this page meant before selection.
+  const selection = parseSelection(useSearchParams().get(SELECTION_PARAM))
 
   // The receipt outlives the cart it came from — checkout empties the cart, so
   // this has to be checked before the "cart is empty" branch below or a
@@ -99,7 +109,26 @@ export function CheckoutView() {
     )
   }
 
-  const blocking = cart.items.filter((item) => item.issue !== null)
+  const paying = selectedItems(cart, selection)
+
+  // The selection outlived the lines it named — removed in another tab, or
+  // already bought. The cart is not empty, so the message above would be a lie;
+  // this sends them back to choose again rather than quietly charging for
+  // whatever survived.
+  if (paying.length === 0) {
+    return (
+      <Notice title="รายการที่เลือกไว้ไม่อยู่ในตะกร้าแล้ว">
+        <p className="mb-6 text-base text-n-600">
+          อาจถูกเอาออกหรือสั่งซื้อไปแล้วจากอีกแท็บหนึ่ง — เลือกใหม่อีกครั้ง
+        </p>
+        <Button variant="primary" size="lg" nativeButton={false} render={<Link href="/cart" />}>
+          กลับไปที่ตะกร้า
+        </Button>
+      </Notice>
+    )
+  }
+
+  const blocking = paying.filter((item) => item.issue !== null)
 
   // The API refuses the whole checkout over one bad line, so this sends them
   // back to the only screen that can fix it rather than letting them fill in
@@ -117,7 +146,7 @@ export function CheckoutView() {
     )
   }
 
-  return <CheckoutForm onDone={setResult} />
+  return <CheckoutForm items={paying} onDone={setResult} />
 }
 
 function Notice({
@@ -135,10 +164,19 @@ function Notice({
   )
 }
 
-function CheckoutForm({ onDone }: { onDone: (result: CheckoutResult) => void }) {
+function CheckoutForm({
+  items,
+  onDone,
+}: {
+  /** CART-003 — the lines this payment covers, already narrowed to the pick. */
+  items: CartItem[]
+  onDone: (result: CheckoutResult) => void
+}) {
   const { cart } = useCart()
   const queryClient = useQueryClient()
   const [method, setMethod] = useState<PaymentMethod>("CARD")
+  const totals = totalsOf(items)
+  const isPartial = (cart?.items.length ?? 0) > items.length
 
   const [showFailure, setShowFailure] = useState(false)
 
@@ -159,6 +197,10 @@ function CheckoutForm({ onDone }: { onDone: (result: CheckoutResult) => void }) 
             postalCode: String(form.get("postalCode") ?? "").trim(),
             phone: String(form.get("phone") ?? "").trim(),
           },
+          // Sent only when it means something. Omitting it on a whole-cart
+          // checkout keeps that request identical to what it always was, and
+          // leaves nothing to go stale between here and the server.
+          ...(isPartial ? { cartItemIds: items.map((item) => item.id) } : {}),
         }),
         wait(MIN_PROCESSING_MS),
       ])
@@ -271,15 +313,13 @@ function CheckoutForm({ onDone }: { onDone: (result: CheckoutResult) => void }) 
         <dl className="mt-4 space-y-2 text-sm">
           <div className="flex justify-between">
             <dt className="text-n-600">จำนวนสินค้า</dt>
-            <dd className="font-semibold text-ink">
-              {cart?.summary.itemCount ?? 0} ชิ้น
-            </dd>
+            <dd className="font-semibold text-ink">{totals.itemCount} ชิ้น</dd>
           </div>
-          {Number(cart?.summary.discountTotal ?? 0) > 0 && (
+          {Number(totals.discountTotal) > 0 && (
             <div className="flex justify-between">
               <dt className="text-n-600">ส่วนลด</dt>
               <dd className="font-semibold text-green">
-                −{formatTHB(cart!.summary.discountTotal)}
+                −{formatTHB(totals.discountTotal)}
               </dd>
             </div>
           )}
@@ -288,15 +328,25 @@ function CheckoutForm({ onDone }: { onDone: (result: CheckoutResult) => void }) 
         <div className="mt-4 flex items-baseline justify-between border-t border-n-200 pt-4">
           <span className="font-semibold text-ink">ยอดที่ต้องชำระ</span>
           <span className="font-display text-2xl font-extrabold text-ink">
-            {formatTHB(cart?.summary.total ?? "0")}
+            {formatTHB(totals.total)}
           </span>
         </div>
 
-        {/* CART-003 — the split is decided by the cart, not by this form */}
-        {(cart?.sellerCount ?? 0) > 1 && (
+        {/* CART-003 — the split is decided by what is being paid for, not by
+            this form */}
+        {totals.sellerCount > 1 && (
           <p className="mt-3 rounded-r3 bg-n-100 px-3 py-2 text-xs text-n-600">
-            จ่ายครั้งเดียว แล้วระบบจะแยกเป็น {cart!.sellerCount} คำสั่งซื้อ
+            จ่ายครั้งเดียว แล้วระบบจะแยกเป็น {totals.sellerCount} คำสั่งซื้อ
             ตามร้าน
+          </p>
+        )}
+
+        {/* The buyer chose this on the previous screen, but the address form
+            is long enough that it is worth repeating what is not in it. */}
+        {isPartial && (
+          <p className="mt-3 rounded-r3 bg-amber-50 px-3 py-2 text-xs text-ink">
+            ชำระเฉพาะ {items.length} รายการที่เลือกไว้ — อีก{" "}
+            {(cart?.items.length ?? 0) - items.length} รายการจะยังอยู่ในตะกร้า
           </p>
         )}
 

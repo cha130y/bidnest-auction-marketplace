@@ -1,10 +1,13 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsEnum,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   ValidateNested
 } from 'class-validator';
@@ -56,4 +59,19 @@ export class CheckoutDto {
   @ValidateNested()
   @Type(() => ShippingAddressDto)
   shippingAddress: ShippingAddressDto;
+
+  /**
+   * CART-003 — which cart lines this payment is for. Omitting it pays for the
+   * whole cart, which is what every existing caller does and what the route
+   * did before selection existed.
+   *
+   * Cart line ids rather than product ids: the same product can only appear
+   * once in a cart, but the line is what carries the quantity and the price
+   * that was quoted, and it is the line that gets cleared afterwards.
+   */
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  cartItemIds?: string[];
 }
