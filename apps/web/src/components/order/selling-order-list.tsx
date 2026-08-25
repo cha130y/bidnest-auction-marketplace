@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import Link from "next/link"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Package } from "lucide-react"
 
 import {
@@ -12,8 +12,10 @@ import {
 import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
 import { PageNav } from "@/components/ui/page-nav"
+import { useAuthToken } from "@/lib/api/auth/use-auth-token"
 import { listSellingOrders } from "@/lib/api/orders"
 import { formatDateTime, formatTHB } from "@/lib/format"
+import { useUserChannel } from "@/lib/use-user-channel"
 import { cn } from "@/lib/utils"
 import type { Order, ShipmentStatus } from "@/lib/api/types"
 
@@ -49,9 +51,32 @@ const GROUPS: { key: string; label: string; statuses?: ShipmentStatus[] }[] = [
  * seller opens.
  */
 export function SellingOrderList() {
+  const { token, ready } = useAuthToken()
+  const queryClient = useQueryClient()
   const [group, setGroup] = useState("all")
   const [page, setPage] = useState(1)
   const statuses = GROUPS.find((entry) => entry.key === group)?.statuses
+
+  /**
+   * NOT-005 — a sale arriving while this page is open puts it on the page.
+   *
+   * `createOrderPlacedNotifications` writes a row for the seller as well as
+   * the buyer, and every row is emitted to its own owner, so the seller's
+   * socket already carried this event — nothing was listening for it, and a
+   * shop sitting on its order list found out by refreshing.
+   *
+   * The whole key rather than the current page: the new order is the newest,
+   * so it belongs at the top of page one under whichever group it lands in,
+   * and none of those are this component's to guess at.
+   *
+   * Wrapped because `useUserChannel` holds it in an effect dependency — an
+   * inline function would rebuild the socket on every render.
+   */
+  const reread = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: sellingOrdersQueryKey })
+  }, [queryClient])
+
+  useUserChannel(ready ? token : null, reread)
 
   const { data, isLoading } = useQuery({
     queryKey: [...sellingOrdersQueryKey, group, page],
