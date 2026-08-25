@@ -1,18 +1,6 @@
 import Link from "next/link"
 import { Suspense, type ReactNode } from "react"
-import {
-  Bell,
-  Camera,
-  Gamepad2,
-  Headphones,
-  Menu,
-  MessageSquare,
-  Monitor,
-  ShoppingCart,
-  Smartphone,
-  Watch,
-} from "lucide-react"
-import { Bell, Heart, Menu, ShoppingCart } from "lucide-react"
+import { Bell, Heart, Menu, MessageSquare, ShoppingCart } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -79,6 +67,11 @@ function SiteHeader({
               render={<Link href="/chat" />}
             >
               <MessageSquare className="size-6" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label="Watchlist"
               className="text-ink"
               nativeButton={false}
