@@ -99,10 +99,10 @@ export function ConversationList() {
               className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-n-100"
             >
               <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-r3 bg-n-100">
-                {conversation.product.imageUrl ? (
+                {conversation.listing.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- thumbnail from arbitrary uploaded-image hosts, next/image would need remotePatterns for each
                   <img
-                    src={conversation.product.imageUrl}
+                    src={conversation.listing.imageUrl}
                     alt=""
                     className="size-full object-cover"
                   />
@@ -129,7 +129,12 @@ export function ConversationList() {
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-n-500">
-                  {conversation.product.title}
+                  {conversation.listing.kind === "AUCTION" && (
+                    <span className="mr-1 rounded-r1 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
+                      ประมูล
+                    </span>
+                  )}
+                  {conversation.listing.title}
                 </p>
                 <p
                   className={cn(

@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { CartProvider } from "@/components/cart/cart-provider"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { SiteHeader } from "@/components/layout/site-header"
 import { WatchlistView } from "@/components/auction/watchlist-view"
@@ -55,7 +56,14 @@ export default function WatchlistPage() {
             </TabsContent>
 
             <TabsContent value="products">
-              <ProductWatchlistView />
+              {/* `ProductCard`'s add-to-cart button reads `useCart()`, which
+                  only the `(shop)` route group's layout provides. This page
+                  lives outside that group — it is shared with the auction
+                  module — so the listings tab brings its own, exactly as the
+                  home page's picks section does. The auctions tab needs none. */}
+              <CartProvider>
+                <ProductWatchlistView />
+              </CartProvider>
             </TabsContent>
           </Tabs>
         </div>

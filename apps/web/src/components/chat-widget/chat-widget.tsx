@@ -1,131 +1,104 @@
 'use client';
 
-import MessageList from '@/components/chat-widget/message-list';
-import {
-  ChatMessage,
-  sendSupportChatMessage,
-  SupportChatError,
-} from '@/lib/api/support-chat';
-import { useMutation } from '@tanstack/react-query';
-import { KeyboardEvent, useState } from 'react';
+import { useState } from 'react';
+import { MessageCircle, Sparkles, X } from 'lucide-react';
 
+import { ConversationPreview } from '@/components/chat-widget/conversation-preview';
+import { SupportChatPanel } from '@/components/chat-widget/support-chat-panel';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+type Mode = 'AI' | 'CHAT';
+
+/**
+ * AI-001 / CHAT-004 — one floating widget, two modes picked by a small tab
+ * bar: the AI assistant (works signed out) and a preview of buyer-seller
+ * threads (CHAT-004, full page at /chat). Same corner both ways, so a
+ * visitor only ever has one thing to notice in that corner of the screen.
+ */
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [sessionId, setSessionId] = useState<string>();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [lastFailedText, setLastFailedText] = useState<string | null>(null);
-  const [escalated, setEscalated] = useState(false);
-
-  const mutation = useMutation({
-    mutationFn: (text: string) => sendSupportChatMessage(text, sessionId),
-    onMutate: (text: string) => {
-      setLastFailedText(null);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `temp-${Date.now()}`,
-          sessionId: sessionId ?? '',
-          role: 'USER',
-          body: text,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-    },
-    onSuccess: (data) => {
-      setSessionId(data.sessionId);
-      setMessages((prev) => [...prev, data.reply]);
-      setEscalated(data.escalated);
-    },
-    onError: (_error, text) => {
-      setLastFailedText(text);
-    },
-  });
-
-  const errorMessage =
-    mutation.error instanceof SupportChatError
-      ? mutation.error.message
-      : 'ส่งข้อความไม่สำเร็จ';
-
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput('');
-    mutation.mutate(text);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      handleSend();
-    }
-    if (event.key === 'Escape') {
-      setIsOpen(false);
-    }
-  };
+  const [mode, setMode] = useState<Mode>('AI');
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed right-6 bottom-6 z-50">
       {isOpen && (
         <div
           role="dialog"
-          aria-label="แชทกับผู้ช่วย BidNest"
-          className="mb-3 flex w-80 flex-col rounded-2xl border bg-white shadow-xl"
+          aria-label="แชท BidNest"
+          className="mb-3 flex w-80 flex-col overflow-hidden rounded-r4 border border-n-200 bg-white shadow-sh2"
         >
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <span className="font-medium">ผู้ช่วย BidNest</span>
-            <button aria-label="ปิดแชท" onClick={() => setIsOpen(false)}>
-              ✕
-            </button>
-          </div>
-
-          <MessageList messages={messages} isPending={mutation.isPending} />
-
-          {escalated && (
-            <div className="px-4 pb-2 text-sm text-amber-700">
-              ดูเหมือนคำถามนี้ยากเกินไปสำหรับผู้ช่วย AI —
-              แนะนำให้ติดต่อแอดมินโดยตรง
-            </div>
-          )}
-
-          {mutation.isError && lastFailedText && (
-            <div className="px-4 pb-2 text-sm text-red-600">
-              {errorMessage}{' '}
-              <button
-                className="underline"
-                onClick={() => mutation.mutate(lastFailedText)}
-              >
-                ลองใหม่
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 border-t p-3">
-            <input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="พิมพ์คำถาม..."
-              className="flex-1 rounded-full border px-3 py-2 text-sm outline-none"
-            />
+          <div className="flex items-center justify-between border-b border-n-200 px-4 py-3">
+            <span className="font-display text-sm font-bold text-ink">
+              {mode === 'AI' ? 'ผู้ช่วย BidNest' : 'ข้อความ'}
+            </span>
             <button
-              onClick={handleSend}
-              disabled={mutation.isPending}
-              className="rounded-full bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+              type="button"
+              aria-label="ปิดแชท"
+              onClick={() => setIsOpen(false)}
+              className="text-n-500 hover:text-ink"
             >
-              ส่ง
+              <X className="size-5" />
             </button>
           </div>
+
+          <div className="flex border-b border-n-200 px-2 pt-2">
+            <TabButton
+              active={mode === 'AI'}
+              onClick={() => setMode('AI')}
+              icon={<Sparkles className="size-4" />}
+              label="ผู้ช่วย AI"
+            />
+            <TabButton
+              active={mode === 'CHAT'}
+              onClick={() => setMode('CHAT')}
+              icon={<MessageCircle className="size-4" />}
+              label="แชท"
+            />
+          </div>
+
+          {mode === 'AI' ? <SupportChatPanel /> : <ConversationPreview />}
         </div>
       )}
 
-      <button
-        aria-label="เปิดแชทช่วยเหลือ"
+      <Button
+        variant="dark"
+        size="icon"
+        pill
+        aria-label={isOpen ? 'ปิดแชท' : 'เปิดแชท'}
         onClick={() => setIsOpen((prev) => !prev)}
-        className="rounded-full bg-blue-600 p-4 text-xl text-white shadow-lg"
+        className="size-14 shadow-sh2"
       >
-        💬
-      </button>
+        {isOpen ? <X className="size-6" /> : <MessageCircle className="size-6" />}
+      </Button>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex flex-1 items-center justify-center gap-1.5 rounded-t-r2 px-3 py-2 text-xs font-semibold transition-colors',
+        active
+          ? 'border-b-2 border-amber-500 text-ink'
+          : 'border-b-2 border-transparent text-n-500 hover:text-n-700'
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

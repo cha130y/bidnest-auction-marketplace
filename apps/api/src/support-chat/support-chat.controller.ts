@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Param, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { SupportChatService } from './support-chat.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { OptionalCurrentUser } from '../common/decorators/optional-current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.type';
 import { Throttle } from '@nestjs/throttler';
 import { ApiResponse } from '@nestjs/swagger';
@@ -21,21 +23,30 @@ export class SupportChatController {
     return this.supportChatService.getHistory(sessionId, user.id);
   }
 
+  // AI-001 — answers a basic question with no account at all; a token, if one
+  // comes along, is still honoured (AccessTokenGuard sets request.user either
+  // way), which is what lets a signed-in caller get their persisted history
+  // and a guest get a stateless, single-request answer from the same route.
+  @Public()
   @ApiResponse({ status: 201, type: SendMessageResponseDto })
   // ThrottlerGuard is a global APP_GUARD now (see app.module.ts) — @Throttle
   // here overrides the blanket per-IP limit for this route only, no
   // @UseGuards needed (adding it back would run the guard twice per request)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @UsePipes(SanitizePromptPipe)
   @Post()
   sendMessage(
-    @Body() dto: SendMessageDto,
-    @CurrentUser() user: AuthenticatedUser
+    // Scoped to this one parameter rather than @UsePipes() at the method
+    // level: a method-level pipe runs against *every* parameter's resolved
+    // value, including @OptionalCurrentUser()'s — which is `undefined` for a
+    // guest, and this pipe reads `.message` off whatever it is handed.
+    @Body(SanitizePromptPipe) dto: SendMessageDto,
+    @OptionalCurrentUser() user: AuthenticatedUser | undefined
   ): Promise<SendMessageResponseDto> {
     return this.supportChatService.sendMessage(
-      user.id,
+      user?.id,
       dto.message,
-      dto.sessionId
+      dto.sessionId,
+      dto.history
     );
   }
 }

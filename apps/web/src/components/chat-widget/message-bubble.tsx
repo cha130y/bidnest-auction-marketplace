@@ -1,4 +1,6 @@
 import { ChatMessage } from '@/lib/api/support-chat';
+import { MessageFormatter } from '@/components/chat-widget/message-formatter';
+import { cn } from '@/lib/utils';
 
 export function MessageBubble({
   message,
@@ -8,13 +10,14 @@ export function MessageBubble({
   const isUser = message.role === 'USER';
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
-          isUser ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
-        }`}
+        className={cn(
+          'max-w-[80%] rounded-r3 px-4 py-2.5 text-sm leading-relaxed',
+          isUser ? 'bg-amber-500 text-ink' : 'bg-n-100 text-n-700'
+        )}
       >
-        {message.body}
+        {isUser ? message.body : <MessageFormatter text={message.body} />}
       </div>
     </div>
   );

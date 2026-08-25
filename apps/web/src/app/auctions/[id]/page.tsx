@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 
 import { ArenaPanel } from "@/components/auction/arena-panel"
 import { AuctionImage } from "@/components/auction/auction-image"
+import { AuctionNegotiateButton } from "@/components/auction/negotiate-button"
 import { WatchButton } from "@/components/auction/watch-button"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { SiteHeader } from "@/components/layout/site-header"
@@ -146,6 +147,10 @@ export default async function AuctionDetailPage({
               {/* WAT-001 — reads its own state: this page is rendered without
                   a token, so it cannot know whether the viewer follows it. */}
               <WatchButton auctionId={auction.id} className="mt-4" />
+
+              <div className="mt-3">
+                <AuctionNegotiateButton auctionId={auction.id} />
+              </div>
             </div>
           </div>
 

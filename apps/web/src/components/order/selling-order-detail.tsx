@@ -5,22 +5,21 @@ import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { OrderStatusBadge } from "@/components/order/order-status-badge"
+import { ShipmentControls } from "@/components/order/shipment-controls"
 import { ShipmentPanel } from "@/components/order/shipment-panel"
 import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
-import { loginHref } from "@/lib/api/auth/login-redirect"
 import { ApiError } from "@/lib/api/client"
 import { getOrder, getShipment } from "@/lib/api/orders"
 import { formatDateTime, formatTHB } from "@/lib/format"
 import { useUserChannel } from "@/lib/use-user-channel"
 import type { Order } from "@/lib/api/types"
 
-/** SHIP-003 / SHIP-002 — one order, and where its parcel has got to. */
-export function OrderDetail({ orderId }: { orderId: string }) {
+/** SHIP-001 — one sold order, and the controls that move its parcel. */
+export function SellingOrderDetail({ orderId }: { orderId: string }) {
   const queryClient = useQueryClient()
-  const { token, ready } = useAuthToken()
-  const isAuthenticated = ready && Boolean(token)
+  const { token } = useAuthToken()
 
   // Wrapped because `useUserChannel` holds it in an effect dependency — an
   // inline function would tear the socket down and rebuild it every render.
@@ -28,42 +27,22 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     void queryClient.invalidateQueries({ queryKey: ["orders", orderId] })
   }, [queryClient, orderId])
 
-  /**
-   * SHIP-001 is the seller's action, but this is the screen that has to show
-   * it. The server emits `order:status_changed` to both parties after commit,
-   * so the moment the seller advances the parcel this page re-reads — no
-   * polling, and no stale timeline sitting there until somebody refreshes.
-   */
+  // The server emits `order:status_changed` to both parties after commit, so a
+  // second tab — or the buyer acting on something — lands here too.
   useUserChannel(token, reread)
 
   const order = useQuery({
     queryKey: ["orders", orderId],
     queryFn: () => getOrder(orderId),
-    enabled: isAuthenticated,
     retry: false,
   })
 
-  if (!ready || (isAuthenticated && order.isLoading)) {
+  if (order.isLoading) {
     return (
       <div
         className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
         aria-hidden="true"
       />
-    )
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="rounded-r4 bg-white px-6 py-16 text-center shadow-sh1">
-        <h2 className="font-display text-xl font-bold text-ink">
-          เข้าสู่ระบบเพื่อดูคำสั่งซื้อนี้
-        </h2>
-        <div className="mt-6 flex justify-center">
-          <Button variant="primary" size="lg" nativeButton={false} render={<Link href={loginHref()} />}>
-            เข้าสู่ระบบ
-          </Button>
-        </div>
-      </div>
     )
   }
 
@@ -76,30 +55,29 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             : "ไม่พบคำสั่งซื้อนี้"}
         </p>
         <div className="mt-6 flex justify-center">
-          <Button variant="secondary" size="md" nativeButton={false} render={<Link href="/orders" />}>
-            กลับไปที่รายการคำสั่งซื้อ
+          <Button
+            variant="secondary"
+            size="md"
+            nativeButton={false}
+            render={<Link href="/sell/orders" />}
+          >
+            กลับไปที่รายการ
           </Button>
         </div>
       </div>
     )
   }
 
-  return <Loaded order={order.data} isAuthenticated={isAuthenticated} />
+  return <Loaded order={order.data} />
 }
 
-function Loaded({
-  order,
-  isAuthenticated,
-}: {
-  order: Order
-  isAuthenticated: boolean
-}) {
+function Loaded({ order }: { order: Order }) {
   const shipment = useQuery({
     queryKey: ["orders", order.id, "shipment"],
     queryFn: () => getShipment(order.id),
-    // A cancelled order has no parcel to follow, and an unpaid one has nothing
-    // to pack yet — asking would only produce an error to swallow.
-    enabled: isAuthenticated && order.status === "PAID",
+    // A cancelled order has no parcel left to move, and an unpaid one has
+    // nothing packed yet — asking would only produce an error to swallow.
+    enabled: order.status === "PAID",
     retry: false,
   })
 
@@ -147,6 +125,14 @@ function Loaded({
           <ShipmentPanel
             timeline={shipment.data}
             isLoading={shipment.isLoading}
+            actions={
+              shipment.data && (
+                <ShipmentControls
+                  orderId={order.id}
+                  nextStatuses={shipment.data.nextStatuses}
+                />
+              )
+            }
           />
         )}
       </div>
@@ -158,7 +144,7 @@ function Loaded({
             {formatTHB(order.subtotal)}
           </p>
           <p className="mt-3 text-xs text-n-500">
-            ร้าน {order.seller.displayName ?? "ไม่ระบุชื่อ"}
+            ผู้ซื้อ {order.buyer.displayName ?? "ไม่ระบุชื่อ"}
           </p>
         </section>
 
@@ -167,7 +153,7 @@ function Loaded({
             <h2 className="font-display text-lg font-bold text-ink">
               ที่อยู่จัดส่ง
             </h2>
-            <address className="mt-3 space-y-0.5 text-sm not-italic text-n-600">
+            <address className="mt-3 space-y-0.5 text-sm text-n-600 not-italic">
               <p className="font-semibold text-ink">
                 {order.shippingAddress.recipientName}
               </p>
@@ -183,8 +169,14 @@ function Loaded({
           </section>
         )}
 
-        <Button variant="ghost" size="sm" block nativeButton={false} render={<Link href="/orders" />}>
-          กลับไปที่รายการคำสั่งซื้อ
+        <Button
+          variant="ghost"
+          size="sm"
+          block
+          nativeButton={false}
+          render={<Link href="/sell/orders" />}
+        >
+          กลับไปที่รายการ
         </Button>
       </aside>
     </div>
