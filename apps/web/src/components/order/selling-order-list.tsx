@@ -1,7 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Package } from "lucide-react"
 
 import {
@@ -10,11 +11,32 @@ import {
 } from "@/components/order/order-status-badge"
 import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
+import { PageNav } from "@/components/ui/page-nav"
 import { listSellingOrders } from "@/lib/api/orders"
 import { formatDateTime, formatTHB } from "@/lib/format"
-import type { Order } from "@/lib/api/types"
+import { cn } from "@/lib/utils"
+import type { Order, ShipmentStatus } from "@/lib/api/types"
 
 export const sellingOrdersQueryKey = ["orders", "selling"] as const
+
+const PAGE_SIZE = 10
+
+/**
+ * The groups a seller actually thinks in, which are not the five states the
+ * sequence is written in. "กำลังส่ง" is two of them, and "รอจัดส่ง" is the one
+ * that means work — everything under it is waiting on this seller to press
+ * something.
+ *
+ * Filtered on the server rather than over the rows already fetched: with a
+ * pager, filtering here would only ever narrow the ten rows on screen and
+ * quietly hide the rest of the matches.
+ */
+const GROUPS: { key: string; label: string; statuses?: ShipmentStatus[] }[] = [
+  { key: "all", label: "ทั้งหมด" },
+  { key: "todo", label: "รอจัดส่ง", statuses: ["PROCESSING"] },
+  { key: "moving", label: "กำลังส่ง", statuses: ["SHIPPED", "IN_TRANSIT"] },
+  { key: "done", label: "เสร็จแล้ว", statuses: ["DELIVERED", "CANCELLED"] },
+]
 
 /**
  * SHIP-001/SHIP-003 — what this seller has sold, and which parcels are waiting
@@ -27,12 +49,50 @@ export const sellingOrdersQueryKey = ["orders", "selling"] as const
  * seller opens.
  */
 export function SellingOrderList() {
+  const [group, setGroup] = useState("all")
+  const [page, setPage] = useState(1)
+  const statuses = GROUPS.find((entry) => entry.key === group)?.statuses
+
   const { data, isLoading } = useQuery({
-    queryKey: sellingOrdersQueryKey,
-    queryFn: () => listSellingOrders({ limit: 50 }),
+    queryKey: [...sellingOrdersQueryKey, group, page],
+    queryFn: () =>
+      listSellingOrders({
+        page,
+        limit: PAGE_SIZE,
+        ...(statuses ? { shipmentStatus: statuses } : {}),
+      }),
+    // Hold the rows already on screen while the next page is fetched, rather
+    // than dropping to the skeleton and back for every press of the pager.
+    placeholderData: keepPreviousData,
     // A 401 will not fix itself by trying again
     retry: false,
   })
+
+  const tabs = (
+    <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-full bg-n-100 p-1.5">
+      {GROUPS.map((entry) => (
+        <button
+          key={entry.key}
+          type="button"
+          aria-pressed={entry.key === group}
+          onClick={() => {
+            setGroup(entry.key)
+            // Page four of "ทั้งหมด" is rarely page four of "รอจัดส่ง", and is
+            // often past its end — which would answer with nothing at all.
+            setPage(1)
+          }}
+          className={cn(
+            "inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold transition-all outline-none focus-visible:ring-3 focus-visible:ring-amber-500/30",
+            entry.key === group
+              ? "bg-white text-ink shadow-sh1"
+              : "text-n-500 hover:text-ink"
+          )}
+        >
+          {entry.label}
+        </button>
+      ))}
+    </div>
+  )
 
   if (isLoading) {
     return (
@@ -45,34 +105,52 @@ export function SellingOrderList() {
 
   if (!data || data.items.length === 0) {
     return (
-      <div className="rounded-r4 bg-white px-6 py-16 text-center shadow-sh1">
-        <Package className="mx-auto size-10 text-n-300" aria-hidden="true" />
-        <h2 className="mt-4 font-display text-xl font-bold text-ink">
-          ยังไม่มีคำสั่งซื้อเข้ามา
-        </h2>
-        <p className="mt-2 text-base text-n-600">
-          เมื่อมีคนซื้อสินค้าของคุณ คำสั่งซื้อจะมาอยู่ที่นี่
-        </p>
-        <div className="mt-6 flex justify-center">
-          <Button
-            variant="secondary"
-            size="md"
-            nativeButton={false}
-            render={<Link href="/sell/products" />}
-          >
-            ดูสินค้าของฉัน
-          </Button>
+      <>
+        {tabs}
+        <div className="rounded-r4 bg-white px-6 py-16 text-center shadow-sh1">
+          <Package className="mx-auto size-10 text-n-300" aria-hidden="true" />
+          <h2 className="mt-4 font-display text-xl font-bold text-ink">
+            {group === "all"
+              ? "ยังไม่มีคำสั่งซื้อเข้ามา"
+              : "ไม่มีคำสั่งซื้อในกลุ่มนี้"}
+          </h2>
+          {group === "all" && (
+            <>
+              <p className="mt-2 text-base text-n-600">
+                เมื่อมีคนซื้อสินค้าของคุณ คำสั่งซื้อจะมาอยู่ที่นี่
+              </p>
+              <div className="mt-6 flex justify-center">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  nativeButton={false}
+                  render={<Link href="/sell/products" />}
+                >
+                  ดูสินค้าของฉัน
+                </Button>
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <ul className="space-y-4">
-      {data.items.map((order) => (
-        <SellingOrderRow key={order.id} order={order} />
-      ))}
-    </ul>
+    <>
+      {tabs}
+      <ul className="space-y-4">
+        {data.items.map((order) => (
+          <SellingOrderRow key={order.id} order={order} />
+        ))}
+      </ul>
+
+      <PageNav
+        page={data.meta.page}
+        totalPages={data.meta.totalPages}
+        onChange={setPage}
+      />
+    </>
   )
 }
 

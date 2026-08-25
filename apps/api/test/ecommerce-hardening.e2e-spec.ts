@@ -355,6 +355,145 @@ describe('E-commerce hardening (e2e)', () => {
   });
 
   /**
+   * SHIP-003 — the seller's list is paged and narrowed on the server.
+   *
+   * Both matter together: a filter applied to rows that were already paged
+   * would only ever narrow the page on screen, and quietly drop every match
+   * sitting on the next one.
+   */
+  describe('SHIP-003 — narrowing the seller’s orders by where the parcel is', () => {
+    let packing: string;
+    let dispatched: string;
+
+    beforeAll(async () => {
+      const productId = await createProduct({
+        title: `${tag} filter`,
+        stockQty: 20
+      });
+
+      // Two orders from one seller, moved to different points of the sequence.
+      for (let made = 0; made < 2; made += 1) {
+        await request(app.getHttpServer())
+          .post('/cart/items')
+          .set('Authorization', authOf(buyerId))
+          .send({ productId, quantity: 1 })
+          .expect(201);
+
+        await request(app.getHttpServer())
+          .post('/orders/checkout')
+          .set('Authorization', authOf(buyerId))
+          .send({ paymentMethod: 'CARD', shippingAddress: address })
+          .expect(201);
+      }
+
+      const list = await request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ limit: 100 })
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      const forThisProduct = (
+        list.body as {
+          items: { id: string; items: { product: { id: string } }[] }[];
+        }
+      ).items.filter((order) => order.items[0]?.product.id === productId);
+
+      [packing, dispatched] = forThisProduct.map((order) => order.id);
+
+      await request(app.getHttpServer())
+        .patch(`/orders/${dispatched}/shipment`)
+        .set('Authorization', authOf(sellerId))
+        .send({ status: 'SHIPPED' })
+        .expect(200);
+    });
+
+    const sellingWhere = async (shipmentStatus: string) => {
+      const response = await request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ shipmentStatus, limit: 100 })
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+      return (response.body as { items: { id: string }[] }).items.map(
+        (order) => order.id
+      );
+    };
+
+    it('finds the one still being packed', async () => {
+      const ids = await sellingWhere('PROCESSING');
+      expect(ids).toContain(packing);
+      expect(ids).not.toContain(dispatched);
+    });
+
+    it('finds the one on its way', async () => {
+      const ids = await sellingWhere('SHIPPED');
+      expect(ids).toContain(dispatched);
+      expect(ids).not.toContain(packing);
+    });
+
+    it('takes several states at once, comma separated', async () => {
+      const ids = await sellingWhere('SHIPPED,IN_TRANSIT');
+      expect(ids).toContain(dispatched);
+      expect(ids).not.toContain(packing);
+    });
+
+    it('refuses a state that is not one', () =>
+      request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ shipmentStatus: 'PACKED' })
+        .set('Authorization', authOf(sellerId))
+        .expect(400));
+
+    it('pages, and says how many pages there are', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ page: 1, limit: 1 })
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      const body = response.body as {
+        items: unknown[];
+        meta: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+        };
+      };
+      expect(body.items).toHaveLength(1);
+      expect(body.meta.limit).toBe(1);
+      expect(body.meta.totalPages).toBe(body.meta.total);
+    });
+
+    it('counts only what the filter kept, not the whole shelf', async () => {
+      const all = await request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ limit: 1 })
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      const packed = await request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ limit: 1, shipmentStatus: 'SHIPPED' })
+        .set('Authorization', authOf(sellerId))
+        .expect(200);
+
+      const totalOf = (response: { body: unknown }) =>
+        (response.body as { meta: { total: number } }).meta.total;
+
+      expect(totalOf(packed)).toBeLessThan(totalOf(all));
+    });
+
+    it('never reaches another seller’s orders', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/orders/selling')
+        .query({ limit: 100 })
+        .set('Authorization', authOf(strangerId))
+        .expect(200);
+      expect((response.body as { items: unknown[] }).items).toHaveLength(0);
+    });
+  });
+
+  /**
    * SHIP-001 — cancelling is the one transition that gives something back.
    * A parcel cancelled while it is still being packed has to return its
    * units to the shelf, or the stock silently leaks one order at a time.

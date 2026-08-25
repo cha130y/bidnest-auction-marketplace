@@ -12,6 +12,12 @@ import type {
 
 export type ListOrdersParams = {
   status?: OrderStatus
+  /**
+   * SHIP-001 — where the parcel has got to, which is a different question from
+   * whether the order was paid for. Every order still waiting to be packed is
+   * `PAID`, so `status` alone cannot pick them out.
+   */
+  shipmentStatus?: ShipmentStatus[]
   page?: number
   limit?: number
 }

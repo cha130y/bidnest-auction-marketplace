@@ -1,12 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Package } from "lucide-react"
 
 import { OrderStatusBadge, SHIPMENT_LABELS } from "@/components/order/order-status-badge"
 import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
+import { PageNav } from "@/components/ui/page-nav"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { listOrders } from "@/lib/api/orders"
@@ -14,6 +16,8 @@ import { formatDateTime, formatTHB } from "@/lib/format"
 import type { Order } from "@/lib/api/types"
 
 export const ordersQueryKey = ["orders", "buying"] as const
+
+const PAGE_SIZE = 10
 
 /**
  * SHIP-003 — what the viewer has bought, newest first.
@@ -25,11 +29,16 @@ export const ordersQueryKey = ["orders", "buying"] as const
 export function OrderList() {
   const { token, ready } = useAuthToken()
   const isAuthenticated = ready && Boolean(token)
+  const [page, setPage] = useState(1)
 
   const { data, isLoading } = useQuery({
-    queryKey: ordersQueryKey,
-    queryFn: () => listOrders({ limit: 50 }),
+    // The page is part of the key, so going back to one is served from cache
+    queryKey: [...ordersQueryKey, page],
+    queryFn: () => listOrders({ page, limit: PAGE_SIZE }),
     enabled: isAuthenticated,
+    // Hold the rows already on screen while the next page is fetched, rather
+    // than dropping to the skeleton and back for every press of the pager.
+    placeholderData: keepPreviousData,
     // A 401 will not fix itself by trying again
     retry: false,
   })
@@ -64,11 +73,19 @@ export function OrderList() {
   }
 
   return (
-    <ul className="space-y-4">
-      {data.items.map((order) => (
-        <OrderRow key={order.id} order={order} />
-      ))}
-    </ul>
+    <>
+      <ul className="space-y-4">
+        {data.items.map((order) => (
+          <OrderRow key={order.id} order={order} />
+        ))}
+      </ul>
+
+      <PageNav
+        page={data.meta.page}
+        totalPages={data.meta.totalPages}
+        onChange={setPage}
+      />
+    </>
   )
 }
 
