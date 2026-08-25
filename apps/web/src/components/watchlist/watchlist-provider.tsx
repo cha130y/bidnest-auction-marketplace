@@ -19,6 +19,16 @@ type WatchlistContextValue = {
   count: number
   /** False until localStorage has been read; the count is 0 until it is true. */
   isAuthReady: boolean
+  /**
+   * True once both halves have answered. Until then every count above reads 0,
+   * which is indistinguishable from following nothing — so a caller that
+   * writes the number down rather than hiding a badge has to wait for this.
+   *
+   * One flag for both halves on purpose: the two counts are shown side by side
+   * to be compared, and a screen that printed one while the other stayed blank
+   * would read as "the auctions failed" rather than "still loading".
+   */
+  isLoaded: boolean
 }
 
 const WatchlistContext = createContext<WatchlistContextValue | null>(null)
@@ -70,6 +80,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     auctionCount,
     count: productCount + auctionCount,
     isAuthReady: ready,
+    isLoaded: products.isSuccess && auctions.isSuccess,
   }
 
   return <WatchlistContext value={value}>{children}</WatchlistContext>

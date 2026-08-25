@@ -5,7 +5,8 @@ import { SiteFooter } from "@/components/layout/site-footer"
 import { AppHeader } from "@/components/layout/app-header"
 import { WatchlistView } from "@/components/auction/watchlist-view"
 import { ProductWatchlistView } from "@/components/shop/product-watchlist-view"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { WatchlistTabsList } from "@/components/watchlist/watchlist-tabs-list"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 
 export const metadata: Metadata = {
   title: "รายการที่ติดตาม · BidNest",
@@ -43,13 +44,11 @@ export default function WatchlistPage() {
             </p>
           </header>
 
-          {/* Auctions first: they are the ones that expire, so they are the
-              ones somebody opening this page is more likely to have come for. */}
+          {/* The triggers live in their own client component: each carries its
+              half's count, and a count needs a token this server component
+              cannot read. The tab order is decided there alongside them. */}
           <Tabs defaultValue="auctions">
-            <TabsList>
-              <TabsTrigger value="auctions">การประมูล</TabsTrigger>
-              <TabsTrigger value="products">สินค้า</TabsTrigger>
-            </TabsList>
+            <WatchlistTabsList />
 
             <TabsContent value="auctions">
               <WatchlistView />
