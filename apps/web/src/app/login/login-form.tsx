@@ -10,6 +10,7 @@ import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/auth/password-input"
 import { Label } from "@/components/ui/label"
 import { resendLoginCode } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
@@ -292,9 +293,8 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
 
         <div className="space-y-2">
           <Label htmlFor="password">รหัสผ่าน</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             {...stepOne.register("password")}
           />

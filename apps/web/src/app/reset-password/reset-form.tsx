@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/auth/password-input"
 import { Label } from "@/components/ui/label"
 import { resetPassword } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
@@ -79,9 +79,8 @@ export function ResetPasswordForm() {
 
       <div className="space-y-2">
         <Label htmlFor="password">รหัสผ่านใหม่</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="new-password"
           autoFocus
           {...form.register("password")}
@@ -97,9 +96,8 @@ export function ResetPasswordForm() {
 
       <div className="space-y-2">
         <Label htmlFor="confirm">ยืนยันรหัสผ่านใหม่</Label>
-        <Input
+        <PasswordInput
           id="confirm"
-          type="password"
           autoComplete="new-password"
           {...form.register("confirm")}
         />
