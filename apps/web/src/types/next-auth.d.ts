@@ -8,6 +8,12 @@ declare module "next-auth" {
   interface Session {
     accessToken?: string
     role?: "USER" | "ADMIN"
+    /**
+     * AUTH-004 — set when the refresh token could not be traded for a new
+     * pair, which means the session is over rather than merely stale.
+     * `SessionWatch` reads it and sends the browser to the login page.
+     */
+    error?: "RefreshFailed"
     user: {
       id: string
     } & DefaultSession["user"]
@@ -25,6 +31,7 @@ declare module "next-auth/jwt" {
     accessToken?: string
     refreshToken?: string
     role?: "USER" | "ADMIN"
+    error?: "RefreshFailed"
   }
 }
 
