@@ -23,14 +23,24 @@ export default function OwnedProductsPage() {
             รวมสินค้าที่หยุดขาย สินค้าหมด และที่ถูกระงับ — หน้าร้านไม่แสดงให้เห็น
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="lg"
-          nativeButton={false}
-          render={<Link href="/sell/products/new" />}
-        >
-          ลงขายสินค้า
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="lg"
+            nativeButton={false}
+            render={<Link href="/sell/orders" />}
+          >
+            คำสั่งซื้อที่ขายได้
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            nativeButton={false}
+            render={<Link href="/sell/products/new" />}
+          >
+            ลงขายสินค้า
+          </Button>
+        </div>
       </header>
 
       <SellerShell>
