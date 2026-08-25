@@ -1,7 +1,14 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import {
+  ConnectedSocket,
+  MessageBody,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
+  WsException
+} from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import { EnvVariable } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +16,13 @@ import { PrismaService } from '../prisma/prisma.service';
 /** One room per person — everything addressed to them, and nobody else. */
 export const userRoom = (userId: string) => `user:${userId}`;
 
+/** CHAT-001..003 — one room per thread, joined only by its two participants. */
+export const conversationRoom = (conversationId: string) =>
+  `conversation:${conversationId}`;
+
 type AccessTokenClaims = { sub: string };
+type JoinConversationPayload = { conversationId?: unknown };
+type JoinConversationResult = { conversationId: string; joined: boolean };
 
 /**
  * SRS 4.1 — the channel for pushing things at one person: notifications
@@ -65,8 +78,60 @@ export class UserGateway {
       return;
     }
 
+    // Remembered for 'conversation:join' below, so that message does not have
+    // to re-verify the token: this socket already proved who it is once.
+    (client.data as { userId?: string }).userId = userId;
+
     await client.join(userRoom(userId));
     client.emit('connection:ready', { userId });
+  }
+
+  /**
+   * CHAT-001..003 — the join path RealtimeService.emitMessageSent was left
+   * waiting for. A thread has exactly two participants, so unlike an auction
+   * room this has to check who is asking before letting a socket in.
+   *
+   * `client.data.userId` is only set once `handleConnection` has identified
+   * the socket, so a socket that raced this message before then (or never
+   * proved itself, and so was already disconnected) has nothing to be
+   * checked against and is refused.
+   */
+  @SubscribeMessage('conversation:join')
+  async joinConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: JoinConversationPayload | undefined
+  ): Promise<JoinConversationResult> {
+    const conversationId = readConversationId(payload);
+    const userId = (client.data as { userId?: string }).userId;
+
+    const conversation = userId
+      ? await this.prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { buyerId: true, sellerId: true }
+        })
+      : null;
+
+    const isParticipant =
+      !!conversation &&
+      (conversation.buyerId === userId || conversation.sellerId === userId);
+
+    // Not-found rather than forbidden, same as the REST side (assertParticipant
+    // in chat.service.ts) — an outsider should not be able to tell a thread
+    // exists from the socket refusing them any differently than a bad id.
+    if (!isParticipant) throw new WsException('Conversation not found');
+
+    await client.join(conversationRoom(conversationId));
+    return { conversationId, joined: true };
+  }
+
+  @SubscribeMessage('conversation:leave')
+  async leaveConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: JoinConversationPayload | undefined
+  ): Promise<JoinConversationResult> {
+    const conversationId = readConversationId(payload);
+    await client.leave(conversationRoom(conversationId));
+    return { conversationId, joined: false };
   }
 
   /**
@@ -107,13 +172,27 @@ export class UserGateway {
    * fails to light must not fail the transaction that raised it.
    */
   emitToUser(userId: string, event: string, payload: unknown): void {
+    this.emitToRoom(userRoom(userId), event, payload);
+  }
+
+  /** CHAT-001..003 — the same drop-rather-than-throw contract as emitToUser. */
+  emitToRoom(room: string, event: string, payload: unknown): void {
     if (!this.server) {
       this.logger.debug(`No socket server yet, dropping ${event}`);
       return;
     }
 
-    this.server.to(userRoom(userId)).emit(event, payload);
+    this.server.to(room).emit(event, payload);
   }
+}
+
+/** A malformed id is refused by the Prisma lookup finding nothing, same as `WsException` would. */
+function readConversationId(
+  payload: JoinConversationPayload | undefined
+): string {
+  return typeof payload?.conversationId === 'string'
+    ? payload.conversationId
+    : '';
 }
 
 /**
