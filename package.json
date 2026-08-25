@@ -7,6 +7,7 @@
     "dev:web": "pnpm --dir apps/web dev",
     "dev:api": "pnpm --dir apps/api start:dev",
     "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:api\"",
+    "check:setup": "node scripts/check-setup.mjs",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --if-present test",
     "check": "pnpm --dir apps/api exec tsc --noEmit && pnpm --dir apps/web exec next typegen && pnpm --dir apps/web exec tsc --noEmit && pnpm test && pnpm lint"
