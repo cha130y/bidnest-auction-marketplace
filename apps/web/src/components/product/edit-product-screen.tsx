@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 
 import { ProductImageManager } from "@/components/product/product-image-manager"
+import { ProductManagePanel } from "@/components/product/product-manage-panel"
 import { SellerShell } from "@/components/auction/seller-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -79,8 +80,17 @@ function Editor({ productId }: { productId: string }) {
     )
   }
 
+  const managePanel = (
+    <ProductManagePanel product={product} onChanged={setProduct} />
+  )
+
   return (
     <div className="space-y-6">
+      {/* ADM-005 — a suspended listing refuses every write below this point,
+          so its notice belongs above the form rather than under it. Nothing
+          else on this screen would tell the seller why saving keeps failing. */}
+      {product.status === "SUSPENDED" && managePanel}
+
       <DetailsForm
         productId={productId}
         product={product}
@@ -99,6 +109,8 @@ function Editor({ productId }: { productId: string }) {
           ดูหน้าที่ผู้ซื้อเห็น
         </Link>
       </p>
+
+      {product.status !== "SUSPENDED" && managePanel}
     </div>
   )
 }

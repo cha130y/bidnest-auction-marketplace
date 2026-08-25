@@ -4,6 +4,7 @@ import type {
   OwnerProduct,
   Paginated,
   Product,
+  ProductRemoval,
   ProductSort,
   StoredImage,
 } from "@/lib/api/types"
@@ -152,8 +153,14 @@ export function updateProductStock(id: string, stockQty: number) {
   })
 }
 
+/**
+ * PROD-002 — soft-deletes the listing, or deactivates it when orders still
+ * reference it. The answer says which, and the caller has to read it: a
+ * screen that assumes the listing is gone would send the seller back to a
+ * list that still has it.
+ */
 export function deleteProduct(id: string) {
-  return apiFetch<void>(`/products/${id}`, { method: "DELETE" })
+  return apiFetch<ProductRemoval>(`/products/${id}`, { method: "DELETE" })
 }
 
 /** PROD-006 — opens (or reuses) the negotiation thread with the seller. */
