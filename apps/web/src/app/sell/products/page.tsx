@@ -4,6 +4,7 @@ import Link from "next/link"
 import { SellerShell } from "@/components/auction/seller-shell"
 import { OwnedProductsList } from "@/components/product/owned-products-screen"
 import { Button } from "@/components/ui/button"
+import { Settings } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "สินค้าของฉัน · BidNest",
@@ -24,6 +25,21 @@ export default function OwnedProductsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* CHAT-004 — the shop's after-sale auto-reply is configured at
+              /sell/settings, which until now was linked only from /sell: the
+              page for starting an auction. A seller who came through the
+              account menu's "ขายสินค้า" landed here and had no way to reach a
+              setting that is entirely about selling goods. */}
+          <Button
+            variant="ghost"
+            size="lg"
+            aria-label="ตั้งค่าร้านค้า"
+            nativeButton={false}
+            render={<Link href="/sell/settings" />}
+          >
+            <Settings aria-hidden="true" />
+            ตั้งค่าร้าน
+          </Button>
           <Button
             variant="secondary"
             size="lg"
