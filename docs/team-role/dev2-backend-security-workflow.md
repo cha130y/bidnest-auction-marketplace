@@ -4,7 +4,7 @@
 > **ไฟล์นี้คืออะไร:** สำเนาของ slash command ส่วนตัว `/dev2` ที่ใช้อยู่จริง เอาขึ้น repo ไว้เป็น **แม่แบบให้เพื่อนในทีมก็อปไปปรับเป็นของตัวเอง**
 > **ไม่ใช่กติกาทีม** — กติกาที่ทั้งทีมยึดร่วมกันอยู่ใน `CLAUDE.md` เท่านั้น ไฟล์นี้เป็นแนวทางส่วนบุคคล ปรับได้ตามใจ
 > **คู่กับ:** `docs/team-role/dev2-checklist.md` (checklist ละเอียดรายข้อ) และ `docs/team-role/dev4-auction-workflow.md` (แม่แบบของ Dev 4)
-> **อ้างอิง:** SRS v5, Team Role Distribution v2
+> **อ้างอิง:** SRS v6, Team Role Distribution v2
 
 ---
 
@@ -34,7 +34,7 @@ description: ทำ requirement ฝั่ง Auth และ Security ของ D
 
 ## เอกสารอ้างอิง (อ่านก่อนเริ่มทุกครั้ง)
 
-- SRS: `docs/requirements/BidNest-Auction and Marketplace-v5.pdf` — ใช้ช่อง **"เกณฑ์การยอมรับ"** ของแต่ละ requirement เป็นเกณฑ์ตัดสินว่าผ่านหรือไม่ และ **§6** เป็นเกณฑ์ด้านความปลอดภัย
+- SRS: `docs/requirements/BidNest-Auction and Marketplace-v6.pdf` — ใช้ช่อง **"เกณฑ์การยอมรับ"** ของแต่ละ requirement เป็นเกณฑ์ตัดสินว่าผ่านหรือไม่ และ **§6** เป็นเกณฑ์ด้านความปลอดภัย
 - Team role: `docs/team-role/Team-role-dustribution-v2.pdf`
 - Checklist ของตัวเอง: `docs/team-role/dev2-checklist.md` — ติ๊กความคืบหน้าที่นี่
 - Schema: `apps/api/prisma/schema.prisma` — **Dev 2 เป็นเจ้าของไฟล์นี้และ migration ทั้งหมด**

@@ -4,7 +4,7 @@
 > **ไฟล์นี้คืออะไร:** สำเนาของ slash command ส่วนตัว `/dev4` ที่ใช้อยู่จริง เอาขึ้น repo ไว้เป็น **แม่แบบให้เพื่อนในทีมก็อปไปปรับเป็นของตัวเอง**
 > **ไม่ใช่กติกาทีม** — กติกาที่ทั้งทีมยึดร่วมกันอยู่ใน `CLAUDE.md` เท่านั้น ไฟล์นี้เป็นแนวทางส่วนบุคคล ปรับได้ตามใจ
 > **ใช้คู่กับ:** [`dev4-commit-workflow.md`](./dev4-commit-workflow.md) — ไฟล์นี้ครอบแค่ **build + test** แล้วจบที่คำถาม "พร้อม commit หรือยัง" ส่วนขั้นตอน **ship** (commit / push / PR) อยู่ในอีกไฟล์
-> **อ้างอิง:** SRS v5, Team Role Distribution v2
+> **อ้างอิง:** SRS v6, Team Role Distribution v2
 
 ---
 
@@ -34,7 +34,7 @@ description: ทำ requirement ฝั่ง Auction ของ Dev 4 ทีล�
 
 ## เอกสารอ้างอิง (อ่านก่อนเริ่มทุกครั้ง)
 
-- SRS: `docs/requirements/BidNest-Auction and Marketplace-v5.pdf` — ใช้ช่อง **"เกณฑ์การยอมรับ"** ของแต่ละ requirement เป็นเกณฑ์ตัดสินว่าผ่านหรือไม่
+- SRS: `docs/requirements/BidNest-Auction and Marketplace-v6.pdf` — ใช้ช่อง **"เกณฑ์การยอมรับ"** ของแต่ละ requirement เป็นเกณฑ์ตัดสินว่าผ่านหรือไม่
 - Team role: `docs/team-role/Team-role-dustribution-v2.pdf`
 - Schema: `apps/api/prisma/schema.prisma`
 - ADR: `docs/architecture/adr/` — ADR-0001 (admin/category ใช้ชุดเดียว), ADR-0002 (product state machine)
