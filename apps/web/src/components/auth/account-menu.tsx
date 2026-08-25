@@ -27,11 +27,7 @@ import { cn } from "@/lib/utils"
  * was `hidden md:inline-flex`, which left a phone with no way in at all, since
  * the menu trigger beside it is not wired to anything yet.
  *
- * The name shows from `lg` up, not `md`. Measured at 800px wide the header
- * needs 767px of a 737px row, and the part hanging off the right-hand end is
- * this control — the logo will not shrink, and the gavel nav bottoms out once
- * "E-commerce" has wrapped. Between those two breakpoints the avatar circle
- * stands alone; the name and address are still a tap away inside the menu, and
+ * On a narrow screen the label drops away and the avatar circle stands alone;
  * the hit area stays a full 44px either way.
  */
 
@@ -68,7 +64,7 @@ export function AccountMenu({ className }: { className?: string }) {
   // Reserve the space while the session resolves, so the header does not shift
   // under the pointer a moment after it paints.
   if (status === "loading") {
-    return <div className={cn("h-11 w-11 lg:w-28", className)} aria-hidden />
+    return <div className={cn("h-11 w-11 md:w-28", className)} aria-hidden />
   }
 
   if (!session?.accessToken) {
@@ -101,7 +97,7 @@ export function AccountMenu({ className }: { className?: string }) {
     <Menu.Root>
       <Menu.Trigger
         className={cn(
-          "flex h-11 shrink-0 items-center gap-2 rounded-r2 px-1.5 text-ink outline-none transition-colors hover:bg-n-100 focus-visible:ring-3 focus-visible:ring-amber-500/30 data-popup-open:bg-n-100 md:px-2",
+          "flex h-11 items-center gap-2 rounded-r2 px-1.5 text-ink outline-none transition-colors hover:bg-n-100 focus-visible:ring-3 focus-visible:ring-amber-500/30 data-popup-open:bg-n-100 md:px-2",
           className
         )}
         aria-label={`บัญชี: ${name}`}
@@ -109,10 +105,10 @@ export function AccountMenu({ className }: { className?: string }) {
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
           {initialOf(session.user?.name, session.user?.email)}
         </span>
-        <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">
+        <span className="hidden max-w-32 truncate text-sm font-semibold md:inline">
           {name}
         </span>
-        <ChevronDown className="hidden size-4 shrink-0 text-n-500 lg:block" />
+        <ChevronDown className="hidden size-4 text-n-500 md:block" />
       </Menu.Trigger>
 
       <Menu.Portal>
