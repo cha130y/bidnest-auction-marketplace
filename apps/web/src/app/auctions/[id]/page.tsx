@@ -7,7 +7,7 @@ import { AuctionImage } from "@/components/auction/auction-image"
 import { AuctionNegotiateButton } from "@/components/auction/negotiate-button"
 import { WatchButton } from "@/components/auction/watch-button"
 import { SiteFooter } from "@/components/layout/site-footer"
-import { SiteHeader } from "@/components/layout/site-header"
+import { AppHeader } from "@/components/layout/app-header"
 import { getArena } from "@/lib/api/auctions"
 import { ApiError } from "@/lib/api/client"
 import { categoryLabel } from "@/lib/category-labels"
@@ -81,7 +81,7 @@ export default async function AuctionDetailPage({
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
-      <SiteHeader />
+      <AppHeader />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-330 px-4 pb-16 md:px-6">
