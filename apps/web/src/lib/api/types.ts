@@ -72,6 +72,21 @@ export type Product = {
  */
 export type OwnerProduct = Product & { negotiationFloor: string | null }
 
+/**
+ * PROD-002 — what `DELETE /products/:id` actually did.
+ *
+ * A delete is not always a delete: `ProductService.remove` counts the order
+ * items still pointing at the listing and deactivates it instead when any
+ * order that is not CANCELLED references it, so order history keeps
+ * resolving. `status` is the only way to tell the seller which of the two
+ * happened.
+ */
+export type ProductRemoval = {
+  id: string
+  status: "REMOVED" | "INACTIVE"
+  message: string
+}
+
 // ── src/categories/categories.service.ts → categorySelect ───────────────────
 export type Category = {
   id: string
