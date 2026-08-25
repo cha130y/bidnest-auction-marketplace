@@ -47,9 +47,11 @@ const WatchlistContext = createContext<WatchlistContextValue | null>(null)
  * invalidates the key, both this and the card re-read it, and they cannot
  * drift apart.
  *
- * The auctions half is a query of its own. `WatchButton` on the auction side
- * fetches the same list through `useEffect` rather than React Query, so there
- * is nothing to share with yet.
+ * The auctions half is shared the same way since WAT-001 landed: the auction
+ * side's `WatchButton` reads `auctionWatchlistQueryKey` with the same
+ * `listWatchlist({ limit: 100 })` this does, so the two are one request and
+ * one answer. (It used to fetch through `useEffect`, which is why this note
+ * once said there was nothing to share with.)
  */
 export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { token, ready } = useAuthToken()
