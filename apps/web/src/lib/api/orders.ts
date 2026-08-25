@@ -35,6 +35,11 @@ export function getOrder(id: string) {
 export type CheckoutInput = {
   paymentMethod: PaymentMethod
   shippingAddress: Omit<ShippingAddress, "line2"> & { line2?: string }
+  /**
+   * CART-003 — the cart lines this payment covers. Omit it to pay for the
+   * whole cart, which is what the route did before selection existed.
+   */
+  cartItemIds?: string[]
 }
 
 /**
