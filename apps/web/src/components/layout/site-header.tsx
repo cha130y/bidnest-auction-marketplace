@@ -1,43 +1,13 @@
 import Link from "next/link"
 import { Suspense, type ReactNode } from "react"
-import {
-  Bell,
-  Camera,
-  Gamepad2,
-  Headphones,
-  Menu,
-  Monitor,
-  ShoppingCart,
-  Smartphone,
-  Watch,
-} from "lucide-react"
+import { Bell, Heart, Menu, ShoppingCart } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { AccountMenu } from "@/components/auth/account-menu"
 import { GavelNav, GavelNavMobile } from "@/components/layout/gavel-nav"
 
-export type CategoryLink = {
-  label: string
-  href: string
-  icon: ReactNode
-}
-
-export const defaultCategories: CategoryLink[] = [
-  { label: "Phones", href: "/shop?category=phones", icon: <Smartphone /> },
-  { label: "Computers", href: "/shop?category=computers", icon: <Monitor /> },
-  { label: "Watches", href: "/shop?category=watches", icon: <Watch /> },
-  { label: "Cameras", href: "/shop?category=cameras", icon: <Camera /> },
-  {
-    label: "Headphones",
-    href: "/shop?category=headphones",
-    icon: <Headphones />,
-  },
-  { label: "Gaming", href: "/shop?category=gaming", icon: <Gamepad2 /> },
-]
-
 export type SiteHeaderProps = {
-  categories?: CategoryLink[]
   cartCount?: number
   hasNotifications?: boolean
   onMenuToggle?: () => void
@@ -51,15 +21,14 @@ export type SiteHeaderProps = {
 }
 
 /**
- * Shared storefront header: logo, gavel-animated Auction/E-commerce nav +
- * category subnav on desktop; logo + menu trigger on mobile. Presentational
- * apart from the account control, which reads the session itself — it is the
- * same on every page, and threading it through six call sites would only be a
- * longer way of saying so. Cart count, notifications and the mobile drawer are
- * still wired from outside.
+ * Shared storefront header: logo, gavel-animated Auction/E-commerce nav;
+ * logo + menu trigger on mobile. Presentational apart from the account
+ * control, which reads the session itself — it is the same on every page,
+ * and threading it through six call sites would only be a longer way of
+ * saying so. Cart count, notifications and the mobile drawer are still
+ * wired from outside.
  */
 function SiteHeader({
-  categories = defaultCategories,
   cartCount = 0,
   hasNotifications = false,
   onMenuToggle,
@@ -89,6 +58,17 @@ function SiteHeader({
           <GavelNav />
 
           <div className="ml-auto flex items-center gap-2 md:gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Watchlist"
+              className="text-ink"
+              nativeButton={false}
+              render={<Link href="/watchlist" />}
+            >
+              <Heart className="size-6" />
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
@@ -143,19 +123,6 @@ function SiteHeader({
         </div>
 
         <GavelNavMobile />
-
-        <nav className="mt-4 hidden flex-wrap justify-between gap-4 rounded-r3 bg-linear-to-b from-[#2b303b] to-ink px-6 py-4 md:flex">
-          {categories.map((category) => (
-            <Link
-              key={category.href}
-              href={category.href}
-              className="flex items-center gap-2 text-sm text-white/75 transition-colors hover:text-amber-400 [&_svg]:size-4.5"
-            >
-              {category.icon}
-              {category.label}
-            </Link>
-          ))}
-        </nav>
       </div>
     </header>
   )

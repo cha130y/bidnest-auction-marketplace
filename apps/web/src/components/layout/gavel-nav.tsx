@@ -72,7 +72,7 @@ function GavelNav() {
         <div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute -top-14.5 left-0 -ml-10.25 flex w-20.5 justify-center opacity-0 transition-[transform,opacity] duration-[460ms] ease-[cubic-bezier(0.5,0.05,0.2,1)]",
+            "pointer-events-none absolute -top-12 left-0 -ml-10.25 flex w-20.5 justify-center opacity-0 transition-[transform,opacity] duration-[460ms] ease-[cubic-bezier(0.5,0.05,0.2,1)]",
             ready && "opacity-100"
           )}
           style={{ transform: `translateX(${centers[target] ?? 0}px)` }}
