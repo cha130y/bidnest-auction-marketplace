@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { UserGateway } from './user.gateway';
+import { Injectable } from '@nestjs/common';
+import { conversationRoom, UserGateway } from './user.gateway';
 
 /**
  * The push side of SRS 4.1, addressed at one person: notifications, and order
@@ -15,8 +15,6 @@ import { UserGateway } from './user.gateway';
 export class RealtimeService {
   constructor(private readonly userGateway: UserGateway) {}
 
-  private readonly logger = new Logger(RealtimeService.name);
-
   emitOrderStatusChanged(userId: string, payload: unknown): void {
     this.userGateway.emitToUser(userId, 'order:status_changed', payload);
   }
@@ -26,17 +24,14 @@ export class RealtimeService {
   }
 
   /**
-   * Still a stub, and deliberately.
-   *
-   * A conversation room needs sockets to join it, and who may join which
-   * conversation is a rule the chat module owns (CHAT-001..003) — the auction
-   * module has no business deciding it. Emitting into a room nobody can join
-   * would look finished while delivering nothing, so this keeps logging until
-   * whoever owns chat adds the join path.
+   * CHAT-001..003 — the join path this was waiting on now exists
+   * (UserGateway#joinConversation), so this delivers for real.
    */
   emitMessageSent(conversationId: string, payload: unknown): void {
-    this.logger.log(
-      `[stub] message:sent -> conversation:${conversationId} ${JSON.stringify(payload)}`
+    this.userGateway.emitToRoom(
+      conversationRoom(conversationId),
+      'message:sent',
+      payload
     );
   }
 }

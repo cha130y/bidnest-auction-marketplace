@@ -5,6 +5,7 @@ import { Minus, Plus } from "lucide-react"
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button"
 import { NegotiateButton } from "@/components/shop/negotiate-button"
+import { NegotiationOfferForm } from "@/components/shop/negotiation-offer-form"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -124,6 +125,19 @@ export function ProductPurchasePanel({ product }: { product: Product }) {
       />
 
       <NegotiateButton productId={product.id} />
+
+      {/* AI-003 — instant automated counter-offer, separate from the
+          NegotiateButton chat thread above (a human seller on the other end).
+          Shown on every listing since the buyer-facing Product never carries
+          `negotiationFloor` (SRS §6); a listing with none set just answers
+          "This listing does not accept offers" on submit. */}
+      <Separator />
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-semibold text-ink">
+          หรือเสนอราคากับ AI (ตอบกลับทันที)
+        </span>
+        <NegotiationOfferForm productId={product.id} />
+      </div>
     </div>
   )
 }
