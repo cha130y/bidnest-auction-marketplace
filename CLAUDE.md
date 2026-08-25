@@ -47,7 +47,7 @@ Do NOT add "Co-Authored-By: Claude" or "Claude-Session:" trailer to commit messa
 
 ## เอกสารประกอบ
 
-- SRS: `docs\requirements\BidNest-Auction and Marketplace-v5.pdf`
+- SRS: `docs\requirements\BidNest-Auction and Marketplace-v6.pdf`
 - ER Diagram: `docs\architecture\erd\bidnest-erd-v1.dbml` หรือ link: https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff
 - Database schema: `apps\api\prisma\schema.prisma`
 - ADR (บันทึกการตัดสินใจเชิงสถาปัตยกรรม): `docs\architecture\adr\`
