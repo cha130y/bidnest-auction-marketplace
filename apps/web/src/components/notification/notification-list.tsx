@@ -299,6 +299,17 @@ export function NotificationList() {
           )
       )
       setUnread((current) => Math.max(0, current - 1))
+      // Under "ยังไม่ได้อ่าน" the row left the list, so the total it is
+      // counted against has to come down with it — otherwise the line below
+      // reads "แสดง 19 จาก 20" over a list that now holds all nineteen there
+      // are. Under "ทั้งหมด" the row stayed, and so does the total.
+      if (unreadOnly) {
+        setMeta((current) =>
+          current
+            ? { ...current, total: Math.max(0, current.total - 1) }
+            : current
+        )
+      }
       void queryClient.invalidateQueries({
         queryKey: unreadNotificationsQueryKey,
       })
