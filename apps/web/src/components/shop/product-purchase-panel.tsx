@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Minus, Plus } from "lucide-react"
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button"
+import { BuyNowButton } from "@/components/cart/buy-now-button"
 import { NegotiateButton } from "@/components/shop/negotiate-button"
 import { NegotiationOfferForm } from "@/components/shop/negotiation-offer-form"
 import { Badge } from "@/components/ui/badge"
@@ -122,7 +123,14 @@ export function ProductPurchasePanel({ product }: { product: Product }) {
         label={soldOut ? "สินค้าหมด" : "เพิ่มลงตะกร้า"}
         size="lg"
         block
+        cartLink
       />
+
+      {/* Second, and darker: adding to the cart is the ordinary press, and
+          buying outright is the one that ends in a payment screen. */}
+      {!soldOut && (
+        <BuyNowButton productId={product.id} quantity={quantity} />
+      )}
 
       <NegotiateButton productId={product.id} />
 
