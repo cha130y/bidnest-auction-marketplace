@@ -22,3 +22,11 @@ jobs:
       - run: pnpm --filter api exec prisma generate
       - run: pnpm lint
       - run: pnpm test
+      # Prerendering is the only check that catches a Server Component
+      # mistake — a `useSearchParams()` with nothing to suspend on, a client
+      # hook reached during export. None of it shows up in dev, where every
+      # page is rendered on demand, so without this the first time anyone
+      # learns the app cannot be built is when they try to deploy it.
+      # No env needed: the build reads nothing out of .env.local, which is
+      # gitignored and absent here anyway.
+      - run: pnpm --dir apps/web build

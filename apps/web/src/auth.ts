@@ -95,16 +95,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const held = token as { accessToken?: string; refreshToken?: string }
 
       if (held.refreshToken && needsRefresh(held.accessToken)) {
-        const renewed = await refreshTokens(held.refreshToken)
+        const result = await refreshTokens(held.refreshToken)
 
-        if (renewed) {
-          token.accessToken = renewed.accessToken
-          token.refreshToken = renewed.refreshToken
+        if (result.outcome === "renewed") {
+          token.accessToken = result.tokens.accessToken
+          token.refreshToken = result.tokens.refreshToken
           // Taken from the API's answer rather than kept, so a role changed by
           // an admin lands within the hour instead of at the next sign-in.
-          token.role = renewed.user.role
+          token.role = result.tokens.user.role
           delete token.error
-        } else {
+        } else if (result.outcome === "dead") {
           // The refresh token is spent, expired or revoked — the session is
           // genuinely over. Drop both tokens rather than carry a dead one that
           // every request would spend a round trip discovering: with no
@@ -114,6 +114,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           delete token.refreshToken
           token.error = "RefreshFailed"
         }
+        // "unreachable" changes nothing on purpose. The API said nothing
+        // about the session, so the session stays; the tokens ride on
+        // unchanged and the next read tries again. Signing people out
+        // because a server restarted is the bug this branch used to be.
       }
 
       return token
