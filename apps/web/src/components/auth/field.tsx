@@ -32,10 +32,12 @@ export function Field({
   error?: string
   /** Shown until an error replaces it. */
   hint?: string
+  /** Drops the required marker and says so in the label instead. */
   optional?: boolean
   /** Called with the props the control must spread, so the wiring cannot be forgotten. */
   children: (props: {
     id: string
+    required: boolean
     "aria-invalid": boolean
     "aria-describedby": string | undefined
   }) => ReactNode
@@ -49,13 +51,24 @@ export function Field({
         className="text-sm font-semibold text-ink has-[+_*_:disabled]:opacity-50"
       >
         {label}
-        {optional && (
-          <span className="ml-1 font-normal text-n-600">(ไม่บังคับ)</span>
+        {optional ? (
+          <span className="-ml-1 font-normal text-n-600">(ไม่บังคับ)</span>
+        ) : (
+          // `required-indicators`: say which boxes are compulsory before the
+          // form is submitted, not after. Hidden from screen readers because
+          // `required` on the control already announces it — read aloud, a
+          // bare asterisk is just "star".
+          // -ml-1 because Label is already `flex gap-2`; without it the
+          // marker sits 12px out and reads as its own word.
+          <span aria-hidden className="-ml-1 text-base leading-none text-red">
+            *
+          </span>
         )}
       </Label>
 
       {children({
         id,
+        required: !optional,
         "aria-invalid": Boolean(error),
         "aria-describedby": messageId
       })}
