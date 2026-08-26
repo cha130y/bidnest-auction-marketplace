@@ -7,9 +7,9 @@ import {
   Patch,
   Query
 } from '@nestjs/common';
-import type { ProductStatus } from '../../generated/prisma/enums';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { ListAdminProductsDto } from './dtos/list-admin-products.dto';
 import { ModerateProductDto } from './dtos/moderate-product.dto';
 import { AdminProductsService } from './products.service';
 
@@ -32,18 +32,16 @@ import { AdminProductsService } from './products.service';
 export class AdminProductsController {
   constructor(private readonly adminProductsService: AdminProductsService) {}
 
-  /** query: cursor?, limit?, status? (ProductStatus) */
+  /**
+   * query: cursor?, limit?, status? — see ListAdminProductsDto.
+   *
+   * One DTO rather than three `@Query('name')` strings: the global
+   * ValidationPipe only runs against a class metatype, so the string form was
+   * unvalidated no matter what it was annotated with.
+   */
   @Get()
-  listProducts(
-    @Query('cursor') cursor?: string,
-    @Query('limit') limit?: string,
-    @Query('status') status?: ProductStatus
-  ) {
-    return this.adminProductsService.listProducts({
-      cursor,
-      limit: limit ? Number(limit) : undefined,
-      status
-    });
+  listProducts(@Query() query: ListAdminProductsDto) {
+    return this.adminProductsService.listProducts(query);
   }
 
   /** body: { reason: string } → products.status = SUSPENDED */
