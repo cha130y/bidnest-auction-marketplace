@@ -1,10 +1,12 @@
-import { API_BASE_URL, ApiError, apiFetch } from "@/lib/api/client"
+import { API_BASE_URL, ApiError, apiFetch, buildQuery } from "@/lib/api/client"
 import { authHeader } from "@/lib/api/auth/token"
 import type {
   Auction,
   DraftValidation,
   OwnedDraftList,
   OwnerAuction,
+  OwnerAuctionStatus,
+  Paginated,
 } from "@/lib/api/types"
 
 /** Mirrors CreateAuctionDraftDto in apps/api/src/auction/dtos/. */
@@ -39,6 +41,28 @@ export function createDraft(input: CreateDraftInput) {
 /** AUC-001 — the seller's own drafts. Needs a token; nothing else may read them. */
 export function listOwnDrafts() {
   return apiFetch<OwnedDraftList>("/auctions/drafts")
+}
+
+/**
+ * AUC-006 — everything the seller has, in any state.
+ *
+ * The drafts route above is the narrow view of the same rows; this is the one
+ * the seller's own screen is built on, because a published auction leaves the
+ * drafts list and has to be findable somewhere.
+ *
+ * Paged, unlike the drafts list: a seller accumulates finished auctions for as
+ * long as they sell, and there is no natural ceiling to fall back on.
+ */
+export function listOwnAuctions(
+  params: { status?: OwnerAuctionStatus; page?: number; limit?: number } = {}
+) {
+  return apiFetch<Paginated<OwnerAuction>>(
+    `/auctions/mine${buildQuery({
+      status: params.status,
+      page: params.page,
+      limit: params.limit,
+    })}`
+  )
 }
 
 export function getOwnDraft(id: string) {

@@ -26,6 +26,7 @@ import { AuctionService } from './auction.service';
 import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListAuctionsDto } from './dtos/list-auctions.dto';
+import { ListOwnAuctionsDto } from './dtos/list-own-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import { AddAuctionImageDto } from './dtos/add-auction-image.dto';
 import {
@@ -59,6 +60,28 @@ export class AuctionController {
   @Get('drafts')
   listOwnDrafts(@CurrentUser('id') sellerId: string) {
     return this.auctionService.listOwnDrafts(sellerId);
+  }
+
+  /**
+   * AUC-006 — the seller's own auctions, whatever state they are in.
+   *
+   * `mine` rather than a flag on `GET /auctions`: that route is the public
+   * catalogue and is `@Public()`, so a personal view of it would mean one
+   * handler answering two different questions with two different guards. It
+   * also has to stay above `GET :id` — `:id` would otherwise swallow the
+   * literal segment, exactly as it would `drafts`.
+   *
+   * Mirrors `GET /products/mine` on the catalogue side, so both halves of a
+   * seller's shop are found the same way.
+   */
+  @Roles('USER')
+  @ReturnsOwnerFields()
+  @Get('mine')
+  listOwnAuctions(
+    @CurrentUser('id') sellerId: string,
+    @Query() dto: ListOwnAuctionsDto
+  ) {
+    return this.auctionService.listOwnAuctions(sellerId, dto);
   }
 
   @Roles('USER')

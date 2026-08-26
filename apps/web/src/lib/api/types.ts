@@ -261,11 +261,24 @@ export type Auction = {
 }
 
 /**
+ * Every status a row can hold, which is wider than `AuctionStatus` above.
+ *
+ * That one is the public four: AUC-005 keeps DRAFT and CANCELLED away from
+ * buyers entirely, so no buyer-facing type has ever needed to name them. The
+ * seller's own list is where both live — an unfinished draft, and a record of
+ * what they called off.
+ */
+export type OwnerAuctionStatus = AuctionStatus | "DRAFT" | "CANCELLED"
+
+/**
  * AUC-003 / SRS §6 — `reservePrice` is added by `toOwnerAuction` and comes back
  * only when the request carries the seller's own token. Never render it on a
  * buyer-facing surface.
  */
-export type OwnerAuction = Auction & { reservePrice: string | null }
+export type OwnerAuction = Omit<Auction, "status"> & {
+  status: OwnerAuctionStatus
+  reservePrice: string | null
+}
 
 // ── src/bid/bid-history.mapper.ts → toPublicBid ─────────────────────────────
 export type PublicBid = {

@@ -1,18 +1,22 @@
 import type { Metadata } from "next"
 
+import { ActiveAuctionFilters } from "@/components/auction/auction-active-filters"
 import { AuctionCard } from "@/components/auction/auction-card"
+import { AuctionFilters } from "@/components/auction/auction-filters"
 import { AuctionPagination } from "@/components/auction/auction-pagination"
 import { AuctionSectionTabs } from "@/components/auction/auction-section-tabs"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { AppHeader } from "@/components/layout/app-header"
 import { listAuctions } from "@/lib/api/auctions"
+import { listCategories } from "@/lib/api/categories"
 import { ApiError } from "@/lib/api/client"
 import {
   AUCTION_PAGE_SIZE,
   AUCTION_SECTION_TABS,
+  hasAuctionFilters,
   parseAuctionSearch,
 } from "@/lib/auction-search"
-import type { Auction, Paginated } from "@/lib/api/types"
+import type { Auction, CategoryTree, Paginated } from "@/lib/api/types"
 
 export const metadata: Metadata = {
   title: "ประมูลทั้งหมด · BidNest",
@@ -27,36 +31,50 @@ const EMPTY_MESSAGE: Record<string, string> = {
 }
 
 /**
- * AUC-008 — one section at a time, paged.
+ * AUC-008 — one section at a time, filtered and paged.
  *
  * No `force-dynamic` here, unlike the home page: reading `searchParams` already
  * makes the route dynamic, which `next build` confirms by reporting it as `ƒ`.
  *
- * The section and the page live in the URL rather than in React state, so the
- * page stays a Server Component and a filtered list is something a visitor can
- * share or reach with the back button.
+ * The section, the filters and the page live in the URL rather than in React
+ * state, so the page stays a Server Component and a filtered list is something
+ * a visitor can share or reach with the back button. Only the sidebar is a
+ * Client Component, exactly as on the catalogue.
  */
 export default async function AuctionsPage({
   searchParams,
 }: PageProps<"/auctions">) {
   const search = parseAuctionSearch(await searchParams)
 
-  let page: Paginated<Auction> | null = null
-  let error: unknown
-
-  try {
-    page = await listAuctions({
+  // `allSettled`, because the two answers are not equally important: the
+  // categories only draw the filter panel, and losing them must not take the
+  // list down with them — the same call Dev 3's catalogue makes.
+  const [listResult, categoriesResult] = await Promise.allSettled([
+    listAuctions({
       section: search.section,
+      q: search.q,
+      categoryIds: search.categoryIds,
+      minPrice: search.minPrice,
+      maxPrice: search.maxPrice,
       page: search.page,
       limit: AUCTION_PAGE_SIZE,
-    })
-  } catch (caught) {
-    error = caught
-  }
+    }),
+    listCategories(),
+  ])
+
+  const page: Paginated<Auction> | null =
+    listResult.status === "fulfilled" ? listResult.value : null
+
+  const error = listResult.status === "rejected" ? listResult.reason : undefined
+
+  const categories: CategoryTree[] =
+    categoriesResult.status === "fulfilled" ? categoriesResult.value : []
 
   const activeTab = AUCTION_SECTION_TABS.find(
     (tab) => tab.value === search.section
   )
+
+  const filtered = hasAuctionFilters(search)
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
@@ -74,36 +92,59 @@ export default async function AuctionsPage({
             </p>
           </header>
 
+          {/* Above the sidebar rather than beside it: a section is which list
+              you are reading, and the filters narrow whichever one that is. */}
           <AuctionSectionTabs search={search} />
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-r4 bg-white px-5 py-4 shadow-sh1">
-            <span className="text-sm text-n-600">
-              {page
-                ? `${activeTab?.label} · ${page.meta.total.toLocaleString("th-TH")} รายการ`
-                : "—"}
-            </span>
-          </div>
+          <div className="mt-4 grid gap-6 lg:grid-cols-[280px_1fr]">
+            <aside className="lg:sticky lg:top-6 lg:self-start">
+              {/* Re-seeds the inputs whenever the URL changes (clear, a
+                  section change, the back button) */}
+              <AuctionFilters
+                key={JSON.stringify(search)}
+                search={search}
+                categories={categories}
+              />
+            </aside>
 
-          {/* Ternary rather than `error && …`: `error` is `unknown`, and
-              `unknown && JSX` is `unknown`, which React will not render. */}
-          {error === undefined ? null : <ListError error={error} />}
-
-          {page && page.items.length === 0 && (
-            <p className="mt-6 rounded-r4 bg-white px-6 py-16 text-center text-n-500 shadow-sh1">
-              {EMPTY_MESSAGE[search.section]}
-            </p>
-          )}
-
-          {page && page.items.length > 0 && (
-            <>
-              <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-                {page.items.map((auction) => (
-                  <AuctionCard key={auction.id} auction={auction} />
-                ))}
+            <section>
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-r4 bg-white px-5 py-4 shadow-sh1">
+                <span className="text-sm text-n-600">
+                  {page
+                    ? `${activeTab?.label} · ${page.meta.total.toLocaleString("th-TH")} รายการ`
+                    : "—"}
+                </span>
               </div>
-              <AuctionPagination search={search} meta={page.meta} />
-            </>
-          )}
+
+              <ActiveAuctionFilters search={search} categories={categories} />
+
+              {/* Ternary rather than `error && …`: `error` is `unknown`, and
+                  `unknown && JSX` is `unknown`, which React will not render. */}
+              {error === undefined ? null : <ListError error={error} />}
+
+              {page && page.items.length === 0 && (
+                <p className="mt-6 rounded-r4 bg-white px-6 py-16 text-center text-n-500 shadow-sh1">
+                  {/* An empty section and an empty *filter* are different
+                      dead ends: one is nothing to see, the other is something
+                      to undo, and only the second has a way out. */}
+                  {filtered
+                    ? "ไม่พบการประมูลที่ตรงกับเงื่อนไข ลองล้างตัวกรองแล้วค้นหาใหม่"
+                    : EMPTY_MESSAGE[search.section]}
+                </p>
+              )}
+
+              {page && page.items.length > 0 && (
+                <>
+                  <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {page.items.map((auction) => (
+                      <AuctionCard key={auction.id} auction={auction} />
+                    ))}
+                  </div>
+                  <AuctionPagination search={search} meta={page.meta} />
+                </>
+              )}
+            </section>
+          </div>
         </div>
       </main>
 

@@ -44,12 +44,13 @@ const LINKS: MenuLink[] = [
   { href: "/profile", label: "โปรไฟล์", icon: User },
   { href: "/orders", label: "คำสั่งซื้อของฉัน", icon: Package },
   { href: "/watchlist", label: "รายการที่ติดตาม", icon: Heart },
-  // Two ways to sell, and this menu was the only way in to either. "/sell"
-  // starts an auction draft; listings live under "/sell/products" and were
-  // reachable only by typing the address, since every link to them sits on a
-  // page you have to already be on. Naming both here is what the single entry
-  // labelled "ขายสินค้า" was promising and could not keep.
-  { href: "/sell", label: "ลงประมูล", icon: Gavel },
+  // Two ways to sell, and this menu was the only way in to either. Both now
+  // point at the list rather than the form: a seller coming back here is far
+  // more often looking for something they already have than starting another
+  // one, and both lists carry the button that starts one. It also makes the
+  // two halves symmetrical — "/sell/auctions" and "/sell/products", with
+  // "/sell" and "/sell/products/new" as the forms behind them.
+  { href: "/sell/auctions", label: "การประมูลของฉัน", icon: Gavel },
   { href: "/sell/products", label: "ขายสินค้า", icon: Store },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: Shield, adminOnly: true }
 ]

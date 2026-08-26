@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
 
 import { ArenaPanel } from "@/components/auction/arena-panel"
 import { AuctionImage } from "@/components/auction/auction-image"
@@ -9,48 +8,9 @@ import { WatchButton } from "@/components/auction/watch-button"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { AppHeader } from "@/components/layout/app-header"
 import { getArena } from "@/lib/api/auctions"
-import { ApiError } from "@/lib/api/client"
+import { readArena } from "@/lib/api/read-arena"
 import { categoryLabel } from "@/lib/category-labels"
 import { formatTHB } from "@/lib/format"
-import type { AuctionArena } from "@/lib/api/types"
-
-/**
- * AUC-005 / LIV-002 — a published auction is public to read, so this fetches
- * without a token and renders for a signed-out visitor.
- *
- * Reads the arena rather than the auction alone: it carries the same auction
- * plus everything that moves — the leader, the latest bids, how close to the
- * deadline it is, and the result once there is one — in one round trip.
- *
- * AUC-003 shaped what reaches the browser. `GET /auctions/:id` answers the
- * seller's own request with `toOwnerAuction`, which carries `reservePrice`;
- * the arena's `auction` is the public shape and has no such field, so nothing
- * here can render the reserve even by accident. What a buyer is told is
- * `reserveMet`, in words.
- */
-async function readArena(id: string): Promise<AuctionArena> {
-  try {
-    return await getArena(id)
-  } catch (error) {
-    // A draft, a cancelled auction, a deleted one, or an id that never existed
-    // all arrive here as 404 — the API deliberately does not distinguish, so
-    // neither does this.
-    //
-    // 400 lands here too, and belongs with them: the route's only parameter is
-    // the id, and `ParseUUIDPipe` rejects anything that is not a uuid before
-    // the handler runs. From a visitor's side `/auctions/not-a-uuid` is an
-    // auction that does not exist, so it gets the same page. Letting the 400
-    // through instead rendered a 500 — which claims this server broke, and
-    // would wake somebody up over a mistyped URL.
-    if (
-      error instanceof ApiError &&
-      (error.status === 404 || error.status === 400)
-    ) {
-      notFound()
-    }
-    throw error
-  }
-}
 
 export async function generateMetadata({
   params,
