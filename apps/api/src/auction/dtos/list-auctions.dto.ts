@@ -1,5 +1,14 @@
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min
+} from 'class-validator';
 import {
   AUCTION_SECTIONS,
   type AuctionSection
@@ -24,6 +33,44 @@ export class ListAuctionsDto {
   @IsIn(AUCTION_SECTIONS)
   @IsOptional()
   section?: AuctionSection;
+
+  /**
+   * AUC-008 — narrowing, not reordering, which is what keeps the four filters
+   * below compatible with "no special flags or hidden scoring".
+   *
+   * A section still decides which auctions are eligible and in what order; all
+   * a filter can do is remove rows from what that section already returned.
+   * There is deliberately no `sort` — asking for the hot list must not become
+   * a way to get it arranged differently.
+   *
+   * The shapes mirror SearchProductDto, so the same filter panel on screen can
+   * drive both lists and a URL means the same thing on either.
+   */
+  @IsString()
+  @IsOptional()
+  q?: string;
+
+  // Accepts ?categoryIds=a&categoryIds=b and ?categoryIds=a,b
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (Array.isArray(value)) return value as string[];
+    if (typeof value === 'string') return value.split(',');
+    return value;
+  })
+  categoryIds?: string[];
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  minPrice?: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  maxPrice?: number;
 
   @IsInt()
   @Min(1)

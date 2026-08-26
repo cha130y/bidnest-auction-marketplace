@@ -35,6 +35,7 @@ import {
 import { MAX_AUCTION_IMAGES } from './constants/auction-image.constant';
 import { StorageService, type StoredImage } from '../storage/storage.service';
 import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
+import { escapeLike } from '../product/utils/escape-like.util';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { ListOwnAuctionsDto } from './dtos/list-own-auctions.dto';
@@ -364,11 +365,46 @@ export class AuctionService {
     const section = dto.section ?? DEFAULT_AUCTION_SECTION;
     const { where: sectionWhere, orderBy } = AUCTION_SECTION_QUERIES[section];
 
-    // Applied here rather than in each section so a section added later
-    // cannot forget it and start listing auctions an admin has removed.
+    // Mirrors ProductService.search, so a shopper who mistypes a range is told
+    // the same thing on either list rather than silently getting nothing.
+    if (
+      dto.minPrice !== undefined &&
+      dto.maxPrice !== undefined &&
+      dto.minPrice > dto.maxPrice
+    ) {
+      throw new BadRequestException('minPrice cannot be greater than maxPrice');
+    }
+
+    /**
+     * Collected into one `AND` rather than spread as sibling keys, because
+     * both of these are themselves an `OR`: written as two `OR` keys the
+     * second would replace the first, and a search plus a price range would
+     * quietly become a price range alone.
+     *
+     * Left out altogether when neither was asked for, rather than sent as an
+     * empty `AND: []`. Prisma answers both the same, but the query a section
+     * runs unfiltered should stay exactly the query it was — the tests that
+     * pin each section down compare the whole `where`, and an empty array in
+     * it is a difference they would have to be taught to ignore.
+     */
+    const narrowing = [
+      ...(dto.q ? [searchClause(dto.q)] : []),
+      ...(dto.minPrice !== undefined || dto.maxPrice !== undefined
+        ? [priceClause(dto.minPrice, dto.maxPrice)]
+        : [])
+    ];
+
+    // AUC-008 — every filter narrows what the section already chose; none of
+    // them can reach past it. `deletedAt` is applied here rather than in each
+    // section so a section added later cannot forget it and start listing
+    // auctions an admin has removed.
     const where: Prisma.AuctionWhereInput = {
       ...sectionWhere,
-      deletedAt: null
+      deletedAt: null,
+      ...(dto.categoryIds?.length
+        ? { categoryId: { in: dto.categoryIds } }
+        : {}),
+      ...(narrowing.length ? { AND: narrowing } : {})
     };
 
     const [items, total] = await Promise.all([
@@ -908,4 +944,52 @@ export class AuctionService {
 
     return toOwnerAuction(auction);
   }
+}
+
+/**
+ * AUC-008 — the words somebody typed, against the two fields that carry them.
+ *
+ * `escapeLike` is imported from the catalogue's utils rather than copied. It
+ * is the fix for `%` and `_` being LIKE's own wildcards, and a second copy of
+ * that rule is how one of the two ends up not being fixed. If a third module
+ * ever needs it, that is the moment to lift it into `common/` — a move that
+ * touches Dev 3's imports and should be agreed rather than assumed.
+ */
+function searchClause(q: string): Prisma.AuctionWhereInput {
+  const term = escapeLike(q);
+
+  return {
+    OR: [
+      { title: { contains: term, mode: 'insensitive' } },
+      { description: { contains: term, mode: 'insensitive' } }
+    ]
+  };
+}
+
+/**
+ * AUC-008 — a price range, matched against whichever price the auction is
+ * actually showing.
+ *
+ * This is the one filter that could not be copied from the catalogue. A
+ * product has one price; an auction has two, and which of them is on the card
+ * depends on whether anybody has bid — `currentPrice` starts at 0 and only
+ * means anything once `bidCount` is above zero.
+ *
+ * Filtering on `currentPrice` alone would therefore file every auction nobody
+ * has bid on under 0, and drop it from every range that does not start there:
+ * an auction opening at ฿3,000 would be missing from a search for ฿1,000 to
+ * ฿5,000 while showing ฿3,000 on its own card.
+ */
+function priceClause(min?: number, max?: number): Prisma.AuctionWhereInput {
+  const range = {
+    ...(min !== undefined ? { gte: min } : {}),
+    ...(max !== undefined ? { lte: max } : {})
+  };
+
+  return {
+    OR: [
+      { bidCount: { gt: 0 }, currentPrice: range },
+      { bidCount: 0, startingPrice: range }
+    ]
+  };
 }
