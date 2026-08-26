@@ -9,11 +9,11 @@ import {
   Patch,
   Query
 } from '@nestjs/common';
-import type { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ChangeOwnPasswordDto } from './dtos/change-own-password.dto';
 import { ChangeUserStatusDto } from './dtos/change-user-status.dto';
+import { ListAdminUsersDto } from './dtos/list-admin-users.dto';
 import { AdminUsersService } from './users.service';
 
 /**
@@ -31,18 +31,8 @@ export class AdminUsersController {
 
   /** query: cursor?, limit?, status? (ACTIVE | SUSPENDED | DEACTIVATED), role? (USER | ADMIN) */
   @Get()
-  listUsers(
-    @Query('cursor') cursor?: string,
-    @Query('limit') limit?: string,
-    @Query('status') status?: UserStatus,
-    @Query('role') role?: UserRole
-  ) {
-    return this.adminUsersService.listUsers({
-      cursor,
-      limit: limit ? Number(limit) : undefined,
-      status,
-      role
-    });
+  listUsers(@Query() query: ListAdminUsersDto) {
+    return this.adminUsersService.listUsers(query);
   }
 
   /**
