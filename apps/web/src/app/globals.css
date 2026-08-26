@@ -58,6 +58,18 @@
   --animate-block-hit-top: block-hit-top 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
   --animate-block-hit-base: block-hit-base 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
   --animate-block-flash: block-flash 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* Home page live ticker — see components/home/home-live-ticker.tsx */
+  --animate-marquee: marquee 34s linear infinite;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes beam-breathe {

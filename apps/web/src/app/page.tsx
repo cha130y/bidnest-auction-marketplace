@@ -5,6 +5,13 @@ import { HomeEndingSoonSection } from "@/components/auction/home-ending-soon-sec
 import { CartProvider } from "@/components/cart/cart-provider"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { AppHeader } from "@/components/layout/app-header"
+import {
+  HomeHero,
+  HomeHeroSpotlight,
+  HomeHeroSpotlightFallback,
+} from "@/components/home/home-hero"
+import { HomeLiveTicker } from "@/components/home/home-live-ticker"
+import { HomeStatsStrip } from "@/components/home/home-stats-strip"
 import { HomeProductPicksSection } from "@/components/shop/home-picks-section"
 import { CardGridSkeleton } from "@/components/ui/card-grid-skeleton"
 
@@ -31,21 +38,19 @@ export default function Home() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
       <AppHeader />
+      <HomeLiveTicker />
 
       <main className="flex-1">
+        <HomeHero
+          spotlight={
+            <Suspense fallback={<HomeHeroSpotlightFallback />}>
+              <HomeHeroSpotlight />
+            </Suspense>
+          }
+        />
+
         <div className="mx-auto w-full max-w-330 px-4 pb-16 md:px-6">
-          <header className="py-8">
-            <p className="text-xs font-semibold tracking-[0.18em] text-amber-600 uppercase">
-              Live bidding & shopping
-            </p>
-            <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
-              BidNest
-            </h1>
-            <p className="mt-2 max-w-2xl text-base text-n-600">
-              ประมูลแบบเรียลไทม์ควบคู่กับการช้อปปิ้งซื้อได้ทันที
-              เห็นราคาปัจจุบัน เวลาที่เหลือ และสินค้าใหม่ในที่เดียว
-            </p>
-          </header>
+          <HomeStatsStrip />
 
           <Suspense
             fallback={
