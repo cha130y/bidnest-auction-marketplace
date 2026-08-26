@@ -32,7 +32,7 @@ const MOBILE_ITEM_CLASS =
 export type SiteHeaderProps = {
   cartCount?: number
   watchlistCount?: number
-  /** Unread notification count — one number covers auction and e-commerce alike. */
+  /** Unread notification count — one number covers auction and marketplace alike. */
   notificationCount?: number
   /**
    * Signed in or not. Signed out, the notification/watchlist/cart icons send
@@ -49,7 +49,7 @@ export type SiteHeaderProps = {
 }
 
 /**
- * Shared storefront header: logo, gavel-animated Auction/E-commerce nav;
+ * Shared storefront header: logo, gavel-animated Auction/Marketplace nav;
  * logo + menu trigger on mobile. Presentational apart from the account
  * control, which reads the session itself — it is the same on every page,
  * and threading it through six call sites would only be a longer way of
