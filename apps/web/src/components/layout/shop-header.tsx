@@ -54,7 +54,8 @@ export function ShopHeader() {
     <SiteHeader
       cartCount={itemCount}
       watchlistCount={watchlistCount}
-      hasNotifications={(data?.unread ?? 0) > 0}
+      notificationCount={data?.unread ?? 0}
+      isAuthenticated={isAuthenticated}
     />
   )
 }

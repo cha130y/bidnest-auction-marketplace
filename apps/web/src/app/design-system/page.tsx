@@ -72,7 +72,12 @@ const colorSwatches = [
 export default function DesignSystemPage() {
   return (
     <div className="flex min-h-full flex-col bg-n-100">
-      <SiteHeader cartCount={2} hasNotifications />
+      <SiteHeader
+        cartCount={2}
+        watchlistCount={3}
+        notificationCount={1}
+        isAuthenticated
+      />
 
       <main className="mx-auto w-full max-w-330 flex-1 px-4 md:px-6">
         <div className="border-b border-n-200 py-12">
