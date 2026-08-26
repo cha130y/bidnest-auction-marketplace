@@ -76,7 +76,7 @@ export function ConversationList() {
   if (conversations.length === 0) {
     return (
       <p className="rounded-r4 bg-white px-6 py-16 text-center text-n-500 shadow-sh1">
-        ยังไม่มีบทสนทนา — เริ่มได้จากปุ่ม “ต่อรองราคากับผู้ขาย” ในหน้าสินค้า
+        ยังไม่มีบทสนทนา — เริ่มได้จากปุ่มทักหาผู้ขายในหน้าสินค้าหรือหน้าประมูล
       </p>
     )
   }
