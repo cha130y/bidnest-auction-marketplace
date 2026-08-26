@@ -28,7 +28,20 @@ async function loadProduct(id: string): Promise<OwnerProduct> {
   try {
     return await getProduct(id)
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) notFound()
+    // 400 belongs with 404, not with the crashes. The route's only parameter
+    // is the id, and `ParseUUIDPipe` rejects anything that is not a uuid
+    // before the handler runs — so `/shop/not-a-uuid` is, from a visitor's
+    // side, a listing that does not exist. Letting the 400 through rendered a
+    // 500 instead, which claims this server broke over a mistyped URL.
+    //
+    // The auction page reached the same conclusion first; this one had not
+    // caught up.
+    if (
+      error instanceof ApiError &&
+      (error.status === 404 || error.status === 400)
+    ) {
+      notFound()
+    }
     throw error
   }
 }
