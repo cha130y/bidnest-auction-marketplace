@@ -29,4 +29,22 @@ export class WatchlistProductsController {
   ) {
     return this.watchlist.listOwn(userId, dto);
   }
+
+  /**
+   * Just the number, for the heart in the header.
+   *
+   * Its own route rather than a flag on the list: the header is on every page,
+   * and reading the count off the list meant fetching a hundred rows to render
+   * one integer. Mirrors `GET /notifications/unread-count`, which the same
+   * header already calls for the same reason.
+   *
+   * This controller has no parameterised routes, so `count` cannot be read as
+   * an id — but it is declared next to the list anyway, since that is where
+   * anyone adding one would look.
+   */
+  @Roles('USER')
+  @Get('count')
+  countOwn(@CurrentUser('id') userId: string) {
+    return this.watchlist.countOwn(userId);
+  }
 }

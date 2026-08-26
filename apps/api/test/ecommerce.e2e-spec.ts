@@ -527,6 +527,73 @@ describe('E-commerce (e2e)', () => {
         productId
       );
     });
+
+    /**
+     * The number on its own, for the header badge.
+     *
+     * The point of these is that the count and the list never disagree: both
+     * are built on the same `ownWhere`, so the paused-listing rule is checked
+     * here too rather than taken on trust. A badge that counted a listing the
+     * page then refuses to show is worse than no badge.
+     */
+    describe('GET /watchlist/products/count', () => {
+      const countFor = async (userId: string) => {
+        const response = await request(app.getHttpServer())
+          .get('/watchlist/products/count')
+          .set('Authorization', authOf(userId))
+          .expect(200);
+
+        return (response.body as { total: number }).total;
+      };
+
+      it('agrees with what the list reports', async () => {
+        const mine = await followed(buyerId);
+        expect(await countFor(buyerId)).toBe(mine.meta.total);
+      });
+
+      it('counts a listing the moment it is followed, and stops when it is not', async () => {
+        const fresh = await createProduct(sellerAId);
+        const before = await countFor(buyerId);
+
+        await follow(buyerId, fresh).expect(200);
+        expect(await countFor(buyerId)).toBe(before + 1);
+
+        await unfollow(buyerId, fresh).expect(200);
+        expect(await countFor(buyerId)).toBe(before);
+      });
+
+      it('drops a listing that stops being on sale, exactly as the list does', async () => {
+        const fresh = await createProduct(sellerAId);
+        await follow(buyerId, fresh).expect(200);
+        const before = await countFor(buyerId);
+
+        await pause(fresh);
+
+        expect(await countFor(buyerId)).toBe(before - 1);
+        expect((await followed(buyerId)).meta.total).toBe(before - 1);
+      });
+
+      it('only ever counts the caller’s own list', async () => {
+        const fresh = await createProduct(sellerAId);
+        await follow(buyerId, fresh).expect(200);
+
+        expect(await countFor(strangerId)).toBe(
+          (await followed(strangerId)).meta.total
+        );
+      });
+
+      it('turns away a visitor who is not signed in', () =>
+        request(app.getHttpServer())
+          .get('/watchlist/products/count')
+          .expect(401));
+
+      // SRS 2 — admins moderate the marketplace, they do not shop in it
+      it('keeps admins out', () =>
+        request(app.getHttpServer())
+          .get('/watchlist/products/count')
+          .set('Authorization', authOf(adminId))
+          .expect(403));
+    });
   });
 
   describe('PROD-002 — a seller can find their own listings', () => {

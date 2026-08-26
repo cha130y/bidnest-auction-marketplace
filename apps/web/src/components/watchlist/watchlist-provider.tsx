@@ -3,12 +3,15 @@
 import { createContext, use } from "react"
 import { useQuery } from "@tanstack/react-query"
 
-import { productWatchlistQueryKey } from "@/components/shop/product-watch-button"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
-import { listProductWatchlist } from "@/lib/api/product-watchlist"
-import { listWatchlist } from "@/lib/api/watchlist"
-
-export const auctionWatchlistQueryKey = ["auction-watchlist"] as const
+import {
+  countProductWatchlist,
+  productWatchlistCountQueryKey,
+} from "@/lib/api/product-watchlist"
+import {
+  auctionWatchlistCountQueryKey,
+  countWatchlist,
+} from "@/lib/api/watchlist"
 
 type WatchlistContextValue = {
   /** Listings followed. */
@@ -40,42 +43,46 @@ const WatchlistContext = createContext<WatchlistContextValue | null>(null)
  * `/watchlist` shows both under it — a badge that counted only half would
  * disagree with the page it opens.
  *
- * The listings half is free: it reuses `productWatchlistQueryKey`, the key
- * every heart on every card already reads, so React Query serves it from the
- * same fetch rather than making a second one. That shared key is also what
- * makes the badge move the moment a heart is pressed — following a listing
- * invalidates the key, both this and the card re-read it, and they cannot
- * drift apart.
+ * Both halves ask for a count rather than a list.
  *
- * The auctions half is shared the same way since WAT-001 landed: the auction
- * side's `WatchButton` reads `auctionWatchlistQueryKey` with the same
- * `listWatchlist({ limit: 100 })` this does, so the two are one request and
- * one answer. (It used to fetch through `useEffect`, which is why this note
- * once said there was nothing to share with.)
+ * They used to read `meta.total` off `listProductWatchlist({ limit: 100 })`
+ * and `listWatchlist({ limit: 100 })` — which is a hundred products with their
+ * images and sellers, and a hundred auctions with their countdowns and
+ * winners, fetched on every page in the app to render two integers. The hearts
+ * on a catalog page need that list and share the key, so on `/shop` it cost
+ * nothing extra; everywhere else — `/cart`, `/orders`, `/notifications`, every
+ * page with a header and no hearts — it was the whole payload for the number.
+ *
+ * The badge still moves the moment a heart is pressed, and without either
+ * button having to know this exists. `productWatchlistCountQueryKey` is
+ * `["product-watchlist", "count"]` — the list key with a segment appended — and
+ * `invalidateQueries` matches by prefix, so the `invalidateQueries({ queryKey:
+ * productWatchlistQueryKey })` each button already runs invalidates the count
+ * too. The auction side works the same way. Anything that invalidates the list
+ * invalidates the number derived from it, which is the only relationship worth
+ * guaranteeing between them.
  */
 export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { token, ready } = useAuthToken()
   const isAuthenticated = ready && Boolean(token)
 
   const products = useQuery({
-    queryKey: productWatchlistQueryKey,
-    queryFn: () => listProductWatchlist({ limit: 100 }),
+    queryKey: productWatchlistCountQueryKey,
+    queryFn: countProductWatchlist,
     enabled: isAuthenticated,
     // A 401 will not fix itself by trying again
     retry: false,
   })
 
   const auctions = useQuery({
-    queryKey: auctionWatchlistQueryKey,
-    queryFn: () => listWatchlist({ limit: 100 }),
+    queryKey: auctionWatchlistCountQueryKey,
+    queryFn: countWatchlist,
     enabled: isAuthenticated,
     retry: false,
   })
 
-  // `meta.total` rather than `items.length`: the total is the whole list, and
-  // the request only ever asks for the first page of it.
-  const productCount = products.data?.meta.total ?? 0
-  const auctionCount = auctions.data?.meta.total ?? 0
+  const productCount = products.data?.total ?? 0
+  const auctionCount = auctions.data?.total ?? 0
 
   const value: WatchlistContextValue = {
     productCount,
