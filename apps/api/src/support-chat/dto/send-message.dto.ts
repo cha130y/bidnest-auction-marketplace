@@ -26,7 +26,14 @@ export class GuestHistoryItemDto {
   body: string;
 }
 
-export class SendMessageDto {
+/**
+ * Named distinctly from chat/dtos/send-message.dto.ts's own `SendMessageDto`
+ * — same class name, different shape, different module. Swagger keys its
+ * generated schemas by class name alone, so the two collided into one broken
+ * schema until this rename; newer @nestjs/swagger turns the same collision
+ * into a hard error instead of a warning.
+ */
+export class SendSupportChatMessageDto {
   @IsOptional()
   @IsUUID()
   sessionId?: string;

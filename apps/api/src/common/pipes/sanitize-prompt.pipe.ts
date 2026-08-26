@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, PipeTransform } from '@nestjs/common';
-import { SendMessageDto } from '../../support-chat/dto/send-message.dto';
+import { SendSupportChatMessageDto } from '../../support-chat/dto/send-message.dto';
 
 const INJECTION_PATTERNS = [
   /ignore (all )?previous instructions/i,
@@ -12,10 +12,10 @@ const INJECTION_PATTERNS = [
 
 @Injectable()
 export class SanitizePromptPipe implements PipeTransform<
-  SendMessageDto,
-  SendMessageDto
+  SendSupportChatMessageDto,
+  SendSupportChatMessageDto
 > {
-  transform(value: SendMessageDto): SendMessageDto {
+  transform(value: SendSupportChatMessageDto): SendSupportChatMessageDto {
     const suspicious = INJECTION_PATTERNS.some((pattern) =>
       pattern.test(value.message)
     );
