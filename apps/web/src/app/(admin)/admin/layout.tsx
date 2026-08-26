@@ -9,6 +9,7 @@ import {
   Gavel,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   Menu,
   Package,
   ScrollText,
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   { href: '/admin/products', label: 'Products', code: 'ADM-005', icon: Package },
   { href: '/admin/orders', label: 'Orders', code: 'ADM-006', icon: ShoppingBag },
   { href: '/admin/categories', label: 'Categories', code: 'ADM-003', icon: FolderTree },
+  { href: '/admin/support', label: 'Support Chat', icon: MessageCircle },
 ];
 
 function useCurrentNavItem() {

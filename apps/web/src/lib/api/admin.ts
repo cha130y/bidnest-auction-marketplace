@@ -204,6 +204,94 @@ export function fetchAdminOverview(): Promise<AdminOverview> {
   return apiFetch<AdminOverview>("/admin/overview")
 }
 
+// ── AI-001 escalation — the admin side of the chat widget's "คุยกับแอดมิน" ──
+
+export type SupportSessionStatus = "AI_ONLY" | "ESCALATED" | "RESOLVED"
+
+export type SupportSessionParticipant = {
+  id: string
+  email: string
+  displayName: string | null
+} | null
+
+export type AdminSupportMessage = {
+  id: string
+  sessionId: string
+  role: "USER" | "ASSISTANT" | "ADMIN"
+  body: string
+  createdAt: string
+}
+
+export type AdminSupportSessionSummary = {
+  id: string
+  status: SupportSessionStatus
+  createdAt: string
+  user: SupportSessionParticipant
+  assignedAdmin: SupportSessionParticipant
+  lastMessage: AdminSupportMessage | null
+}
+
+export type AdminSupportSessionDetail = Omit<
+  AdminSupportSessionSummary,
+  "lastMessage"
+> & {
+  messages: AdminSupportMessage[]
+}
+
+export function fetchAdminSupportSessions(
+  params: { status?: SupportSessionStatus } = {}
+): Promise<AdminSupportSessionSummary[]> {
+  return apiFetch<AdminSupportSessionSummary[]>(
+    `/admin/support/sessions${buildQuery(params)}`
+  )
+}
+
+export function fetchAdminSupportSession(
+  sessionId: string
+): Promise<AdminSupportSessionDetail> {
+  return apiFetch<AdminSupportSessionDetail>(
+    `/admin/support/sessions/${sessionId}`
+  )
+}
+
+/**
+ * The raw session row, not the enriched shape `fetchAdminSupportSession`
+ * returns (no flattened `user`/`assignedAdmin` — the service hands back
+ * Prisma's own `update()` result as-is). Callers that need the enriched
+ * shape after claiming/resolving should refetch, not read this response.
+ */
+export type RawSupportSession = {
+  id: string
+  status: SupportSessionStatus
+  assignedAdminId: string | null
+}
+
+export function claimSupportSession(
+  sessionId: string
+): Promise<RawSupportSession> {
+  return apiFetch(`/admin/support/sessions/${sessionId}/claim`, {
+    method: "PATCH",
+  })
+}
+
+export function sendAdminSupportMessage(
+  sessionId: string,
+  body: string
+): Promise<AdminSupportMessage> {
+  return apiFetch<AdminSupportMessage>(
+    `/admin/support/sessions/${sessionId}/messages`,
+    { method: "POST", body: JSON.stringify({ body }) }
+  )
+}
+
+export function resolveSupportSession(
+  sessionId: string
+): Promise<RawSupportSession> {
+  return apiFetch(`/admin/support/sessions/${sessionId}/resolve`, {
+    method: "PATCH",
+  })
+}
+
 // ── ADM-001 — auction oversight (owner: Dev 4) ──────────────────────────────
 
 export function fetchAdminAuctions(
