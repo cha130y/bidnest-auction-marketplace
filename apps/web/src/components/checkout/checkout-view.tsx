@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
+import { ordersQueryKey } from "@/components/order/order-list"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -211,6 +212,16 @@ function CheckoutForm({
       // Checkout empties the cart server-side; without this the header badge
       // would keep the old count until something else happened to refetch.
       void queryClient.invalidateQueries({ queryKey: cartQueryKey })
+
+      // And this is the moment the buyer's order list stopped being true.
+      // `/orders` has no socket wired to it, so nothing else tells it that an
+      // order now exists — it was only ever right because React Query's
+      // default `staleTime: 0` refetched it on arrival. Saying so explicitly
+      // is what the list actually needs, and it is what keeps a non-zero
+      // staleTime from showing a buyer a list without the order they just
+      // paid for.
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+
       onDone(result)
     },
     onError: () => setShowFailure(true),

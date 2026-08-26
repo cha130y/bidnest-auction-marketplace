@@ -87,12 +87,7 @@ export class WatchlistService {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? DEFAULT_WATCHLIST_PAGE_SIZE;
 
-    // An auction that has since been cancelled or rolled back to draft drops
-    // out of the list rather than appearing as a row nobody may open.
-    const where = {
-      userId,
-      auction: { status: { in: PUBLIC_AUCTION_STATUSES }, deletedAt: null }
-    } satisfies Prisma.WatchlistWhereInput;
+    const where = this.ownWhere(userId);
 
     const [entries, total] = await Promise.all([
       this.prisma.watchlist.findMany({
@@ -137,6 +132,40 @@ export class WatchlistService {
         };
       }),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
+  }
+
+  /**
+   * How many auctions the caller follows, without sending any of them.
+   *
+   * The heart in the header wants one number, and the header is on every page.
+   * Reading it off `listOwn`'s `meta.total` meant asking for a page of a
+   * hundred rows — each one a full auction, plus the winner lookup and a
+   * countdown computed per row — and throwing all of it away.
+   *
+   * Built on the same `ownWhere` the list uses, so the number in the header
+   * cannot disagree with the page it opens.
+   */
+  async countOwn(userId: string) {
+    const total = await this.prisma.watchlist.count({
+      where: this.ownWhere(userId)
+    });
+
+    return { total };
+  }
+
+  /**
+   * Which rows count as on the list.
+   *
+   * An auction that has since been cancelled or rolled back to draft drops out
+   * rather than appearing as a row nobody may open — and, for the count,
+   * rather than being tallied into a badge that promises more than the page
+   * can show.
+   */
+  private ownWhere(userId: string): Prisma.WatchlistWhereInput {
+    return {
+      userId,
+      auction: { status: { in: PUBLIC_AUCTION_STATUSES }, deletedAt: null }
     };
   }
 

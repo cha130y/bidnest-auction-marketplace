@@ -1,12 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { AdminActionType } from '../../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface ListActionsQuery {
-  cursor?: string;
-  limit?: number;
-  actionType?: AdminActionType;
-}
+import { ListAdminActionsDto } from './dtos/list-admin-actions.dto';
 
 /**
  * ADM-004 — Audit log viewer (owner: Dev 5)
@@ -22,7 +16,12 @@ interface ListActionsQuery {
 export class AdminActionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listActions(query: ListActionsQuery = {}) {
+  /**
+   * Takes the DTO itself rather than a private copy of its shape, so the
+   * bounds written there cannot drift from what this method assumes. Every
+   * field arrives validated: the controller is the only caller.
+   */
+  async listActions(query: ListAdminActionsDto = {}) {
     const limit = query.limit ?? 20;
 
     return this.prisma.adminAction.findMany({

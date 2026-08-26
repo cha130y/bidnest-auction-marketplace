@@ -481,4 +481,71 @@ describe('Watchlist (e2e)', () => {
         .expect(403);
     });
   });
+
+  /**
+   * WAT-002 — the number on its own, for the header badge.
+   *
+   * The point of these is that the count and the list never disagree. Both
+   * are built on the same `ownWhere`, so every rule the list applies has to
+   * show up here too — which is why the cancelled-auction case is repeated
+   * rather than taken on trust.
+   */
+  describe('GET /watchlist/count', () => {
+    const countFor = async (userId: string) => {
+      const response = await request(app.getHttpServer())
+        .get('/watchlist/count')
+        .set('Authorization', authOf(userId))
+        .expect(200);
+
+      return (response.body as { total: number }).total;
+    };
+
+    it('is zero for somebody who watches nothing', async () => {
+      expect(await countFor(buyerId)).toBe(0);
+    });
+
+    it('agrees with what the list reports', async () => {
+      const first = await publishAuction(1);
+      const second = await publishAuction(2);
+      await watch(first, buyerId).expect(200);
+      await watch(second, buyerId).expect(200);
+
+      expect(await countFor(buyerId)).toBe(2);
+      expect((await listFor(buyerId)).meta.total).toBe(2);
+    });
+
+    it('drops an auction that stops being public, exactly as the list does', async () => {
+      const auctionId = await publishAuction(1);
+      await watch(auctionId, buyerId).expect(200);
+      expect(await countFor(buyerId)).toBe(1);
+
+      await request(app.getHttpServer())
+        .post(`/auctions/${auctionId}/cancel`)
+        .set('Authorization', authOf(sellerId))
+        .send({ reason: 'No longer for sale' })
+        .expect(200);
+
+      expect(await countFor(buyerId)).toBe(0);
+      expect((await listFor(buyerId)).meta.total).toBe(0);
+    });
+
+    it('only ever counts the caller’s own list', async () => {
+      const auctionId = await publishAuction(1);
+      await watch(auctionId, buyerId).expect(200);
+
+      expect(await countFor(buyerId)).toBe(1);
+      expect(await countFor(sellerId)).toBe(0);
+    });
+
+    it('turns away a visitor who is not signed in', async () => {
+      await request(app.getHttpServer()).get('/watchlist/count').expect(401);
+    });
+
+    it('keeps admins out', async () => {
+      await request(app.getHttpServer())
+        .get('/watchlist/count')
+        .set('Authorization', authOf(adminId))
+        .expect(403);
+    });
+  });
 });

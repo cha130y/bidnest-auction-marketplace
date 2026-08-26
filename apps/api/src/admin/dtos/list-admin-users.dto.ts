@@ -5,17 +5,23 @@ import { UserRole, UserStatus } from '../../../generated/prisma/enums';
 /**
  * ADM-002 — what an admin may narrow the user list by.
  *
- * Mirrors ADM-001's ListAdminAuctionsDto: a bad `status`/`role` used to reach
- * Prisma's `where` clause as a raw string and come back as an unhandled 500
- * instead of a 400, and an out-of-range `limit` or non-UUID `cursor` failed
- * the same way. Validating here means the global ValidationPipe rejects all
- * four before the query ever runs.
+ * The four parameters were read as bare query strings before this existed.
+ * `@Query('status') status?: UserStatus` is a compile-time annotation, and the
+ * global ValidationPipe skips a parameter whose metatype is a built-in like
+ * `String` — so nothing checked any of them and all four reached Prisma as
+ * typed. Same shape, same four failures, as ADM-005 had before #114.
  */
 export class ListAdminUsersDto {
+  /** The id of the last row already shown; that row is skipped, not repeated. */
   @IsUUID()
   @IsOptional()
   cursor?: string;
 
+  /**
+   * Bounded at 100, matching every other list in the API. Unbounded, one
+   * hand-edited URL pulls the entire users table — and this is the list where
+   * every row is a person's account and email address.
+   */
   @IsInt()
   @Min(1)
   @Max(100)

@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import type { ReactNode, SVGProps } from "react"
 
@@ -8,6 +9,13 @@ export type FooterLinkGroup = {
   links: { label: string; href: string }[]
 }
 
+/**
+ * Every href here is a route that actually exists — the previous list
+ * pointed half its links at pages that were never built (`/how-it-works`,
+ * `/fees`, `/support/*`, `/terms`), so "read more" and "get help" both led
+ * to a 404. These are what's real today: browsing/selling on the left,
+ * the signed-in account pages on the right.
+ */
 export const defaultFooterGroups: FooterLinkGroup[] = [
   {
     title: "Marketplace",
@@ -15,20 +23,18 @@ export const defaultFooterGroups: FooterLinkGroup[] = [
       { label: "Live auctions", href: "/auctions" },
       { label: "Buy now", href: "/shop" },
       { label: "Watchlist", href: "/watchlist" },
-      { label: "Sell an item", href: "/sell" },
-      { label: "How bidding works", href: "/how-it-works" },
-      { label: "Fees", href: "/fees" },
+      { label: "Start an auction", href: "/sell" },
+      { label: "Sell products", href: "/sell/products" },
     ],
   },
   {
-    title: "Support",
+    title: "My account",
     links: [
-      { label: "Track an order", href: "/orders" },
-      { label: "Delivery & returns", href: "/support/delivery" },
-      { label: "Buyer protection", href: "/support/protection" },
-      { label: "Payments", href: "/support/payments" },
-      { label: "FAQ", href: "/support/faq" },
-      { label: "Terms of use", href: "/terms" },
+      { label: "My orders", href: "/orders" },
+      { label: "Selling orders", href: "/sell/orders" },
+      { label: "Cart", href: "/cart" },
+      { label: "Messages", href: "/chat" },
+      { label: "Notifications", href: "/notifications" },
     ],
   },
 ]
@@ -99,22 +105,16 @@ function SiteFooter({
   return (
     <footer className={cn("w-full", className)}>
       <div className="mx-auto max-w-330 px-4 py-6 md:px-6 md:py-8">
-        <div className="flex flex-col items-center gap-10 rounded-r4 bg-white px-6 py-10 text-center shadow-sh2 md:flex-row md:flex-wrap md:items-start md:gap-16 md:px-10 md:py-12 md:text-left">
+        <div className="flex flex-col items-center gap-10 rounded-r4 bg-white px-6 py-10 text-center shadow-sh2 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-8 md:px-10 md:py-12 md:text-left">
           <div className="max-w-80">
-            <Link
-              href="/"
-              className="flex items-center justify-center gap-2 font-display text-xl font-bold text-ink md:justify-start"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                className="size-7 text-amber-500"
-              >
-                <path d="M3 6l9 12 9-12M8 6l4 5 4-5" />
-              </svg>
-              BidNest
+            <Link href="/" className="flex items-center justify-center md:justify-start">
+              <Image
+                src="/logo.jpg"
+                alt="BidNest"
+                width={1160}
+                height={730}
+                className="h-10 w-auto"
+              />
             </Link>
             <p className="mt-5 text-[15px] leading-relaxed text-n-500">
               {description}

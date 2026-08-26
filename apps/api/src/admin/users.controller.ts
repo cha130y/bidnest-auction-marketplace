@@ -29,7 +29,13 @@ import { AdminUsersService } from './users.service';
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
-  /** query: cursor?, limit?, status? (ACTIVE | SUSPENDED | DEACTIVATED), role? (USER | ADMIN) */
+  /**
+   * query: cursor?, limit?, status?, role? — see ListAdminUsersDto.
+   *
+   * One DTO rather than four `@Query('name')` strings: the global
+   * ValidationPipe only runs against a class metatype, so the string form was
+   * unvalidated no matter what it was annotated with.
+   */
   @Get()
   listUsers(@Query() query: ListAdminUsersDto) {
     return this.adminUsersService.listUsers(query);

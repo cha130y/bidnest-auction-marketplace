@@ -68,12 +68,7 @@ export class ProductWatchlistService {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? DEFAULT_PAGE_SIZE;
 
-    // A listing the seller has since paused, or an admin has taken down, drops
-    // out of the list rather than appearing as a row nobody may open.
-    const where = {
-      userId,
-      product: { status: { in: PUBLIC_PRODUCT_STATUSES } }
-    } satisfies Prisma.ProductWatchlistWhereInput;
+    const where = this.ownWhere(userId);
 
     const [entries, total] = await Promise.all([
       this.prisma.productWatchlist.findMany({
@@ -99,6 +94,41 @@ export class ProductWatchlistService {
         product: toPublicProduct(entry.product)
       })),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
+  }
+
+  /**
+   * How many listings the caller follows, without sending any of them.
+   *
+   * The badge in the header wants one number. Reading it off `listOwn`'s
+   * `meta.total` meant asking for a page of a hundred rows — each one a full
+   * product with its images and its seller — and throwing all of it away.
+   *
+   * Deliberately the same shape as `GET /notifications/unread-count`, and
+   * deliberately built on the same `ownWhere` the list uses: a count that
+   * filtered differently from the list would put a number in the header that
+   * disagrees with the page it opens.
+   */
+  async countOwn(userId: string) {
+    const total = await this.prisma.productWatchlist.count({
+      where: this.ownWhere(userId)
+    });
+
+    return { total };
+  }
+
+  /**
+   * Which rows count as on the list.
+   *
+   * A listing the seller has since paused, or an admin has taken down, drops
+   * out rather than appearing as a row nobody may open — and, for the count,
+   * rather than being tallied into a badge that promises more than the page
+   * can show.
+   */
+  private ownWhere(userId: string): Prisma.ProductWatchlistWhereInput {
+    return {
+      userId,
+      product: { status: { in: PUBLIC_PRODUCT_STATUSES } }
     };
   }
 

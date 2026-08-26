@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { Suspense, type ReactNode } from "react"
 import { Bell, Heart, Menu, ShoppingCart } from "lucide-react"
@@ -73,20 +74,15 @@ function SiteHeader({
     <header className={cn("w-full", className)}>
       <div className="mx-auto max-w-330 px-4 py-4 md:px-6 md:py-6">
         <div className="flex items-center gap-4 rounded-r4 bg-white px-4 py-4 shadow-sh2 md:gap-6 md:px-6 md:py-5">
-          <Link
-            href="/"
-            className="flex shrink-0 items-center gap-2 font-display text-xl font-bold text-ink md:text-2xl"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="size-7 text-amber-500"
-            >
-              <path d="M3 6l9 12 9-12M8 6l4 5 4-5" />
-            </svg>
-            BidNest
+          <Link href="/" className="flex shrink-0 items-center">
+            <Image
+              src="/logo.jpg"
+              alt="BidNest"
+              width={1160}
+              height={730}
+              priority
+              className="h-9 w-auto md:h-11"
+            />
           </Link>
 
           <GavelNav />
