@@ -146,7 +146,7 @@ export default async function ProductDetailPage({
                 {product.seller.displayName ?? "ไม่ระบุชื่อ"}
               </p>
               <p className="mt-2 text-sm text-n-600">
-                กดปุ่ม &ldquo;ต่อรองราคากับผู้ขาย&rdquo;
+                กดปุ่ม &ldquo;ทักหาผู้ขาย&rdquo;
                 เพื่อเปิดห้องสนทนากับผู้ขายรายนี้โดยตรง
               </p>
             </TabsContent>
