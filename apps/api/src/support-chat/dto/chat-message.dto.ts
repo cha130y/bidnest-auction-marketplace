@@ -13,7 +13,7 @@ export class SendMessageResponseDto {
   /**
    * `null` for a guest caller: there is no session to persist without a
    * userId, so the widget carries its own history instead (see
-   * SendMessageDto.history) and never has one to send back.
+   * SendSupportChatMessageDto.history) and never has one to send back.
    */
   sessionId: string | null;
   reply: ChatMessageDto;
