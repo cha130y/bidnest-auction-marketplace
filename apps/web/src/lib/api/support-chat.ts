@@ -39,7 +39,13 @@ export function sendSupportChatMessage(
     body: JSON.stringify({
       message,
       sessionId,
-      history: history?.slice(-10),
+      // Picked field-by-field rather than sent as-is: the caller passes this
+      // widget's own ChatMessage[], which also carries id/sessionId/createdAt
+      // — fields GuestHistoryItemDto doesn't declare, and the API's
+      // whitelist-and-forbid validation rejects rather than silently drops.
+      history: history
+        ?.slice(-10)
+        .map(({ role, body }) => ({ role, body })),
     }),
   });
 }
