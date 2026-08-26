@@ -5,14 +5,8 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import type { ProductStatus } from '../../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface ListProductsQuery {
-  cursor?: string;
-  limit?: number;
-  status?: ProductStatus;
-}
+import { ListAdminProductsDto } from './dtos/list-admin-products.dto';
 
 /**
  * ADM-005 — Product listing oversight (owner: Dev 3)
@@ -39,8 +33,13 @@ export class AdminProductsService {
    * request, since it was blocking a real GET /admin/products table on the
    * dashboard. Same cursor/limit/status shape ADM-002 and ADM-004 already
    * use, since it was scaffolded alongside those.
+   *
+   * Takes the DTO itself rather than a private copy of its shape, so the
+   * bounds written there cannot drift from what this method assumes. Every
+   * field arrives validated: the controller is the only caller, and it hands
+   * over what the pipe already checked.
    */
-  async listProducts(query: ListProductsQuery = {}) {
+  async listProducts(query: ListAdminProductsDto = {}) {
     const limit = query.limit ?? 20;
 
     const products = await this.prisma.product.findMany({
