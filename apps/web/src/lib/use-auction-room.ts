@@ -59,10 +59,20 @@ export function useAuctionRoom(auctionId: string, onChange: () => void) {
     })
 
     const join = () => {
-      socket.emit("auction:join", {
-        auctionId,
-        token: getAuthToken() ?? undefined,
+      // Awaited rather than read inline: the token lives in an httpOnly
+      // session cookie now (AUTH-008), so `getAuthToken()` is async. Emitting
+      // the promise itself would put `{}` on the wire — a promise carries no
+      // enumerable properties — and the gateway reads anything that is not a
+      // string as anonymous, costing LIV-001 the one thing the token is for:
+      // noticing that this person's connection has gone.
+      void getAuthToken().then((token) => {
+        // The room may already have been left while the session was read.
+        if (!socket.connected) return
+        socket.emit("auction:join", { auctionId, token: token ?? undefined })
       })
+
+      // Not behind the token: the arena read sends its own bearer, so the
+      // screen has no reason to wait for the session on its way to the room.
       onChange()
     }
 
