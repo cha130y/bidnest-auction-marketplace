@@ -10,7 +10,7 @@ import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { loginHref } from "@/lib/api/auth/login-redirect"
-import { removeCartItem, updateCartItem } from "@/lib/api/cart"
+import { clearCart, removeCartItem, updateCartItem } from "@/lib/api/cart"
 import { ApiError } from "@/lib/api/client"
 import { checkoutHref, totalsOf } from "@/lib/cart-selection"
 import { formatPercent, formatTHB } from "@/lib/format"
@@ -106,20 +106,26 @@ function CartBody({ cart }: { cart: Cart }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
       <div className="space-y-4">
-        <label className="flex cursor-pointer items-center gap-3 rounded-r4 bg-white px-4 py-3 shadow-sh1">
-          <Checkbox
-            checked={allSelected}
-            indeterminate={selected.size > 0 && !allSelected}
-            onCheckedChange={(checked) =>
-              setUnselected(
-                checked ? new Set() : new Set(cart.items.map((item) => item.id))
-              )
-            }
-          />
-          <span className="text-sm font-semibold text-ink">
-            เลือกทั้งหมด ({cart.items.length} รายการ)
-          </span>
-        </label>
+        <div className="flex items-center gap-3 rounded-r4 bg-white px-4 py-3 shadow-sh1">
+          <label className="flex flex-1 cursor-pointer items-center gap-3">
+            <Checkbox
+              checked={allSelected}
+              indeterminate={selected.size > 0 && !allSelected}
+              onCheckedChange={(checked) =>
+                setUnselected(
+                  checked
+                    ? new Set()
+                    : new Set(cart.items.map((item) => item.id))
+                )
+              }
+            />
+            <span className="text-sm font-semibold text-ink">
+              เลือกทั้งหมด ({cart.items.length} รายการ)
+            </span>
+          </label>
+
+          <ClearCartButton />
+        </div>
 
         <ul className="space-y-4">
           {cart.items.map((item) => (
@@ -153,6 +159,61 @@ function EmptyState({
       <h2 className="mt-4 font-display text-xl font-bold text-ink">{title}</h2>
       <p className="mx-auto mt-2 max-w-100 text-base text-n-600">{body}</p>
       <div className="mt-6 flex justify-center">{action}</div>
+    </div>
+  )
+}
+
+/**
+ * CART-002 — empties the cart, after asking.
+ *
+ * Two steps rather than a confirm dialog: the page has no modal of its own,
+ * and this is the one control here that cannot be undone by pressing it
+ * again — every other button on a line has an obvious opposite.
+ */
+function ClearCartButton() {
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+
+  const clear = useMutation({
+    mutationFn: clearCart,
+    onSuccess: (cart) => {
+      queryClient.setQueryData(cartQueryKey, cart)
+      setConfirming(false)
+    },
+  })
+
+  if (!confirming) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-n-500 hover:text-red"
+        onClick={() => setConfirming(true)}
+      >
+        ล้างตะกร้า
+      </Button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-n-600">ล้างทั้งตะกร้า?</span>
+      <Button
+        variant="danger"
+        size="sm"
+        disabled={clear.isPending}
+        onClick={() => clear.mutate()}
+      >
+        {clear.isPending ? "กำลังล้าง…" : "ยืนยัน"}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={clear.isPending}
+        onClick={() => setConfirming(false)}
+      >
+        ไม่
+      </Button>
     </div>
   )
 }

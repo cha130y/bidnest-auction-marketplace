@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { AuctionImage } from "@/components/auction/auction-image"
+import { AuctionCardWatchButton } from "@/components/auction/watch-button"
 import { Badge } from "@/components/ui/badge"
 import { categoryLabel } from "@/lib/category-labels"
 import { formatDateTime, formatTHB } from "@/lib/format"
@@ -82,7 +83,10 @@ export function AuctionCard({ auction }: { auction: Auction }) {
   const href = `/auctions/${auction.id}`
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-r4 bg-white shadow-sh1 transition-shadow hover:shadow-sh2">
+    <article className="group relative flex flex-col overflow-hidden rounded-r4 bg-white shadow-sh1 transition-shadow hover:shadow-sh2">
+      {/* Outside the link on purpose — see AuctionCardWatchButton. */}
+      <AuctionCardWatchButton auctionId={auction.id} title={auction.title} />
+
       <Link href={href} className="relative block">
         <AuctionImage
           src={primaryImage?.url}

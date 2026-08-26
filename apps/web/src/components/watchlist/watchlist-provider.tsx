@@ -19,6 +19,16 @@ type WatchlistContextValue = {
   count: number
   /** False until localStorage has been read; the count is 0 until it is true. */
   isAuthReady: boolean
+  /**
+   * True once both halves have answered. Until then every count above reads 0,
+   * which is indistinguishable from following nothing — so a caller that
+   * writes the number down rather than hiding a badge has to wait for this.
+   *
+   * One flag for both halves on purpose: the two counts are shown side by side
+   * to be compared, and a screen that printed one while the other stayed blank
+   * would read as "the auctions failed" rather than "still loading".
+   */
+  isLoaded: boolean
 }
 
 const WatchlistContext = createContext<WatchlistContextValue | null>(null)
@@ -37,9 +47,11 @@ const WatchlistContext = createContext<WatchlistContextValue | null>(null)
  * invalidates the key, both this and the card re-read it, and they cannot
  * drift apart.
  *
- * The auctions half is a query of its own. `WatchButton` on the auction side
- * fetches the same list through `useEffect` rather than React Query, so there
- * is nothing to share with yet.
+ * The auctions half is shared the same way since WAT-001 landed: the auction
+ * side's `WatchButton` reads `auctionWatchlistQueryKey` with the same
+ * `listWatchlist({ limit: 100 })` this does, so the two are one request and
+ * one answer. (It used to fetch through `useEffect`, which is why this note
+ * once said there was nothing to share with.)
  */
 export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { token, ready } = useAuthToken()
@@ -70,6 +82,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     auctionCount,
     count: productCount + auctionCount,
     isAuthReady: ready,
+    isLoaded: products.isSuccess && auctions.isSuccess,
   }
 
   return <WatchlistContext value={value}>{children}</WatchlistContext>

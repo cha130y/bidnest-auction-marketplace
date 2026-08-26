@@ -88,6 +88,24 @@ export class CartService {
     return this.buildCartView(cart.id);
   }
 
+  /**
+   * CART-002 — empties the cart in one call.
+   *
+   * Scoped to the caller's own cart row rather than taking ids from the
+   * client: there is nothing to check line by line, and no request shape that
+   * could name somebody else's line.
+   *
+   * Answers with the (now empty) cart like every other mutation here, so the
+   * caller can seed its cache instead of following up with a read.
+   */
+  async clear(userId: string) {
+    const cart = await this.findOrCreateCart(userId);
+
+    await this.prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+    return this.buildCartView(cart.id);
+  }
+
   private async findOrCreateCart(userId: string) {
     return this.prisma.cart.upsert({
       where: { userId },

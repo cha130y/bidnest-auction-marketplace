@@ -1,6 +1,6 @@
 # คู่มือเริ่มต้นโปรเจค (Kickoff Guide)
 
-อ้างอิงจาก SRS v1.0 และ Team Role Distribution — ทำตามลำดับนี้ได้เลย แต่ละ step มีคำสั่งจริงให้ copy ไปรันตรงๆ
+อ้างอิงจาก SRS v6 และ Team Role Distribution — ทำตามลำดับนี้ได้เลย แต่ละ step มีคำสั่งจริงให้ copy ไปรันตรงๆ
 
 **ผู้รับผิดชอบ Step 1–4 และ 6: Dev 2** (ตามที่ระบุใน Team Role Distribution ว่าเป็นเจ้าของ "NestJS setup, ออกแบบ Prisma schema หลักและดูแล migration ให้ทั้งทีม")
 **Step 5 (Jira):** ไม่ผูกกับ role ใครโดยเฉพาะ ทำคู่ขนานกับ Step 2–4 ได้เลย ใครสะดวกก็ทำได้
