@@ -4,8 +4,10 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
-  Patch
+  Patch,
+  Query
 } from '@nestjs/common';
+import type { ProductStatus } from '../../generated/prisma/enums';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ModerateProductDto } from './dtos/moderate-product.dto';
@@ -32,8 +34,16 @@ export class AdminProductsController {
 
   /** query: cursor?, limit?, status? (ProductStatus) */
   @Get()
-  listProducts() {
-    return this.adminProductsService.listProducts();
+  listProducts(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: ProductStatus
+  ) {
+    return this.adminProductsService.listProducts({
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+      status
+    });
   }
 
   /** body: { reason: string } → products.status = SUSPENDED */

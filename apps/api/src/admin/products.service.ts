@@ -2,11 +2,17 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
-  NotImplementedException
+  NotFoundException
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
+import type { ProductStatus } from '../../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
+
+interface ListProductsQuery {
+  cursor?: string;
+  limit?: number;
+  status?: ProductStatus;
+}
 
 /**
  * ADM-005 — Product listing oversight (owner: Dev 3)
@@ -28,9 +34,43 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AdminProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** query: cursor?, limit?, status? (ProductStatus) */
-  listProducts(): never {
-    throw new NotImplementedException('ADM-005 listProducts');
+  /**
+   * The one stub this file shipped with — filled in by Dev 5, at Dev 5's own
+   * request, since it was blocking a real GET /admin/products table on the
+   * dashboard. Same cursor/limit/status shape ADM-002 and ADM-004 already
+   * use, since it was scaffolded alongside those.
+   */
+  async listProducts(query: ListProductsQuery = {}) {
+    const limit = query.limit ?? 20;
+
+    const products = await this.prisma.product.findMany({
+      where: query.status ? { status: query.status } : undefined,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        stockQty: true,
+        seller: {
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { displayName: true } }
+          }
+        }
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: limit,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {})
+    });
+
+    return products.map(({ seller, ...product }) => ({
+      ...product,
+      seller: {
+        id: seller.id,
+        email: seller.email,
+        displayName: seller.profile?.displayName ?? null
+      }
+    }));
   }
 
   /**

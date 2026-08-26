@@ -12,6 +12,7 @@ import { createDataTableColumnHelper, DataTable } from '@/components/admin/data-
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -39,12 +40,59 @@ function StatusPill({ status }: { status: AdminUserRow['status'] }) {
 }
 
 export default function AdminUsersPage() {
-  const queryClient = useQueryClient();
+  const [role, setRole] = useState<AdminUserRow['role']>('USER');
   const [statusFilter, setStatusFilter] = useState<AdminUserRow['status'] | undefined>();
 
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="font-display text-2xl font-bold text-ink">Users</h1>
+
+      <Tabs value={role} onValueChange={(value) => setRole(value as AdminUserRow['role'])}>
+        <TabsList>
+          <TabsTrigger value="USER">สมาชิก</TabsTrigger>
+          <TabsTrigger value="ADMIN">พนักงาน</TabsTrigger>
+        </TabsList>
+
+        <Select
+          value={statusFilter ?? ''}
+          onValueChange={(value) =>
+            setStatusFilter((value || undefined) as AdminUserRow['status'] | undefined)
+          }
+        >
+          <SelectTrigger className="w-52">
+            <SelectValue placeholder="ทุกสถานะ" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">ทุกสถานะ</SelectItem>
+            <SelectItem value="ACTIVE">ACTIVE</SelectItem>
+            <SelectItem value="SUSPENDED">SUSPENDED</SelectItem>
+            <SelectItem value="DEACTIVATED">DEACTIVATED</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <TabsContent value="USER">
+          <UsersTable role="USER" status={statusFilter} />
+        </TabsContent>
+        <TabsContent value="ADMIN">
+          <UsersTable role="ADMIN" status={statusFilter} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function UsersTable({
+  role,
+  status,
+}: {
+  role: AdminUserRow['role'];
+  status: AdminUserRow['status'] | undefined;
+}) {
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-users', statusFilter],
-    queryFn: () => fetchUsers({ status: statusFilter }),
+    queryKey: ['admin-users', role, status],
+    queryFn: () => fetchUsers({ role, status }),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
@@ -98,37 +146,16 @@ export default function AdminUsersPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-ink">Users</h1>
-
-      <Select
-        value={statusFilter ?? ''}
-        onValueChange={(value) =>
-          setStatusFilter((value || undefined) as AdminUserRow['status'] | undefined)
-        }
-      >
-        <SelectTrigger className="w-52">
-          <SelectValue placeholder="ทุกสถานะ" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="">ทุกสถานะ</SelectItem>
-          <SelectItem value="ACTIVE">ACTIVE</SelectItem>
-          <SelectItem value="SUSPENDED">SUSPENDED</SelectItem>
-          <SelectItem value="DEACTIVATED">DEACTIVATED</SelectItem>
-        </SelectContent>
-      </Select>
-
-      <Card>
-        {isLoading ? (
-          <div className="flex flex-col gap-2 p-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : (
-          <DataTable columns={columns} data={data ?? []} />
-        )}
-      </Card>
-    </div>
+    <Card>
+      {isLoading ? (
+        <div className="flex flex-col gap-2 p-4">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+      ) : (
+        <DataTable columns={columns} data={data ?? []} />
+      )}
+    </Card>
   );
 }

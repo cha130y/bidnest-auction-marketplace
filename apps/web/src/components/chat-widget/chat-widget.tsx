@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { MessageCircle, Sparkles, X } from 'lucide-react';
 
 import { ConversationPreview } from '@/components/chat-widget/conversation-preview';
@@ -15,10 +16,16 @@ type Mode = 'AI' | 'CHAT';
  * bar: the AI assistant (works signed out) and a preview of buyer-seller
  * threads (CHAT-004, full page at /chat). Same corner both ways, so a
  * visitor only ever has one thing to notice in that corner of the screen.
+ *
+ * Absent under /admin: neither mode is an admin tool, and an admin working
+ * the dashboard is not the audience either one is written for.
  */
 export function ChatWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('AI');
+
+  if (pathname?.startsWith('/admin')) return null;
 
   return (
     <div className="fixed right-6 bottom-6 z-50">

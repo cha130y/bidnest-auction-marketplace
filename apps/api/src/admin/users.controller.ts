@@ -2,14 +2,17 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Query
 } from '@nestjs/common';
-import type { UserStatus } from '../../generated/prisma/enums';
+import type { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { ChangeOwnPasswordDto } from './dtos/change-own-password.dto';
 import { ChangeUserStatusDto } from './dtos/change-user-status.dto';
 import { AdminUsersService } from './users.service';
 
@@ -26,18 +29,38 @@ import { AdminUsersService } from './users.service';
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
-  /** query: cursor?, limit?, status? (ACTIVE | SUSPENDED | DEACTIVATED) */
+  /** query: cursor?, limit?, status? (ACTIVE | SUSPENDED | DEACTIVATED), role? (USER | ADMIN) */
   @Get()
   listUsers(
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
-    @Query('status') status?: UserStatus
+    @Query('status') status?: UserStatus,
+    @Query('role') role?: UserRole
   ) {
     return this.adminUsersService.listUsers({
       cursor,
       limit: limit ? Number(limit) : undefined,
-      status
+      status,
+      role
     });
+  }
+
+  /**
+   * body: { currentPassword, newPassword } — the caller's own password, not
+   * another account's. Declared ahead of the `:userId` routes below so Nest
+   * cannot ever match "me" as one.
+   */
+  @Patch('me/password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  changeOwnPassword(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangeOwnPasswordDto
+  ) {
+    return this.adminUsersService.changeOwnPassword(
+      userId,
+      dto.currentPassword,
+      dto.newPassword
+    );
   }
 
   /** body: { note?: string } → users.status = SUSPENDED */

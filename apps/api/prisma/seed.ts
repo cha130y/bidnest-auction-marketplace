@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -7,6 +8,16 @@ import { PrismaClient } from '../generated/prisma/client';
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
+
+/**
+ * Local dev/test only — every seeded actor shares this one password so
+ * anybody on the team can sign in as any of them through the real /login
+ * form (with the real OTP, from Maildev at localhost:1080) without hunting
+ * for a per-account secret. Hashed the same way HashingService does
+ * (bcryptjs, 12 rounds), so login compares against it exactly like a real
+ * password.
+ */
+const SEED_PASSWORD = 'Test1234';
 
 // Fixed UUIDs so the seeded actors stay stable across re-seeds
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001';
@@ -50,15 +61,22 @@ async function seedUsers() {
     },
   ];
 
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
+
   for (const { id, email, role, firstName, displayName } of users) {
     await prisma.user.upsert({
       where: { id },
-      update: {},
+      // Sets the password on a row that already exists from an earlier seed
+      // run too, not only on first creation — re-running this is how an
+      // already-seeded database picks it up.
+      update: { passwordHash, emailVerifiedAt: new Date() },
       create: {
         id,
         email,
         role,
         status: 'ACTIVE',
+        passwordHash,
+        emailVerifiedAt: new Date(),
         profile: {
           create: {
             firstName,
@@ -211,6 +229,11 @@ async function main() {
   await seedCategories();
   await seedProducts();
 
+  console.log(
+    `Seeded accounts all share the password "${SEED_PASSWORD}" — sign in ` +
+      'at /login with any of their emails, then read the OTP from Maildev ' +
+      '(http://localhost:1080).'
+  );
   printAccessTokens();
 }
 

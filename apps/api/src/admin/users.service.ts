@@ -1,16 +1,21 @@
 import {
   ForbiddenException,
   Injectable,
-  NotFoundException
+  NotFoundException,
+  UnauthorizedException
 } from '@nestjs/common';
 import { AdminActionType } from '../../generated/prisma/enums';
-import type { UserStatus } from '../../generated/prisma/enums';
+import type { UserRole, UserStatus } from '../../generated/prisma/enums';
+import { HashingService } from '../auth/hashing.service';
+import { TokenService } from '../auth/token.service';
+import { TrustedDeviceService } from '../auth/trusted-device.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface ListUsersQuery {
   cursor?: string;
   limit?: number;
   status?: UserStatus;
+  role?: UserRole;
 }
 
 /**
@@ -26,13 +31,22 @@ interface ListUsersQuery {
  */
 @Injectable()
 export class AdminUsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hashing: HashingService,
+    private readonly tokens: TokenService,
+    private readonly trustedDevices: TrustedDeviceService
+  ) {}
 
+  /** สมาชิก/พนักงาน แยกกันด้วย role ที่มีอยู่แล้ว — ไม่มี role ใหม่ */
   async listUsers(query: ListUsersQuery = {}) {
     const limit = query.limit ?? 20;
 
     return this.prisma.user.findMany({
-      where: query.status ? { status: query.status } : undefined,
+      where: {
+        ...(query.status ? { status: query.status } : {}),
+        ...(query.role ? { role: query.role } : {})
+      },
       select: {
         id: true,
         email: true,
@@ -100,5 +114,43 @@ export class AdminUsersService {
 
       return user;
     });
+  }
+
+  /**
+   * An admin's own password — not another admin action on someone else, so
+   * no `admin_actions` row: ADM-004 logs what an admin did *to the system*,
+   * and this is the same "change my own password" any account can do.
+   *
+   * Mirrors AUTH-005's own reset exactly: every other session and trusted
+   * device is revoked, since an old password is exactly as untrustworthy
+   * after a deliberate change as after a leaked one. The session carrying
+   * this very request is left alone — its access token still has whatever
+   * life it had, the same as a reset via emailed link does.
+   */
+  async changeOwnPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true }
+    });
+
+    if (
+      !user?.passwordHash ||
+      !(await this.hashing.compare(currentPassword, user.passwordHash))
+    ) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await this.hashing.hash(newPassword);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash }
+    });
+    await this.tokens.revokeAllSessions(userId);
+    await this.trustedDevices.revokeAll(userId);
   }
 }

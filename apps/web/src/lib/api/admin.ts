@@ -50,9 +50,25 @@ export function fetchUsers(
     cursor?: string
     limit?: number
     status?: AdminUserRow["status"]
+    role?: AdminUserRow["role"]
   } = {}
 ): Promise<AdminUserRow[]> {
   return apiFetch<AdminUserRow[]>(`/admin/users${buildQuery(params)}`)
+}
+
+/**
+ * An admin's own password — mirrors AUTH-005's own reset: every other
+ * session and trusted device is revoked on success, so this account will be
+ * asked to sign in again everywhere else.
+ */
+export function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  return apiFetch<void>("/admin/users/me/password", {
+    method: "PATCH",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
 }
 
 export function suspendUser(
@@ -155,18 +171,10 @@ export function reactivateAdminProduct(productId: string, reason: string) {
 }
 
 /**
- * 🚧 ADM-005 — `GET /admin/products` itself still throws
- * `NotImplementedException` on the backend as of 2026-08-24
- * (`apps/api/src/admin/products.service.ts` — `listProducts()` is a stub;
- * only the deactivate/reactivate mutations above are real). This call will
- * 500 until Dev3 finishes it.
- *
- * The shape below is a *guess*, not a verified contract — there is no
- * response to inspect yet. It follows the query params already documented on
- * the controller (`query: cursor?, limit?, status?`) and the same
- * cursor-array pattern ADM-002/ADM-004 use, since Dev3 scaffolded this file
- * alongside those. Re-check against the real response the moment it ships;
- * do not assume this type is correct until then.
+ * ADM-005 — `GET /admin/products` was a stub (`NotImplementedException`)
+ * until 2026-08-26, filled in by Dev 5 since it was blocking this table —
+ * see `apps/api/src/admin/products.service.ts`. Verified against the real
+ * response; this shape is no longer a guess.
  */
 export type AdminProductRow = {
   id: string
@@ -180,6 +188,20 @@ export function fetchAdminProducts(
   params: { cursor?: string; limit?: number; status?: ProductStatus } = {}
 ): Promise<AdminProductRow[]> {
   return apiFetch<AdminProductRow[]>(`/admin/products${buildQuery(params)}`)
+}
+
+// ── Dashboard overview — real counts, across every admin module ────────────
+
+export type AdminOverview = {
+  users: { total: number; suspended: number }
+  auctions: { active: number; total: number }
+  products: { active: number; total: number }
+  orders: { paidCount: number; paidTotal: string }
+  adminActionsLast24h: number
+}
+
+export function fetchAdminOverview(): Promise<AdminOverview> {
+  return apiFetch<AdminOverview>("/admin/overview")
 }
 
 // ── ADM-001 — auction oversight (owner: Dev 4) ──────────────────────────────
