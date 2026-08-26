@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 
 import { CheckoutView } from "@/components/checkout/checkout-view"
@@ -17,7 +18,9 @@ export default function CheckoutPage() {
         </h1>
       </header>
 
-      <CheckoutView />
+      <Suspense fallback={null}>
+        <CheckoutView />
+      </Suspense>
     </div>
   )
 }
