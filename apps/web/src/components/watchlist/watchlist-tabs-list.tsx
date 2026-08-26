@@ -19,10 +19,9 @@ import {
  * are the only part that needs them.
  *
  * It mounts a `WatchlistProvider` of its own. `AppHeader` has one already, but
- * that one wraps the header rather than the page body. The two share
- * `productWatchlistQueryKey`, `auctionWatchlistQueryKey` and the same
- * QueryClient, so this asks for nothing extra and the tabs cannot disagree
- * with the heart above them.
+ * that one wraps the header rather than the page body. The two share the two
+ * count query keys and the same QueryClient, so this asks for nothing extra
+ * and the tabs cannot disagree with the heart above them.
  */
 export function WatchlistTabsList() {
   return (

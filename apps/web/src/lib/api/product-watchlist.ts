@@ -44,3 +44,29 @@ export function listProductWatchlist(params: ProductWatchlistParams = {}) {
     `/watchlist/products${buildQuery({ ...params })}`
   )
 }
+
+/**
+ * How many, without any of them.
+ *
+ * For the badge in the header, which is on every page and wants an integer,
+ * not a page of products with their images and sellers attached.
+ *
+ * Counts exactly what `listProductWatchlist` would list — same filter,
+ * server-side — so the number cannot promise more than the page it opens can
+ * show.
+ */
+export function countProductWatchlist() {
+  return apiFetch<{ total: number }>("/watchlist/products/count")
+}
+
+/**
+ * Kept here, next to the fetch, rather than in the provider that reads it.
+ *
+ * `watchlist-provider` already imports this module, and `ProductWatchButton`
+ * — which has to invalidate this key when a heart is pressed — imports it too.
+ * Declaring the key in either component would make the two import each other.
+ */
+export const productWatchlistCountQueryKey = [
+  "product-watchlist",
+  "count",
+] as const
