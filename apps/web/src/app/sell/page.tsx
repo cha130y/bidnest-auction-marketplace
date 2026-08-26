@@ -24,7 +24,7 @@ export default function SellPage() {
           href="/sell/auctions"
           className="mt-2 inline-block text-sm font-semibold text-amber-600 hover:text-ink"
         >
-          ดูร่างที่บันทึกไว้
+          การประมูลของฉัน
         </Link>
         <Link
           href="/sell/settings"

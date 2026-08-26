@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Users } from "lucide-react"
 
 import { AuctionCountdown } from "@/components/auction/auction-countdown"
@@ -12,6 +13,8 @@ import { SuddenDeathBanner } from "@/components/auction/sudden-death-banner"
 import { Badge } from "@/components/ui/badge"
 import { getArena } from "@/lib/api/auctions"
 import { formatTHB } from "@/lib/format"
+import { useArenaWakeUps } from "@/lib/use-arena-wake-ups"
+import { useAuctionPresence } from "@/lib/use-auction-presence"
 import { useAuctionRoom } from "@/lib/use-auction-room"
 import { URGENCY_STYLE, describeUrgency } from "@/lib/auction-urgency"
 import { cn } from "@/lib/utils"
@@ -56,14 +59,69 @@ export function ArenaPanel({
     }
   }, [auctionId])
 
-  useAuctionRoom(auctionId, refresh)
-
   const { auction, countdown, suddenDeath, result, leader, you } = arena
   const hasBids = auction.bidCount > 0
   const running = auction.status === "ACTIVE"
   const price = hasBids ? auction.currentPrice : auction.startingPrice
-  const urgency = describeUrgency(suddenDeath)
+  const urgency = describeUrgency(suddenDeath, auction.biddingOpen)
   const style = URGENCY_STYLE[urgency]
+
+  useAuctionRoom(auctionId, refresh)
+
+  /**
+   * LIV-001 — the number beside the little crowd icon below is a count of
+   * participant rows, and this is what writes one.
+   *
+   * `you` is null for a signed-out visitor, and POST /participants is
+   * `@Roles('USER')`, so the call is only worth making once a read with a
+   * token has come back — which it has by the time `you` is anything but null.
+   * It is also the reason the first paint never joins: the server rendered
+   * this page without a token, so its copy of the arena always says null.
+   *
+   * The status test mirrors JOINABLE_AUCTION_STATUSES on the API. A finished
+   * auction is still public to look at (AUC-005) but there is nothing left to
+   * take part in, and one that settles while somebody is watching drops out of
+   * this on the next read — which leaves the auction the same way closing the
+   * page would.
+   */
+  useAuctionPresence(
+    auctionId,
+    you !== null && (running || auction.status === "SCHEDULED"),
+    refresh
+  )
+
+  /**
+   * LIV-003 — the room announces everything somebody *does*, and nothing that
+   * time alone does. An auction crossing into its closing window fires no
+   * event, because no event happened: it is the same auction, one second
+   * later, and only the server's answer about it has changed. This is what
+   * asks for the new answer at the moment it changes.
+   */
+  useArenaWakeUps(arena, refresh)
+
+  /**
+   * LIV-004 — an auction that closes while somebody is watching takes them to
+   * its result screen.
+   *
+   * Only somebody who was here before it ended: `openedUnfinished` is fixed at
+   * mount from the copy the server rendered, so arriving at an auction that
+   * finished last week reads the summary below instead of being bounced to a
+   * page they did not ask for — and the "back to this auction" link on the
+   * result page still works.
+   *
+   * `replace` rather than `push` for the same reason. A pushed entry would put
+   * the arena behind the result in history, and going back would land on a
+   * page that immediately sends them forward again.
+   */
+  const router = useRouter()
+  const openedUnfinished = useRef(initialArena.result === null)
+
+  useEffect(() => {
+    if (!result || !openedUnfinished.current) return
+
+    openedUnfinished.current = false
+    router.replace(`/auctions/${auctionId}/result`)
+  }, [result, auctionId, router])
 
   return (
     <div className="flex flex-col gap-4">
@@ -85,8 +143,13 @@ export function ArenaPanel({
        */}
       <style>{PULSE_KEYFRAMES}</style>
 
-      {suddenDeath.active && !result && (
-        <SuddenDeathBanner suddenDeath={suddenDeath} />
+      {/* `urgency` rather than `suddenDeath.active`: once an extension has
+          been granted the deadline sits outside the window until the clock
+          winds back down, and the banner has to stay up across that gap —
+          it is the stretch where a bid resets the clock, which is the whole
+          thing it is there to say. */}
+      {urgency !== "calm" && !result && (
+        <SuddenDeathBanner suddenDeath={suddenDeath} urgency={urgency} />
       )}
 
       {result ? (
@@ -150,7 +213,10 @@ export function ArenaPanel({
               }
               urgent={urgency !== "calm"}
               completeLabel={running ? "กำลังปิดการประมูล" : "กำลังเปิดห้อง"}
-              className="text-xl font-bold"
+              // `style.countdown` last, so it wins the merge over the plain
+              // red `urgent` paints: the three levels are meant to look
+              // different from each other, and amber is what "closing" is.
+              className={cn("text-xl font-bold", style.countdown)}
             />
           </div>
 

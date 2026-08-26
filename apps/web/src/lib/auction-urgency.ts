@@ -21,8 +21,34 @@ import type { SuddenDeath } from "@/lib/api/types"
  */
 export type AuctionUrgency = "calm" | "closing" | "suddenDeath"
 
-export function describeUrgency(suddenDeath: SuddenDeath): AuctionUrgency {
-  if (suddenDeath.extensionCount > 0 && suddenDeath.active) return "suddenDeath"
+/**
+ * Note what `suddenDeath` does *not* test: `active`.
+ *
+ * It used to, and that was wrong in a way only a real extension shows. An
+ * extension is measured from the old deadline — `newEndAt = currentEndAt +
+ * ANTI_SNIPING_EXTENSION_MS`, see calculate-anti-sniping.util — and the window
+ * and the extension are the same two minutes. So a bid that lands with 1:19
+ * left pushes the end to 3:19 away, which is *outside* the window, and
+ * `active` goes false the instant the extension is granted. Requiring it here
+ * meant the screen dropped out of sudden death at the exact moment it entered
+ * it, went white for the length of the extension, and only came back once the
+ * clock had wound down again.
+ *
+ * Having been extended is a fact about the auction, not about this second of
+ * it: from the first extension until it settles, every qualifying bid resets
+ * the clock. cbeave holds its red the same way — its sudden-death panel is on
+ * screen at 2m 39s remaining, well outside the window.
+ *
+ * `biddingOpen` is what ends it, and it is the API's own answer (AUC-005)
+ * rather than a status compared here. A SCHEDULED auction has no urgency to
+ * show, and one that has settled is a result, not a countdown.
+ */
+export function describeUrgency(
+  suddenDeath: SuddenDeath,
+  biddingOpen: boolean
+): AuctionUrgency {
+  if (!biddingOpen) return "calm"
+  if (suddenDeath.extensionCount > 0) return "suddenDeath"
   if (suddenDeath.active) return "closing"
   return "calm"
 }
