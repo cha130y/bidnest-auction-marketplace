@@ -27,3 +27,8 @@ export function updateCartItem(itemId: string, quantity: number) {
 export function removeCartItem(itemId: string) {
   return apiFetch<Cart>(`/cart/items/${itemId}`, { method: "DELETE" })
 }
+
+/** CART-002 — empties the cart in one call, and answers with the empty cart. */
+export function clearCart() {
+  return apiFetch<Cart>("/cart", { method: "DELETE" })
+}

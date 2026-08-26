@@ -118,7 +118,13 @@ describe('E-commerce (e2e)', () => {
       .get('/cart')
       .set('Authorization', authOf(userId));
     return response.body as {
-      items: { id: string; product: { id: string }; subtotal: string }[];
+      items: {
+        id: string;
+        quantity: number;
+        product: { id: string };
+        subtotal: string;
+        issue: string | null;
+      }[];
       summary: { total: string };
     };
   };
@@ -569,6 +575,164 @@ describe('E-commerce (e2e)', () => {
       expect(body.items.every((item) => item.seller.id === sellerAId)).toBe(
         true
       );
+    });
+  });
+
+  /**
+   * CART-001/002 — the cart's own rules, which until now were only ever
+   * exercised as a way of setting up a checkout. Every assertion here is
+   * something a buyer can reach directly from the shop, and nothing below
+   * involves paying for anything.
+   */
+  describe('CART-001/002 — what may go in a cart, and what happens to it', () => {
+    let sellerAProduct: string;
+    let scarce: string;
+
+    const setStatus = (productId: string, status: string) =>
+      request(app.getHttpServer())
+        .patch(`/products/${productId}/status`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ status })
+        .expect(200);
+
+    const setStock = (productId: string, stockQty: number) =>
+      request(app.getHttpServer())
+        .patch(`/products/${productId}/stock`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ stockQty })
+        .expect(200);
+
+    beforeAll(async () => {
+      await emptyCart(buyerId);
+      sellerAProduct = await createProduct(sellerAId, {
+        price: 100,
+        stockQty: 20
+      });
+      scarce = await createProduct(sellerAId, { price: 50, stockQty: 2 });
+    });
+
+    it('refuses the seller their own listing', () =>
+      addToCart(sellerAId, sellerAProduct, 1).expect(403));
+
+    it('refuses a quantity of zero or less', async () => {
+      await addToCart(buyerId, sellerAProduct, 0).expect(400);
+      await addToCart(buyerId, sellerAProduct, -3).expect(400);
+    });
+
+    it('refuses more than the listing has', () =>
+      addToCart(buyerId, scarce, 5).expect(400));
+
+    it('refuses a listing that does not exist', () =>
+      addToCart(buyerId, '00000000-0000-4000-8000-000000000999', 1).expect(
+        404
+      ));
+
+    it('is not a public cart', () =>
+      request(app.getHttpServer())
+        .post('/cart/items')
+        .send({ productId: sellerAProduct, quantity: 1 })
+        .expect(401));
+
+    it('adds to the quantity already there rather than replacing it', async () => {
+      await emptyCart(buyerId);
+      await addToCart(buyerId, sellerAProduct, 2).expect(201);
+      await addToCart(buyerId, sellerAProduct, 3).expect(201);
+
+      const cart = await cartOf(buyerId);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].quantity).toBe(5);
+    });
+
+    it('will not let that addition exceed the stock either', () =>
+      // 5 are already in the cart from above, and only 20 exist
+      addToCart(buyerId, sellerAProduct, 16).expect(400));
+
+    it('reprices from the listing rather than from what was quoted', async () => {
+      await emptyCart(buyerId);
+      await addToCart(buyerId, sellerAProduct, 2).expect(201);
+      expect((await cartOf(buyerId)).summary.total).toBe('200.00');
+
+      await request(app.getHttpServer())
+        .patch(`/products/${sellerAProduct}`)
+        .set('Authorization', authOf(sellerAId))
+        .send({ price: 130 })
+        .expect(200);
+
+      // CART-002 — the line is worth what the listing is worth now, not what
+      // it cost when it went in.
+      expect((await cartOf(buyerId)).summary.total).toBe('260.00');
+    });
+
+    it('flags a line whose listing was paused, and refuses the checkout', async () => {
+      await setStatus(sellerAProduct, 'INACTIVE');
+
+      const cart = await cartOf(buyerId);
+      expect(cart.items[0].issue).toBe('PRODUCT_UNAVAILABLE');
+      await checkout(buyerId).expect(400);
+
+      await setStatus(sellerAProduct, 'ACTIVE');
+    });
+
+    it('flags a line the stock no longer covers, and refuses the checkout', async () => {
+      // 2 in the cart, 1 left on the shelf
+      await setStock(sellerAProduct, 1);
+
+      const cart = await cartOf(buyerId);
+      expect(cart.items[0].issue).toBe('INSUFFICIENT_STOCK');
+      await checkout(buyerId).expect(400);
+    });
+
+    it('leaves the cart untouched when a checkout is refused', async () => {
+      const cart = await cartOf(buyerId);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].quantity).toBe(2);
+    });
+
+    it('clears the flag once the shelf can cover it again', async () => {
+      await setStock(sellerAProduct, 20);
+      expect((await cartOf(buyerId)).items[0].issue).toBeNull();
+      await emptyCart(buyerId);
+    });
+
+    describe('emptying it in one call', () => {
+      const clear = (userId: string) =>
+        request(app.getHttpServer())
+          .delete('/cart')
+          .set('Authorization', authOf(userId));
+
+      it('answers with the empty cart rather than nothing', async () => {
+        await addToCart(buyerId, sellerAProduct, 2).expect(201);
+        await addToCart(buyerId, scarce, 1).expect(201);
+
+        const response = await clear(buyerId).expect(200);
+        const body = response.body as {
+          items: unknown[];
+          summary: { total: string };
+        };
+
+        expect(body.items).toHaveLength(0);
+        expect(body.summary.total).toBe('0.00');
+      });
+
+      it('leaves it empty', async () => {
+        expect((await cartOf(buyerId)).items).toHaveLength(0);
+      });
+
+      it('is fine to call on a cart that is already empty', () =>
+        clear(buyerId).expect(200));
+
+      it('reaches nobody else’s cart', async () => {
+        await emptyCart(strangerId);
+        await addToCart(strangerId, sellerAProduct, 1).expect(201);
+
+        await clear(buyerId).expect(200);
+
+        expect((await cartOf(strangerId)).items).toHaveLength(1);
+        await emptyCart(strangerId);
+      });
+
+      it('is not a public route', () =>
+        request(app.getHttpServer()).delete('/cart').expect(401));
     });
   });
 

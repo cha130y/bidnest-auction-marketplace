@@ -33,22 +33,12 @@ export class OrderController {
 
   @Get()
   listBought(@CurrentUser('id') buyerId: string, @Query() dto: ListOrderDto) {
-    return this.orderService.listForBuyer(
-      buyerId,
-      dto.status,
-      dto.page,
-      dto.limit
-    );
+    return this.orderService.listForBuyer(buyerId, dto);
   }
 
   @Get('selling')
   listSold(@CurrentUser('id') sellerId: string, @Query() dto: ListOrderDto) {
-    return this.orderService.listForSeller(
-      sellerId,
-      dto.status,
-      dto.page,
-      dto.limit
-    );
+    return this.orderService.listForSeller(sellerId, dto);
   }
 
   @Get(':id')
