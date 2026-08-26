@@ -31,6 +31,11 @@ import { TwoFactorService } from './two-factor.service';
     { provide: GOOGLE_VERIFIER, useClass: GoogleTokenVerifier },
     { provide: LINE_VERIFIER, useClass: LineTokenVerifier }
   ],
-  exports: [HashingService, TokenService]
+  // TrustedDeviceService added for AdminModule to reuse: an admin changing
+  // their own password (ADM-002) revokes every other session and trusted
+  // device the same way AUTH-005's own reset does, since an old password is
+  // exactly as untrusted after a deliberate change as after a leaked one.
+  // Its own behavior is unchanged; this only widens who may import it.
+  exports: [HashingService, TokenService, TrustedDeviceService]
 })
 export class AuthModule {}

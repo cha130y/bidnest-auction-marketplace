@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { AdminUsersController } from './users.controller';
 import { AdminUsersService } from './users.service';
 import { AdminAuctionsController } from './auctions.controller';
@@ -9,6 +10,8 @@ import { AdminOrdersController } from './orders.controller';
 import { AdminOrdersService } from './orders.service';
 import { AdminActionsController } from './actions.controller';
 import { AdminActionsService } from './actions.service';
+import { AdminOverviewController } from './overview.controller';
+import { AdminOverviewService } from './overview.service';
 
 /**
  * Admin module — ADM-001, ADM-002, ADM-004, ADM-005, ADM-006
@@ -34,19 +37,22 @@ import { AdminActionsService } from './actions.service';
  * ให้ merge `dev` เข้ามาก่อนแก้เสมอเพื่อลด conflict
  */
 @Module({
+  imports: [AuthModule],
   controllers: [
     AdminUsersController,
     AdminAuctionsController,
     AdminProductsController,
     AdminOrdersController,
-    AdminActionsController
+    AdminActionsController,
+    AdminOverviewController
   ],
   providers: [
     AdminUsersService,
     AdminAuctionsService,
     AdminProductsService,
     AdminOrdersService,
-    AdminActionsService
+    AdminActionsService,
+    AdminOverviewService
   ]
 })
 export class AdminModule {}

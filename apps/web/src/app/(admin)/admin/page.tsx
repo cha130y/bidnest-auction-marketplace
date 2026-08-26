@@ -1,68 +1,178 @@
-import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+'use client';
 
-const SECTIONS = [
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Activity,
+  FolderTree,
+  Gavel,
+  Package,
+  ScrollText,
+  ShoppingBag,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { fetchAdminOverview } from '@/lib/api/admin';
+import { formatTHB } from '@/lib/format';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const SECTIONS: {
+  href: string;
+  title: string;
+  code: string;
+  description: string;
+  owner: string;
+  icon: LucideIcon;
+}[] = [
   {
     href: '/admin/users',
-    title: 'Users (ADM-002)',
+    title: 'Users',
+    code: 'ADM-002',
     description: 'ดูรายชื่อผู้ใช้ suspend/reactivate บัญชี',
     owner: 'Dev 5',
+    icon: Users,
   },
   {
     href: '/admin/audit-log',
-    title: 'Audit Log (ADM-004)',
+    title: 'Audit Log',
+    code: 'ADM-004',
     description: 'ดู log การกระทำของ admin ทั้งหมด กรองตาม action type',
     owner: 'Dev 5',
+    icon: ScrollText,
   },
   {
     href: '/admin/auctions',
-    title: 'Auctions (ADM-001)',
+    title: 'Auctions',
+    code: 'ADM-001',
     description: 'ดูรายการประมูลทุกสถานะ ยกเลิกประมูลได้ (พร้อมเหตุผล)',
     owner: 'Dev 4',
+    icon: Gavel,
   },
   {
     href: '/admin/products',
-    title: 'Products (ADM-005)',
-    description: 'ปิด/เปิดการขายสินค้า (list ยังรอ backend implement)',
+    title: 'Products',
+    code: 'ADM-005',
+    description: 'ปิด/เปิดการขายสินค้า',
     owner: 'Dev 3',
+    icon: Package,
   },
   {
     href: '/admin/orders',
-    title: 'Orders (ADM-006)',
+    title: 'Orders',
+    code: 'ADM-006',
     description: 'ดูคำสั่งซื้อทั้งหมด อ่านอย่างเดียว',
     owner: 'Dev 3',
+    icon: ShoppingBag,
   },
   {
     href: '/admin/categories',
-    title: 'Categories (ADM-003)',
+    title: 'Categories',
+    code: 'ADM-003',
     description: 'จัดการหมวดหมู่ที่ใช้ร่วมกันทั้งประมูลและ e-commerce',
     owner: 'Dev 2',
+    icon: FolderTree,
   },
 ];
 
 export default function AdminOverviewPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-overview'],
+    queryFn: fetchAdminOverview,
+  });
+
+  const stats = data && [
+    {
+      label: 'ผู้ใช้ทั้งหมด',
+      value: data.users.total.toLocaleString('th-TH'),
+      hint: `${data.users.suspended.toLocaleString('th-TH')} ถูกระงับ`,
+      icon: Users,
+    },
+    {
+      label: 'ประมูลที่กำลังดำเนินอยู่',
+      value: data.auctions.active.toLocaleString('th-TH'),
+      hint: `${data.auctions.total.toLocaleString('th-TH')} รายการทั้งหมด`,
+      icon: Gavel,
+    },
+    {
+      label: 'สินค้าที่เปิดขายอยู่',
+      value: data.products.active.toLocaleString('th-TH'),
+      hint: `${data.products.total.toLocaleString('th-TH')} รายการทั้งหมด`,
+      icon: Package,
+    },
+    {
+      label: 'ยอดขายที่ชำระแล้ว',
+      value: formatTHB(data.orders.paidTotal),
+      hint: `${data.orders.paidCount.toLocaleString('th-TH')} คำสั่งซื้อ`,
+      icon: ShoppingBag,
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-ink">Overview</h1>
-      <p className="max-w-2xl text-sm text-n-600">
-        ยังไม่มี endpoint สรุปตัวเลข (<code>/admin/overview</code>) ในระบบจริง — ไม่ใส่การ์ด
-        ตัวเลขมั่ว ศูนย์รวมทุก endpoint แอดมินของทั้ง 4 คน (ตาม ADR-0001 — admin role เดียว
-        ครอบทั้งสองโมดูล) อยู่ด้านล่างนี้แทน
-      </p>
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {isLoading || !stats
+          ? Array.from({ length: 4 }, (_, index) => (
+              <Card key={index}>
+                <CardContent className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-7 w-16" />
+                </CardContent>
+              </Card>
+            ))
+          : stats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <Card key={stat.label}>
+                  <CardContent className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-n-500">{stat.label}</p>
+                      <p className="mt-1 font-display text-2xl font-extrabold text-ink">
+                        {stat.value}
+                      </p>
+                      <p className="mt-1 text-xs text-n-400">{stat.hint}</p>
+                    </div>
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-r3 bg-amber-50 text-amber-600">
+                      <Icon className="size-4.5" />
+                    </span>
+                  </CardContent>
+                </Card>
+              );
+            })}
+      </div>
+
+      {data && (
+        <p className="flex items-center gap-1.5 text-xs text-n-500">
+          <Activity className="size-3.5" />
+          admin ทำรายการ {data.adminActionsLast24h.toLocaleString('th-TH')} ครั้งใน 24 ชั่วโมงที่ผ่านมา
+        </p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SECTIONS.map((section) => (
-          <Link key={section.href} href={section.href}>
-            <Card className="h-full transition-shadow hover:shadow-sh2">
-              <CardHeader>
-                <CardTitle>{section.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm text-n-600">
-                <p>{section.description}</p>
-                <span className="text-xs text-n-400">Backend: {section.owner}</span>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        {SECTIONS.map((section) => {
+          const Icon = section.icon;
+          return (
+            <Link key={section.href} href={section.href} className="group">
+              <Card className="h-full transition-all group-hover:-translate-y-0.5 group-hover:shadow-sh2">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-r3 bg-amber-50 text-amber-600">
+                      <Icon className="size-5" />
+                    </span>
+                    <div>
+                      <CardTitle className="text-base">{section.title}</CardTitle>
+                      <span className="text-xs font-medium text-n-400">{section.code}</span>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2 text-sm text-n-600">
+                  <p>{section.description}</p>
+                  <span className="text-xs text-n-400">Backend: {section.owner}</span>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
