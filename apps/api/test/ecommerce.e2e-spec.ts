@@ -527,6 +527,73 @@ describe('E-commerce (e2e)', () => {
         productId
       );
     });
+
+    /**
+     * The number on its own, for the header badge.
+     *
+     * The point of these is that the count and the list never disagree: both
+     * are built on the same `ownWhere`, so the paused-listing rule is checked
+     * here too rather than taken on trust. A badge that counted a listing the
+     * page then refuses to show is worse than no badge.
+     */
+    describe('GET /watchlist/products/count', () => {
+      const countFor = async (userId: string) => {
+        const response = await request(app.getHttpServer())
+          .get('/watchlist/products/count')
+          .set('Authorization', authOf(userId))
+          .expect(200);
+
+        return (response.body as { total: number }).total;
+      };
+
+      it('agrees with what the list reports', async () => {
+        const mine = await followed(buyerId);
+        expect(await countFor(buyerId)).toBe(mine.meta.total);
+      });
+
+      it('counts a listing the moment it is followed, and stops when it is not', async () => {
+        const fresh = await createProduct(sellerAId);
+        const before = await countFor(buyerId);
+
+        await follow(buyerId, fresh).expect(200);
+        expect(await countFor(buyerId)).toBe(before + 1);
+
+        await unfollow(buyerId, fresh).expect(200);
+        expect(await countFor(buyerId)).toBe(before);
+      });
+
+      it('drops a listing that stops being on sale, exactly as the list does', async () => {
+        const fresh = await createProduct(sellerAId);
+        await follow(buyerId, fresh).expect(200);
+        const before = await countFor(buyerId);
+
+        await pause(fresh);
+
+        expect(await countFor(buyerId)).toBe(before - 1);
+        expect((await followed(buyerId)).meta.total).toBe(before - 1);
+      });
+
+      it('only ever counts the caller’s own list', async () => {
+        const fresh = await createProduct(sellerAId);
+        await follow(buyerId, fresh).expect(200);
+
+        expect(await countFor(strangerId)).toBe(
+          (await followed(strangerId)).meta.total
+        );
+      });
+
+      it('turns away a visitor who is not signed in', () =>
+        request(app.getHttpServer())
+          .get('/watchlist/products/count')
+          .expect(401));
+
+      // SRS 2 — admins moderate the marketplace, they do not shop in it
+      it('keeps admins out', () =>
+        request(app.getHttpServer())
+          .get('/watchlist/products/count')
+          .set('Authorization', authOf(adminId))
+          .expect(403));
+    });
   });
 
   describe('PROD-002 — a seller can find their own listings', () => {
@@ -1131,6 +1198,106 @@ describe('E-commerce (e2e)', () => {
 
       expect((response.body as { status: string }).status).toBe('ACTIVE');
     });
+  });
+
+  /**
+   * ADM-005 — the oversight list itself, and what it refuses.
+   *
+   * The refusals are the point of most of these. `cursor`, `limit` and
+   * `status` were read as bare query strings, which the global ValidationPipe
+   * does not check, so each one reached Prisma as typed: three answered 500,
+   * and an unbounded `limit` answered 200 with the whole table. Only a
+   * ListAdminProductsDto turns those into 400s, so only an end-to-end request
+   * through the real pipe can show that it does.
+   */
+  describe('ADM-005 — listing every product for oversight', () => {
+    let listedId: string;
+
+    beforeAll(async () => {
+      listedId = await createProduct(sellerAId, { price: 700, stockQty: 4 });
+    });
+
+    it('answers an admin with the listing, seller flattened onto each row', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/admin/products?limit=100')
+        .set('Authorization', authOf(adminId))
+        .expect(200);
+
+      const rows = response.body as {
+        id: string;
+        status: string;
+        seller: { id: string; email: string; displayName: string | null };
+      }[];
+
+      const mine = rows.find((row) => row.id === listedId);
+      expect(mine).toBeDefined();
+      // Flattened: no nested `profile`, and a seller without one reads null
+      expect(mine?.seller.id).toBe(sellerAId);
+      expect(mine?.seller).toHaveProperty('displayName');
+      expect(mine?.seller).not.toHaveProperty('profile');
+    });
+
+    it('refuses a regular user', () =>
+      request(app.getHttpServer())
+        .get('/admin/products')
+        .set('Authorization', authOf(buyerId))
+        .expect(403));
+
+    it('narrows to one status, and returns nothing else', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/admin/products?status=SUSPENDED&limit=100')
+        .set('Authorization', authOf(adminId))
+        .expect(200);
+
+      const rows = response.body as { status: string }[];
+      for (const row of rows) expect(row.status).toBe('SUSPENDED');
+    });
+
+    it('honours limit', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/admin/products?limit=1')
+        .set('Authorization', authOf(adminId))
+        .expect(200);
+
+      expect((response.body as unknown[]).length).toBe(1);
+    });
+
+    it('refuses a status that is not one', () =>
+      request(app.getHttpServer())
+        .get('/admin/products?status=BOGUS')
+        .set('Authorization', authOf(adminId))
+        .expect(400));
+
+    it('refuses a cursor that is not a uuid', () =>
+      request(app.getHttpServer())
+        .get('/admin/products?cursor=notauuid')
+        .set('Authorization', authOf(adminId))
+        .expect(400));
+
+    it('refuses a limit that is not a number', () =>
+      request(app.getHttpServer())
+        .get('/admin/products?limit=abc')
+        .set('Authorization', authOf(adminId))
+        .expect(400));
+
+    // The one that used to answer 200 — with every product in the table
+    it('refuses a limit past the cap', () =>
+      request(app.getHttpServer())
+        .get('/admin/products?limit=99999')
+        .set('Authorization', authOf(adminId))
+        .expect(400));
+
+    it('refuses a limit below one', () =>
+      request(app.getHttpServer())
+        .get('/admin/products?limit=0')
+        .set('Authorization', authOf(adminId))
+        .expect(400));
+
+    it('refuses a parameter it does not know', () =>
+      request(app.getHttpServer())
+        .get('/admin/products?sellerId=whoever')
+        .set('Authorization', authOf(adminId))
+        .expect(400));
   });
 
   describe('CHAT — a thread belongs to its two participants only', () => {

@@ -20,4 +20,22 @@ export class WatchlistController {
   listOwn(@CurrentUser('id') userId: string, @Query() dto: ListWatchlistDto) {
     return this.watchlistService.listOwn(userId, dto);
   }
+
+  /**
+   * Just the number, for the heart in the header.
+   *
+   * Its own route rather than a flag on the list: the header is on every page,
+   * and reading the count off the list meant fetching a hundred rows to render
+   * one integer. Mirrors `GET /notifications/unread-count`, which the same
+   * header already calls for the same reason.
+   *
+   * No `@ReturnsOwnerFields()`: a count is a count either way, and the
+   * decorator exists to let owner-only fields through on rows there are none
+   * of here.
+   */
+  @Roles('USER')
+  @Get('count')
+  countOwn(@CurrentUser('id') userId: string) {
+    return this.watchlistService.countOwn(userId);
+  }
 }

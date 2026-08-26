@@ -51,7 +51,7 @@ const GRACE_MS = 60_000
  * why the API's own reuse detection stays the real defence and this is only
  * here to stop us tripping it ourselves.
  */
-const spent = new Map<string, Promise<ApiTokens | null>>()
+const spent = new Map<string, Promise<RefreshResult>>()
 
 /** `exp` out of a JWT payload, in ms, without verifying anything. */
 function expiryOf(accessToken: string): number | null {
@@ -87,9 +87,23 @@ export function needsRefresh(
   return now >= expiry - SKEW_MS
 }
 
-async function requestRefresh(
-  refreshToken: string
-): Promise<ApiTokens | null> {
+/**
+ * The three things a renewal attempt can learn, kept apart because they call
+ * for opposite reactions:
+ *
+ *   renewed      a fresh pair — swap it in.
+ *   dead         the API looked at the token and said no. The session is over.
+ *   unreachable  the API never got to look — network failure, a 5xx, a 429.
+ *                Saying nothing about the session, so nothing may act as if
+ *                it did. Collapsing this into `dead` is how an API restart
+ *                signed everyone out with "เซสชันหมดอายุ" mid-development.
+ */
+export type RefreshResult =
+  | { outcome: "renewed"; tokens: ApiTokens }
+  | { outcome: "dead" }
+  | { outcome: "unreachable" }
+
+async function requestRefresh(refreshToken: string): Promise<RefreshResult> {
   let response: Response
   try {
     response = await fetch(`${API_URL}/auth/refresh`, {
@@ -99,30 +113,34 @@ async function requestRefresh(
       cache: "no-store"
     })
   } catch {
-    // The API being unreachable is not the same as the session being over,
-    // but there is no token to carry on with either way.
-    return null
+    return { outcome: "unreachable" }
   }
 
-  if (!response.ok) return null
+  // Only a considered rejection kills the session. 401 is the API saying the
+  // token is spent, expired or revoked; anything else — a crash, a proxy
+  // error, the throttler — is the request failing, not the token.
+  if (response.status === 401 || response.status === 403) {
+    return { outcome: "dead" }
+  }
+  if (!response.ok) return { outcome: "unreachable" }
 
   const body: unknown = await response.json().catch(() => null)
   const tokens = body as ApiTokens | null
-  return tokens?.accessToken && tokens.refreshToken ? tokens : null
+  return tokens?.accessToken && tokens.refreshToken
+    ? { outcome: "renewed", tokens }
+    : { outcome: "unreachable" }
 }
 
 /**
  * Spend a refresh token, at most once, however many callers ask at the same
- * moment. Answers null when the session is genuinely over.
+ * moment.
  */
-export function refreshTokens(
-  refreshToken: string
-): Promise<ApiTokens | null> {
+export function refreshTokens(refreshToken: string): Promise<RefreshResult> {
   const already = spent.get(refreshToken)
   if (already) return already
 
-  const attempt = requestRefresh(refreshToken).then((tokens) => {
-    if (tokens) {
+  const attempt = requestRefresh(refreshToken).then((result) => {
+    if (result.outcome === "renewed") {
       // Hold the answer for stragglers, then forget it — the map would
       // otherwise grow for the life of the process.
       const timer = setTimeout(() => spent.delete(refreshToken), GRACE_MS)
@@ -132,7 +150,7 @@ export function refreshTokens(
       // attempt should be free to try again.
       spent.delete(refreshToken)
     }
-    return tokens
+    return result
   })
 
   spent.set(refreshToken, attempt)

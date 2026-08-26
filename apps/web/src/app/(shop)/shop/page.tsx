@@ -1,10 +1,12 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { ActiveFilters } from "@/components/shop/active-filters"
 import { CatalogPagination } from "@/components/shop/catalog-pagination"
 import { ProductCard } from "@/components/shop/product-card"
 import { ProductFilters } from "@/components/shop/product-filters"
 import { ProductSortSelect } from "@/components/shop/product-sort"
+import { Button } from "@/components/ui/button"
 import { listCategories } from "@/lib/api/categories"
 import { ApiError } from "@/lib/api/client"
 import { searchProducts } from "@/lib/api/products"
@@ -106,7 +108,49 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
   )
 }
 
+/**
+ * Two different failures reach this, and they read as the same one if the
+ * API's own words are printed:
+ *
+ * - **A rejected filter (400.)** `?minPrice=100&maxPrice=1`, or a categoryId
+ *   that is not a uuid. `SearchProductDto` answers in English, from
+ *   class-validator — "each value in categoryIds must be a UUID" — which is
+ *   written for whoever is calling the API, not for whoever is shopping. The
+ *   filter panel cannot produce either case (the range is guarded before
+ *   submit, the ids come from checkboxes), so this only happens on a
+ *   hand-edited or stale URL, and the way out is to drop the filters.
+ * - **Anything else**, including the API being down, where `ApiError.message`
+ *   is already the Thai "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" set by `apiFetch`.
+ *
+ * The hint about `NEXT_PUBLIC_API_URL` stays only on the second: it is aimed
+ * at whoever is running the stack, and a shopper reading it about their own
+ * typo learns nothing.
+ */
 function CatalogError({ error }: { error: unknown }) {
+  const badFilter = error instanceof ApiError && error.status === 400
+
+  if (badFilter) {
+    return (
+      <div className="mt-6 rounded-r4 border border-red bg-red-50 px-6 py-8 text-center">
+        <p className="font-semibold text-red">
+          เงื่อนไขการค้นหาไม่ถูกต้อง
+        </p>
+        <p className="mt-2 text-sm text-n-600">
+          ลองล้างตัวกรองแล้วค้นหาใหม่อีกครั้ง
+        </p>
+        <Button
+          variant="secondary"
+          size="md"
+          className="mt-5"
+          nativeButton={false}
+          render={<Link href="/shop" />}
+        >
+          ล้างตัวกรอง
+        </Button>
+      </div>
+    )
+  }
+
   const message =
     error instanceof ApiError
       ? error.message

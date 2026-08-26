@@ -1,7 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { AdminActionType } from '../../generated/prisma/enums';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AdminActionsService } from './actions.service';
+import { ListAdminActionsDto } from './dtos/list-admin-actions.dto';
 
 /**
  * ADM-004 — Audit log viewer (owner: Dev 5)
@@ -20,19 +20,15 @@ export class AdminActionsController {
   constructor(private readonly adminActionsService: AdminActionsService) {}
 
   /**
-   * query: cursor?, limit?, actionType? (AdminActionType)
+   * query: cursor?, limit?, actionType? — see ListAdminActionsDto.
    * คืน admin ที่ทำ, ประเภทการกระทำ, เป้าหมาย, หมายเหตุ, เวลา ตาม ADM-004
+   *
+   * One DTO rather than three `@Query('name')` strings: the global
+   * ValidationPipe only runs against a class metatype, so the string form was
+   * unvalidated no matter what it was annotated with.
    */
   @Get()
-  listActions(
-    @Query('cursor') cursor?: string,
-    @Query('limit') limit?: string,
-    @Query('actionType') actionType?: AdminActionType
-  ) {
-    return this.adminActionsService.listActions({
-      cursor,
-      limit: limit ? Number(limit) : undefined,
-      actionType
-    });
+  listActions(@Query() query: ListAdminActionsDto) {
+    return this.adminActionsService.listActions(query);
   }
 }
