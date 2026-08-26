@@ -1,29 +1,61 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  FolderTree,
+  Gavel,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Package,
+  ScrollText,
+  ShoppingBag,
+  Users,
+} from 'lucide-react';
 import { fetchCurrentUser } from '@/lib/api/admin';
 import { useAuthToken } from '@/lib/api/auth/use-auth-token';
 import { loginHref } from '@/lib/api/auth/login-redirect';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { DevTokenSwitcher } from '@/components/dev/dev-token-switcher';
+import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/admin', label: 'Overview' },
-  { href: '/admin/users', label: 'Users (ADM-002)' },
-  { href: '/admin/audit-log', label: 'Audit Log (ADM-004)' },
-  { href: '/admin/auctions', label: 'Auctions (ADM-001)' },
-  { href: '/admin/products', label: 'Products (ADM-005)' },
-  { href: '/admin/orders', label: 'Orders (ADM-006)' },
-  { href: '/admin/categories', label: 'Categories (ADM-003)' },
+  { href: '/admin', label: 'Overview', icon: LayoutDashboard },
+  { href: '/admin/users', label: 'Users', code: 'ADM-002', icon: Users },
+  { href: '/admin/audit-log', label: 'Audit Log', code: 'ADM-004', icon: ScrollText },
+  { href: '/admin/auctions', label: 'Auctions', code: 'ADM-001', icon: Gavel },
+  { href: '/admin/products', label: 'Products', code: 'ADM-005', icon: Package },
+  { href: '/admin/orders', label: 'Orders', code: 'ADM-006', icon: ShoppingBag },
+  { href: '/admin/categories', label: 'Categories', code: 'ADM-003', icon: FolderTree },
 ];
+
+function useCurrentNavItem() {
+  const pathname = usePathname();
+  return (
+    NAV_ITEMS.find((item) =>
+      item.href === '/admin' ? pathname === item.href : pathname?.startsWith(item.href)
+    ) ?? NAV_ITEMS[0]
+  );
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { token, ready } = useAuthToken();
+  const currentItem = useCurrentNavItem();
 
   const { data: currentUser, isLoading } = useQuery({
     queryKey: ['current-user'],
@@ -32,7 +64,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     retry: false,
   });
 
-  // `ready` means "localStorage has been read", not "signed in" — wait for
+  // `ready` means "the session has been read", not "signed in" — wait for
   // both before deciding anything, same as SellerShell.
   if (!ready || (token && isLoading)) {
     return (
@@ -43,9 +75,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // No real login page yet (Dev1's NextAuth work is still pending) —
-  // loginHref() lands on a 404 on purpose until it ships. Use the DEV
-  // switcher below instead while testing.
   if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">
@@ -75,27 +104,175 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen bg-n-100">
-      <aside className="w-56 shrink-0 border-r border-n-200 bg-white p-4">
-        <div className="mb-6 font-display font-semibold text-ink">BidNest Admin</div>
-        <nav className="flex flex-col gap-2">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-r3 px-3 py-2 text-sm text-n-700 hover:bg-n-100"
-            >
-              {item.label}
-            </Link>
-          ))}
+    <div className="flex min-h-screen flex-col bg-n-100 lg:flex-row">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-n-200 bg-white lg:flex">
+        <div className="flex items-center gap-2 px-5 py-6">
+          <span className="flex size-9 items-center justify-center rounded-r3 bg-linear-to-b from-amber-400 to-amber-500 font-display text-lg font-extrabold text-ink shadow-sh1">
+            B
+          </span>
+          <div className="leading-tight">
+            <p className="font-display text-base font-bold text-ink">BidNest</p>
+            <p className="text-xs text-n-500">Admin</p>
+          </div>
+        </div>
+
+        <nav className="flex flex-col gap-1 px-3">
+          {NAV_ITEMS.map((item) => {
+            const active = item === currentItem;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-r3 px-3 py-2.5 text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'text-n-600 hover:bg-n-100 hover:text-ink'
+                )}
+              >
+                <Icon
+                  className={cn('size-4.5 shrink-0', active ? 'text-amber-600' : 'text-n-400')}
+                />
+                <span className="flex-1">{item.label}</span>
+                {item.code && (
+                  <span
+                    className={cn(
+                      'text-[10px] font-semibold tracking-wide',
+                      active ? 'text-amber-500' : 'text-n-400'
+                    )}
+                  >
+                    {item.code}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
+
+        <Link
+          href="/admin/account"
+          className="mt-auto flex items-center gap-3 border-t border-n-200 px-5 py-4 transition-colors hover:bg-n-100"
+        >
+          <span className="flex size-8 items-center justify-center rounded-full bg-n-100 text-xs font-bold text-n-600">
+            {currentUser.email.slice(0, 1).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-xs font-semibold text-ink">{currentUser.email}</p>
+            <p className="text-[11px] text-n-500">ADMIN</p>
+          </div>
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => void signOut({ callbackUrl: '/' })}
+          className="flex items-center gap-3 border-t border-n-200 px-5 py-3 text-sm font-medium text-n-600 transition-colors hover:bg-red-50 hover:text-red"
+        >
+          <LogOut className="size-4.5 shrink-0 text-n-400" />
+          ออกจากระบบ
+        </button>
       </aside>
-      <div className="flex-1">
-        <header className="border-b border-n-200 bg-white p-4 text-sm text-n-500">
-          Admin Dashboard
+
+      <header className="flex items-center gap-3 border-b border-n-200 bg-white px-4 py-3 lg:hidden">
+        <Sheet>
+          <SheetTrigger
+            render={
+              <button
+                type="button"
+                aria-label="เปิดเมนู"
+                className="flex size-10 shrink-0 items-center justify-center rounded-r2 text-ink hover:bg-n-100"
+              />
+            }
+          >
+            <Menu className="size-5" />
+          </SheetTrigger>
+          <SheetContent side="left" className="flex flex-col p-0">
+            <SheetHeader className="border-b border-n-200">
+              <SheetTitle>เมนู</SheetTitle>
+            </SheetHeader>
+
+            <nav className="flex flex-col gap-1 px-3 py-3">
+              {NAV_ITEMS.map((item) => {
+                const active = item === currentItem;
+                const Icon = item.icon;
+                return (
+                  <SheetClose
+                    key={item.href}
+                    render={<Link href={item.href} />}
+                    nativeButton={false}
+                    className={cn(
+                      'flex items-center gap-3 rounded-r3 px-3 py-2.5 text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'text-n-600 hover:bg-n-100 hover:text-ink'
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'size-4.5 shrink-0',
+                        active ? 'text-amber-600' : 'text-n-400'
+                      )}
+                    />
+                    <span className="flex-1">{item.label}</span>
+                    {item.code && (
+                      <span
+                        className={cn(
+                          'text-[10px] font-semibold tracking-wide',
+                          active ? 'text-amber-500' : 'text-n-400'
+                        )}
+                      >
+                        {item.code}
+                      </span>
+                    )}
+                  </SheetClose>
+                );
+              })}
+            </nav>
+
+            <SheetClose
+              render={<Link href="/admin/account" />}
+              nativeButton={false}
+              className="mt-auto flex items-center gap-3 border-t border-n-200 px-5 py-4 transition-colors hover:bg-n-100"
+            >
+              <span className="flex size-8 items-center justify-center rounded-full bg-n-100 text-xs font-bold text-n-600">
+                {currentUser.email.slice(0, 1).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1 text-left leading-tight">
+                <p className="truncate text-xs font-semibold text-ink">{currentUser.email}</p>
+                <p className="text-[11px] text-n-500">ADMIN</p>
+              </div>
+            </SheetClose>
+
+            <SheetClose
+              onClick={() => void signOut({ callbackUrl: '/' })}
+              className="flex items-center gap-3 border-t border-n-200 px-5 py-3 text-sm font-medium text-n-600 transition-colors hover:bg-red-50 hover:text-red"
+            >
+              <LogOut className="size-4.5 shrink-0 text-n-400" />
+              ออกจากระบบ
+            </SheetClose>
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-r3 bg-linear-to-b from-amber-400 to-amber-500 font-display text-sm font-extrabold text-ink shadow-sh1">
+            B
+          </span>
+          <p className="font-display text-sm font-bold text-ink">BidNest Admin</p>
+        </div>
+      </header>
+
+      <div className="flex flex-1 flex-col">
+        <header className="hidden items-center justify-between border-b border-n-200 bg-white px-6 py-4 lg:flex">
+          <div>
+            <h1 className="font-display text-lg font-bold text-ink">{currentItem.label}</h1>
+            <p className="text-xs text-n-500">
+              {pathname === '/admin' ? 'ศูนย์รวม endpoint แอดมินของทั้งทีม' : (currentItem.code ?? '')}
+            </p>
+          </div>
         </header>
-        <main className="p-6">{children}</main>
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
+
       <DevTokenSwitcher />
     </div>
   );
