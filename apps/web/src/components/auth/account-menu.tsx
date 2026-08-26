@@ -104,7 +104,7 @@ export function AccountMenu({ className }: { className?: string }) {
     <Menu.Root>
       <Menu.Trigger
         className={cn(
-          "flex h-11 items-center gap-2 rounded-r2 px-1.5 text-ink outline-none transition-colors hover:bg-n-100 focus-visible:ring-3 focus-visible:ring-amber-500/30 data-popup-open:bg-n-100 md:px-2",
+          "flex h-11 items-center gap-2 rounded-r2 px-1.5 text-ink outline-none transition-colors hover:bg-n-100 focus-visible:ring-3 focus-visible:ring-amber-500/30 data-popup-open:bg-n-100 lg:border lg:border-n-200 lg:bg-white lg:px-2 lg:shadow-sh1 lg:transition-shadow lg:hover:bg-n-100 lg:hover:shadow-sh2 lg:data-popup-open:shadow-sh2",
           className
         )}
         aria-label={`บัญชี: ${name}`}
@@ -112,10 +112,10 @@ export function AccountMenu({ className }: { className?: string }) {
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
           {initialOf(session.user?.name, session.user?.email)}
         </span>
-        <span className="hidden max-w-32 truncate text-sm font-semibold md:inline">
+        <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">
           {name}
         </span>
-        <ChevronDown className="hidden size-4 text-n-500 md:block" />
+        <ChevronDown className="hidden size-4 text-n-500 lg:block" />
       </Menu.Trigger>
 
       <Menu.Portal>

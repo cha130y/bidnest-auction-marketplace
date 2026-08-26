@@ -12,9 +12,17 @@ const TABS = [
   { label: "E-commerce", href: "/shop", icon: ShoppingCart },
 ] as const
 
-function useActiveTabIndex() {
-  const pathname = usePathname()
-  return pathname?.startsWith("/shop") ? 1 : 0
+/**
+ * `null` off an allowlist — home, watchlist, notifications, cart and every
+ * other page outside `/auctions` and `/shop` are not "Auction" or
+ * "E-commerce" just because they aren't `/shop`, so no tab lights up or
+ * carries the gavel there. Hovering still previews it regardless.
+ */
+function useActiveTabIndex(): number | null {
+  const pathname = usePathname() ?? ""
+  if (pathname.startsWith("/auctions")) return 0
+  if (pathname.startsWith("/shop")) return 1
+  return null
 }
 
 /**
@@ -73,9 +81,11 @@ function GavelNav() {
           aria-hidden
           className={cn(
             "pointer-events-none absolute -top-12 left-0 -ml-10.25 flex w-20.5 justify-center opacity-0 transition-[transform,opacity] duration-[460ms] ease-[cubic-bezier(0.5,0.05,0.2,1)]",
-            ready && "opacity-100"
+            ready && target !== null && "opacity-100"
           )}
-          style={{ transform: `translateX(${centers[target] ?? 0}px)` }}
+          style={{
+            transform: `translateX(${target !== null ? (centers[target] ?? 0) : 0}px)`
+          }}
         >
           <div
             className="absolute top-8.5 -bottom-10.5 left-1/2 w-9.5 -ml-4.75 animate-beam-breathe blur-[2px]"

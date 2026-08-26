@@ -11,7 +11,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ChatService } from './chat.service';
 import { ListMessagesDto } from './dtos/list-messages.dto';
-import { SendMessageDto } from './dtos/send-message.dto';
+import { SendChatMessageDto } from './dtos/send-message.dto';
 
 // SRS 6 — chat content is private to the two participants, admins included
 @Roles('USER')
@@ -37,7 +37,7 @@ export class ConversationController {
   sendMessage(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: SendMessageDto
+    @Body() dto: SendChatMessageDto
   ) {
     return this.chatService.sendMessage(id, userId, dto.body);
   }

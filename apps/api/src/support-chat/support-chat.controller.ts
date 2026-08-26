@@ -7,7 +7,7 @@ import type { AuthenticatedUser } from '../common/types/authenticated-user.type'
 import { Throttle } from '@nestjs/throttler';
 import { ApiResponse } from '@nestjs/swagger';
 import { SanitizePromptPipe } from '../common/pipes/sanitize-prompt.pipe';
-import { SendMessageDto } from './dto/send-message.dto';
+import { SendSupportChatMessageDto } from './dto/send-message.dto';
 import { ChatMessageDto, SendMessageResponseDto } from './dto/chat-message.dto';
 
 @Controller('support/chat')
@@ -39,7 +39,7 @@ export class SupportChatController {
     // level: a method-level pipe runs against *every* parameter's resolved
     // value, including @OptionalCurrentUser()'s — which is `undefined` for a
     // guest, and this pipe reads `.message` off whatever it is handed.
-    @Body(SanitizePromptPipe) dto: SendMessageDto,
+    @Body(SanitizePromptPipe) dto: SendSupportChatMessageDto,
     @OptionalCurrentUser() user: AuthenticatedUser | undefined
   ): Promise<SendMessageResponseDto> {
     return this.supportChatService.sendMessage(

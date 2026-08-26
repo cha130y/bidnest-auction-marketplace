@@ -96,8 +96,15 @@ export class GeminiClientService {
     const model = this.client.getGenerativeModel({ model: this.modelName });
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Cleared in `finally` below regardless of which side of the race
+      // wins — left running, it holds the process open for the rest of
+      // `timeoutMs` after every successful call, which is most of them.
+      let timeoutHandle!: NodeJS.Timeout;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('GEMINI_TIMEOUT')), timeoutMs);
+        timeoutHandle = setTimeout(
+          () => reject(new Error('GEMINI_TIMEOUT')),
+          timeoutMs
+        );
       });
 
       try {
@@ -118,6 +125,8 @@ export class GeminiClientService {
           `Gemini request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms: ${(error as Error).message}`
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
+      } finally {
+        clearTimeout(timeoutHandle);
       }
     }
 

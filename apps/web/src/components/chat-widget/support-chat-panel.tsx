@@ -6,11 +6,8 @@ import { Send } from 'lucide-react';
 
 import MessageList from '@/components/chat-widget/message-list';
 import { Button } from '@/components/ui/button';
-import {
-  ChatMessage,
-  sendSupportChatMessage,
-  SupportChatError,
-} from '@/lib/api/support-chat';
+import { ApiError } from '@/lib/api/client';
+import { ChatMessage, sendSupportChatMessage } from '@/lib/api/support-chat';
 
 /**
  * AI-001 — the assistant tab's content. Works the same whether the viewer is
@@ -54,7 +51,7 @@ export function SupportChatPanel() {
   });
 
   const errorMessage =
-    mutation.error instanceof SupportChatError
+    mutation.error instanceof ApiError
       ? mutation.error.message
       : 'ส่งข้อความไม่สำเร็จ';
 
