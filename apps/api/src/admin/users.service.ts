@@ -5,18 +5,12 @@ import {
   UnauthorizedException
 } from '@nestjs/common';
 import { AdminActionType } from '../../generated/prisma/enums';
-import type { UserRole, UserStatus } from '../../generated/prisma/enums';
+import type { UserStatus } from '../../generated/prisma/enums';
 import { HashingService } from '../auth/hashing.service';
 import { TokenService } from '../auth/token.service';
 import { TrustedDeviceService } from '../auth/trusted-device.service';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface ListUsersQuery {
-  cursor?: string;
-  limit?: number;
-  status?: UserStatus;
-  role?: UserRole;
-}
+import { ListAdminUsersDto } from './dtos/list-admin-users.dto';
 
 /**
  * ADM-002 — User management (owner: Dev 5)
@@ -38,8 +32,14 @@ export class AdminUsersService {
     private readonly trustedDevices: TrustedDeviceService
   ) {}
 
-  /** สมาชิก/พนักงาน แยกกันด้วย role ที่มีอยู่แล้ว — ไม่มี role ใหม่ */
-  async listUsers(query: ListUsersQuery = {}) {
+  /**
+   * สมาชิก/พนักงาน แยกกันด้วย role ที่มีอยู่แล้ว — ไม่มี role ใหม่
+   *
+   * Takes the DTO itself rather than a private copy of its shape, so the
+   * bounds written there cannot drift from what this method assumes. Every
+   * field arrives validated: the controller is the only caller.
+   */
+  async listUsers(query: ListAdminUsersDto = {}) {
     const limit = query.limit ?? 20;
 
     return this.prisma.user.findMany({
