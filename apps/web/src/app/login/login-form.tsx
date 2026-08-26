@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { signIn } from "next-auth/react"
@@ -11,7 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/auth/password-input"
-import { Label } from "@/components/ui/label"
+import { AuthCard, AuthLink } from "@/components/auth/auth-card"
+import { Field, FormError } from "@/components/auth/field"
 import { resendLoginCode } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
 import type { ApiTokens, PendingResponse } from "@/lib/auth/api-contract"
@@ -182,149 +182,152 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
   if (credentials) {
     const busy = codeForm.formState.isSubmitting
     return (
-      <form
-        onSubmit={codeForm.handleSubmit(completeSignIn)}
-        className="space-y-4"
-        noValidate
+      <AuthCard
+        title="ยืนยันตัวตน"
+        subtitle={`กรอกรหัส 6 หลักที่ส่งไปยัง ${credentials.email} — ใช้ได้ภายใน ${expiresIn} นาที`}
       >
-        <div>
-          <h1 className="text-xl font-semibold">ยืนยันตัวตน</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            กรอกรหัส 6 หลักที่ส่งไปยัง {credentials.email} — ใช้ได้ภายใน{" "}
-            {expiresIn} นาที
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="otp">รหัสยืนยัน</Label>
-          <Input
+        <form
+          onSubmit={codeForm.handleSubmit(completeSignIn)}
+          className="space-y-5"
+          noValidate
+        >
+          <Field
             id="otp"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            autoFocus
-            {...codeForm.register("otp")}
-          />
-          {codeForm.formState.errors.otp && (
-            <p className="text-sm text-destructive">
-              {codeForm.formState.errors.otp.message}
+            label="รหัสยืนยัน"
+            error={codeForm.formState.errors.otp?.message}
+          >
+            {(field) => (
+              <Input
+                {...field}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+                placeholder="000000"
+                // Six digits read as a code rather than a word: spaced out,
+                // centred, and in the tabular figures the display face has,
+                // so nothing shifts as the boxes fill.
+                className="text-center font-display text-2xl font-bold tracking-[0.4em] tabular-nums"
+                {...codeForm.register("otp")}
+              />
+            )}
+          </Field>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-r2 bg-n-100 p-4 text-sm">
+            <Checkbox
+              checked={remember}
+              onCheckedChange={(value) => setRemember(value)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-semibold text-ink">
+                จำอุปกรณ์นี้ไว้ 30 วัน
+              </span>
+              <span className="mt-1 block leading-relaxed text-n-600">
+                ครั้งต่อไปจากเครื่องนี้จะไม่ต้องกรอกรหัสจากอีเมลอีก —
+                เครื่องอื่นยังต้องกรอกเหมือนเดิม อย่าเลือกถ้าเป็นเครื่องสาธารณะ
+              </span>
+            </span>
+          </label>
+
+          {notice && !failure && (
+            <p role="status" className="text-sm text-n-600">
+              {notice}
             </p>
           )}
-        </div>
+          <FormError>{failure}</FormError>
 
-        <label className="flex items-start gap-3 text-sm">
-          <Checkbox
-            checked={remember}
-            onCheckedChange={(value) => setRemember(value)}
-          />
-          <span>
-            จำอุปกรณ์นี้ไว้ 30 วัน
-            <span className="mt-0.5 block text-muted-foreground">
-              ครั้งต่อไปจากเครื่องนี้จะไม่ต้องกรอกรหัสจากอีเมลอีก —
-              เครื่องอื่นยังต้องกรอกเหมือนเดิม อย่าเลือกถ้าเป็นเครื่องสาธารณะ
-            </span>
-          </span>
-        </label>
+          <Button type="submit" size="lg" block disabled={busy}>
+            {busy ? "กำลังยืนยัน..." : "เข้าสู่ระบบ"}
+          </Button>
 
-        {notice && !failure && (
-          <p className="text-sm text-muted-foreground">{notice}</p>
-        )}
-        {failure && <p className="text-sm text-destructive">{failure}</p>}
-
-        <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "กำลังยืนยัน..." : "เข้าสู่ระบบ"}
-        </Button>
-
-        <div className="flex justify-between text-sm">
-          <button
-            type="button"
-            className="text-muted-foreground underline"
-            onClick={() => {
-              setCredentials(null)
-              setFailure(null)
-              codeForm.reset()
-            }}
-          >
-            ย้อนกลับ
-          </button>
-          <button
-            type="button"
-            className="text-muted-foreground underline"
-            onClick={resend}
-            disabled={busy}
-          >
-            ขอรหัสใหม่
-          </button>
-        </div>
-      </form>
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <button
+              type="button"
+              className="rounded-r1 font-semibold text-n-600 underline decoration-n-300 underline-offset-4 transition-colors outline-none hover:text-ink focus-visible:ring-3 focus-visible:ring-amber-500/30"
+              onClick={() => {
+                setCredentials(null)
+                setFailure(null)
+                codeForm.reset()
+              }}
+            >
+              ย้อนกลับ
+            </button>
+            <button
+              type="button"
+              className="rounded-r1 font-semibold text-n-600 underline decoration-n-300 underline-offset-4 transition-colors outline-none hover:text-ink focus-visible:ring-3 focus-visible:ring-amber-500/30 disabled:opacity-45"
+              onClick={resend}
+              disabled={busy}
+            >
+              ขอรหัสใหม่
+            </button>
+          </div>
+        </form>
+      </AuthCard>
     )
   }
 
   const busy = stepOne.formState.isSubmitting
   return (
-    <div className="space-y-6">
+    <AuthCard
+      title="เข้าสู่ระบบ"
+      subtitle="ครั้งแรกจากเครื่องนี้ต้องยืนยันด้วยรหัสทางอีเมลอีกขั้นหนึ่ง"
+      footer={
+        <>
+          ยังไม่มีบัญชี <AuthLink href="/register">สมัครสมาชิก</AuthLink>
+        </>
+      }
+    >
       <form
         onSubmit={stepOne.handleSubmit(sendCode)}
-        className="space-y-4"
+        className="space-y-5"
         noValidate
       >
-        <div>
-          <h1 className="text-xl font-semibold">เข้าสู่ระบบ</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            ครั้งแรกจากเครื่องนี้ต้องยืนยันด้วยรหัสทางอีเมลอีกขั้นหนึ่ง
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="email">อีเมล</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            autoFocus
-            {...stepOne.register("email")}
-          />
-          {stepOne.formState.errors.email && (
-            <p className="text-sm text-destructive">
-              {stepOne.formState.errors.email.message}
-            </p>
+        <Field
+          id="email"
+          label="อีเมล"
+          error={stepOne.formState.errors.email?.message}
+        >
+          {(field) => (
+            <Input
+              {...field}
+              type="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="you@example.com"
+              {...stepOne.register("email")}
+            />
           )}
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">รหัสผ่าน</Label>
-          <PasswordInput
-            id="password"
-            autoComplete="current-password"
-            {...stepOne.register("password")}
-          />
-          {stepOne.formState.errors.password && (
-            <p className="text-sm text-destructive">
-              {stepOne.formState.errors.password.message}
-            </p>
+        <Field
+          id="password"
+          label="รหัสผ่าน"
+          error={stepOne.formState.errors.password?.message}
+        >
+          {(field) => (
+            <PasswordInput
+              {...field}
+              autoComplete="current-password"
+              {...stepOne.register("password")}
+            />
           )}
-        </div>
+        </Field>
 
-        {failure && <p className="text-sm text-destructive">{failure}</p>}
+        <FormError>{failure}</FormError>
 
-        <Button type="submit" className="w-full" disabled={busy}>
+        <Button type="submit" size="lg" block disabled={busy}>
           {busy ? "กำลังตรวจสอบ..." : "ถัดไป"}
         </Button>
 
-        <div className="flex justify-between text-sm">
-          <Link
-            href="/forgot-password"
-            className="text-muted-foreground underline"
-          >
+        <div className="text-right text-sm">
+          <AuthLink href="/forgot-password" className="text-n-600">
             ลืมรหัสผ่าน
-          </Link>
-          <Link href="/register" className="text-muted-foreground underline">
-            สมัครสมาชิก
-          </Link>
+          </AuthLink>
         </div>
       </form>
 
       {oauth}
-    </div>
+    </AuthCard>
   )
 }
