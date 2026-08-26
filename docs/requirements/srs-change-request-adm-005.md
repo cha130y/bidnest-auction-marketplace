@@ -3,7 +3,7 @@
 - **สถานะ:** ✅ **ปิดแล้ว** — แก้ครบทุกจุดและ export เป็น `BidNest-Auction and Marketplace-v5.pdf` เรียบร้อย
 - **อัปเดตล่าสุด:** 2026-08-19
 - **ไฟล์ต้นฉบับ:** `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
-- **SRS ที่อยู่ใน repo:** `BidNest-Auction and Marketplace-v5.pdf`
+- **SRS ที่อยู่ใน repo:** `BidNest-Auction and Marketplace-v6.pdf` (ข้อความ ADM-005 ที่แก้ในรอบนี้ยกมาครบไม่มีเปลี่ยน — v6 แก้เฉพาะ CART-002/003/004 ดู [srs-change-request-cart-003.md](./srs-change-request-cart-003.md))
 - **อ้างอิงการตัดสินใจ:** [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
 
 > เอกสารนี้เก็บไว้เป็นบันทึกว่าแก้อะไรไปบ้างและทำไม ไม่ต้องทำอะไรต่อแล้ว
@@ -165,7 +165,7 @@ SRS v4 มีข้อกำหนด 2 ข้อที่ขัดกันเ�
 - [ ] แจ้ง Dev 3 ว่า story ADM-005, PROD-002, PROD-005 และ CART-001 ใน Jira มีเงื่อนไขเพิ่ม
 - [ ] แจ้ง Dev 1 / Dev 3 เรื่อง confirm dialog ตอนลบสินค้า (ต้องบอกว่ากู้คืนไม่ได้ + เสนอ INACTIVE)
 
-SRS v5, `schema.prisma`, ERD และ scaffold ใน `apps/api/src/admin/` ตรงกันหมดแล้ว รายละเอียดการตัดสินใจดูที่ [ADR-0001](../architecture/adr/0001-single-admin-role-and-shared-category-set.md) และ [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
+SRS v6, `schema.prisma`, ERD และ scaffold ใน `apps/api/src/admin/` ตรงกันหมดแล้ว รายละเอียดการตัดสินใจดูที่ [ADR-0001](../architecture/adr/0001-single-admin-role-and-shared-category-set.md) และ [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
 
 ## เหลือให้ทีมทำต่อ
 

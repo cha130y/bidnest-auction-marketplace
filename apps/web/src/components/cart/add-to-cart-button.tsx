@@ -1,8 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Check, ShoppingCart } from "lucide-react"
+import { ArrowRight, Check, ShoppingCart } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
@@ -20,6 +21,16 @@ type AddToCartButtonProps = {
   variant?: "primary" | "dark" | "secondary"
   block?: boolean
   className?: string
+  /**
+   * Offer the way to the cart once something is in it.
+   *
+   * Off by default because of where this button mostly lives: a catalogue
+   * grid, whose rows stretch to their tallest card. A link that appeared after
+   * a press would grow one card and shove its whole row down. On a detail page
+   * there is no row to disturb, and the buyer who just added something is
+   * exactly the one who wants it.
+   */
+  cartLink?: boolean
 }
 
 /**
@@ -36,6 +47,7 @@ export function AddToCartButton({
   variant = "primary",
   block,
   className,
+  cartLink,
 }: AddToCartButtonProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -71,6 +83,17 @@ export function AddToCartButton({
         {isSuccess ? <Check /> : <ShoppingCart />}
         {isSuccess ? "เพิ่มแล้ว" : label}
       </Button>
+      {/* The press used to end here: the label changed to "เพิ่มแล้ว" and the
+          only way on was to find the cart icon in the header. */}
+      {cartLink && isSuccess && (
+        <Link
+          href="/cart"
+          className="inline-flex items-center justify-center gap-1 text-sm font-semibold text-amber-600 underline-offset-4 hover:underline"
+        >
+          ไปที่ตะกร้า
+          <ArrowRight className="size-4" />
+        </Link>
+      )}
       {error instanceof ApiError && (
         <p className="text-xs text-red">{error.message}</p>
       )}

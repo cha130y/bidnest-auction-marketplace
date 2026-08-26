@@ -16,6 +16,7 @@ import { ProductSort } from './constants/product-sort.constant';
 import { CreateProductDto } from './dtos/create-product.dto';
 import { SearchProductDto } from './dtos/search-product.dto';
 import { UpdateProductDto } from './dtos/update-product.dto';
+import { escapeLike } from './utils/escape-like.util';
 import {
   productOwnerSelect,
   productPublicSelect,
@@ -145,8 +146,13 @@ export class ProductService {
       ...(dto.q
         ? {
             OR: [
-              { title: { contains: dto.q, mode: 'insensitive' } },
-              { description: { contains: dto.q, mode: 'insensitive' } }
+              { title: { contains: escapeLike(dto.q), mode: 'insensitive' } },
+              {
+                description: {
+                  contains: escapeLike(dto.q),
+                  mode: 'insensitive'
+                }
+              }
             ]
           }
         : {}),

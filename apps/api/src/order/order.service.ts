@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import type { OrderStatus } from '../../generated/prisma/enums';
+import type { OrderStatus, ShipmentStatus } from '../../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -32,28 +32,53 @@ const orderInclude = {
 
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
+/**
+ * What a caller may narrow an order list by. An object rather than four
+ * positional arguments: the two are both optional and both enums, so a call
+ * site that put them the wrong way round would still compile.
+ */
+export type OrderFilters = {
+  status?: OrderStatus;
+  shipmentStatus?: ShipmentStatus[];
+  page?: number;
+  limit?: number;
+};
+
+function narrow({
+  status,
+  shipmentStatus
+}: OrderFilters): Prisma.OrderWhereInput {
+  return {
+    ...(status ? { status } : {}),
+    // An order that was never paid for has no shipment row at all, so this
+    // also excludes those — which is what a seller filtering by parcel state
+    // means to ask for.
+    ...(shipmentStatus?.length
+      ? { shipment: { status: { in: shipmentStatus } } }
+      : {})
+  };
+}
+
 @Injectable()
 export class OrderService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** SHIP-003 — buyer side of order history. */
-  listForBuyer(
-    buyerId: string,
-    status?: OrderStatus,
-    page = 1,
-    limit = DEFAULT_PAGE_SIZE
-  ) {
-    return this.list({ buyerId, ...(status ? { status } : {}) }, page, limit);
+  listForBuyer(buyerId: string, filters: OrderFilters = {}) {
+    return this.list(
+      { buyerId, ...narrow(filters) },
+      filters.page ?? 1,
+      filters.limit ?? DEFAULT_PAGE_SIZE
+    );
   }
 
   /** SHIP-003 — seller side, same filters. */
-  listForSeller(
-    sellerId: string,
-    status?: OrderStatus,
-    page = 1,
-    limit = DEFAULT_PAGE_SIZE
-  ) {
-    return this.list({ sellerId, ...(status ? { status } : {}) }, page, limit);
+  listForSeller(sellerId: string, filters: OrderFilters = {}) {
+    return this.list(
+      { sellerId, ...narrow(filters) },
+      filters.page ?? 1,
+      filters.limit ?? DEFAULT_PAGE_SIZE
+    );
   }
 
   async findOne(orderId: string, userId: string) {

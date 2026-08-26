@@ -2,7 +2,9 @@
 
 import { useCallback } from "react"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { ArrowRight } from "lucide-react"
 
 import { OrderStatusBadge } from "@/components/order/order-status-badge"
 import { ShipmentPanel } from "@/components/order/shipment-panel"
@@ -147,6 +149,7 @@ function Loaded({
           <ShipmentPanel
             timeline={shipment.data}
             isLoading={shipment.isLoading}
+            actions={<WhatHappensNext order={order} />}
           />
         )}
       </div>
@@ -188,5 +191,55 @@ function Loaded({
         </Button>
       </aside>
     </div>
+  )
+}
+
+/**
+ * What to do once the parcel is on screen — which, on this page, is usually
+ * nothing, and saying so is the point.
+ *
+ * SHIP-001 belongs to the seller, so this screen carries no controls. That
+ * left the timeline sitting at "กำลังเตรียมพัสดุ" with nothing underneath it
+ * and no hint of who moves it next. Two different readers reach that dead end:
+ *
+ * - **The seller**, who arrives from a notification, or from their own shop,
+ *   and lands on the buyer's view of their own sale. `GET /orders/:id` answers
+ *   for them too (SHIP-003), so the page renders perfectly and does nothing.
+ *   They get the way across to `/sell/orders/[id]`, where the controls are.
+ * - **The buyer**, who genuinely has nothing to press and should be told that
+ *   rather than left hunting for a button — including that the page moves on
+ *   its own, since `useUserChannel` above means it really does.
+ *
+ * Always renders something: `ShipmentPanel` draws a divider above whatever it
+ * is handed, and a divider over empty space is worse than no divider.
+ */
+function WhatHappensNext({ order }: { order: Order }) {
+  const { data: session } = useSession()
+
+  if (session?.user?.id === order.seller.id) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-n-600">
+          คำสั่งซื้อนี้เป็นของร้านคุณ
+        </p>
+        <Button
+          variant="primary"
+          size="md"
+          nativeButton={false}
+          render={<Link href={`/sell/orders/${order.id}`} />}
+        >
+          จัดการการจัดส่ง
+          <ArrowRight />
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <p className="text-sm text-n-600">
+      {order.shipment?.status === "DELIVERED"
+        ? "จัดส่งสำเร็จแล้ว ขอบคุณที่สั่งซื้อ"
+        : "ผู้ขายกำลังดำเนินการ — หน้านี้จะอัปเดตเองเมื่อสถานะเปลี่ยน ไม่ต้องรีเฟรช"}
+    </p>
   )
 }
