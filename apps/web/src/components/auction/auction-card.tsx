@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { AuctionCountdownChip } from "@/components/auction/auction-countdown-chip"
 import { AuctionImage } from "@/components/auction/auction-image"
 import { AuctionCardWatchButton } from "@/components/auction/watch-button"
 import { Badge } from "@/components/ui/badge"
@@ -127,9 +128,13 @@ export function AuctionCard({ auction }: { auction: Auction }) {
                 : `เสนอราคาแล้ว ${auction.bidCount.toLocaleString("th-TH")} ครั้ง`}
             </span>
           </div>
-          <span className="mt-1 block text-xs text-n-500">
-            {timingLabel(auction)}
-          </span>
+          {auction.status === "ACTIVE" && auction.currentEndAt ? (
+            <AuctionCountdownChip currentEndAt={auction.currentEndAt} />
+          ) : (
+            <span className="mt-1 block text-xs text-n-500">
+              {timingLabel(auction)}
+            </span>
+          )}
         </div>
       </div>
     </article>
