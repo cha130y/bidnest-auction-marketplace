@@ -18,6 +18,7 @@ const PROTECTED = [
   "/profile",
   "/sell",
   "/cart",
+  "/chat",
   "/checkout",
   "/orders",
   "/watchlist",
