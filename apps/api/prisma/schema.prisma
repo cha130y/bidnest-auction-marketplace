@@ -128,6 +128,13 @@ enum AIRequestType {
 enum ChatRole {
   USER
   ASSISTANT
+  ADMIN
+}
+
+enum SupportSessionStatus {
+  AI_ONLY
+  ESCALATED
+  RESOLVED
 }
 
 // ============================================================
@@ -179,13 +186,14 @@ model User {
   messages            Message[]
 
   // Engagement
-  notifications         Notification[]
-  performedAdminActions AdminAction[]        @relation("AdminActionPerformed")
-  receivedAdminActions  AdminAction[]        @relation("AdminActionReceived")
-  auctionEvents         AuctionEvent[]
-  shipmentEvents        ShipmentEvent[]
-  aiRequests            AIRequest[]
-  supportChatSessions   SupportChatSession[]
+  notifications           Notification[]
+  performedAdminActions   AdminAction[]        @relation("AdminActionPerformed")
+  receivedAdminActions    AdminAction[]        @relation("AdminActionReceived")
+  auctionEvents           AuctionEvent[]
+  shipmentEvents          ShipmentEvent[]
+  aiRequests              AIRequest[]
+  supportChatSessions     SupportChatSession[] @relation("SupportChatSessionUser")
+  assignedSupportSessions SupportChatSession[] @relation("SupportChatSessionAdmin")
 
   @@index([role, status])
   @@map("users")
@@ -792,13 +800,17 @@ model AIRequest {
 }
 
 model SupportChatSession {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  status          SupportSessionStatus @default(AI_ONLY)
+  assignedAdminId String?              @map("assigned_admin_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at")
 
-  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages SupportChatMessage[]
+  user          User                 @relation("SupportChatSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedAdmin User?                @relation("SupportChatSessionAdmin", fields: [assignedAdminId], references: [id])
+  messages      SupportChatMessage[]
 
+  @@index([status, createdAt])
   @@map("support_chat_sessions")
 }
 
