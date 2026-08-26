@@ -1,35 +1,62 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { Settings } from "lucide-react"
 
-import { OwnedDraftsList } from "@/components/auction/owned-drafts-screen"
+import { OwnedAuctionsList } from "@/components/auction/owned-auctions-screen"
 import { SellerShell } from "@/components/auction/seller-shell"
 import { Button } from "@/components/ui/button"
 
 export const metadata: Metadata = {
-  title: "ร่างของฉัน · BidNest",
-  description: "ร่างการประมูลที่ยังไม่ได้เผยแพร่",
+  title: "การประมูลของฉัน · BidNest",
+  description: "ร่าง รายการที่ตั้งเวลาไว้ และผลการประมูลของคุณ",
 }
 
-/** AUC-001 — the seller's own unpublished drafts. */
+/**
+ * AUC-006 — the seller's own auctions, in every state.
+ *
+ * Was a list of unpublished drafts and nothing else, which left a published
+ * auction with nowhere to be found and a scheduled one with no way to be
+ * called off. It is now the counterpart of `/sell/products`: the list is the
+ * page you land on, and `/sell` is the form that starts a new one — the same
+ * shape as `/sell/products` and `/sell/products/new`.
+ */
 export default function OwnedAuctionsPage() {
   return (
     <>
       <header className="flex flex-wrap items-end justify-between gap-4 py-8">
         <div>
           <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
-            ร่างของฉัน
+            การประมูลของฉัน
           </h1>
           <p className="mt-2 text-base text-n-600">
-            รายการที่ยังไม่ได้เผยแพร่ — มีแต่คุณที่เห็น
+            ทำร่างที่ค้างไว้ต่อ และดูรายการที่เผยแพร่แล้ว
           </p>
         </div>
-        <Button variant="primary" size="lg" nativeButton={false} render={<Link href="/sell" />}>
-          สร้างรายการใหม่
-        </Button>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            size="lg"
+            aria-label="ตั้งค่าร้านค้า"
+            nativeButton={false}
+            render={<Link href="/sell/settings" />}
+          >
+            <Settings aria-hidden="true" />
+            ตั้งค่าร้าน
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            nativeButton={false}
+            render={<Link href="/sell" />}
+          >
+            สร้างการประมูลใหม่
+          </Button>
+        </div>
       </header>
 
       <SellerShell>
-        <OwnedDraftsList />
+        <OwnedAuctionsList />
       </SellerShell>
     </>
   )

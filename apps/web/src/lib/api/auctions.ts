@@ -18,6 +18,20 @@ export type AuctionListParams = {
    * rendering the wrong list.
    */
   section?: AuctionSection
+  /**
+   * AUC-008 — the same four the catalogue takes, and the same shapes, so one
+   * filter panel can drive both lists and a URL means the same thing on
+   * either. `categoryIds` goes over the wire comma-joined by `buildQuery`,
+   * which is one of the two forms `ListAuctionsDto` accepts.
+   *
+   * `minPrice`/`maxPrice` are matched against whichever price the auction is
+   * showing — its current price once somebody has bid, its starting price
+   * before that — so the range means what the card says.
+   */
+  q?: string
+  categoryIds?: string[]
+  minPrice?: number
+  maxPrice?: number
   page?: number
   limit?: number
 }

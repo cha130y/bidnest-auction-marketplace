@@ -1,7 +1,7 @@
 import { AlertTriangle } from "lucide-react"
 
 import { formatDateTime, formatTHB } from "@/lib/format"
-import { describeUrgency } from "@/lib/auction-urgency"
+import type { AuctionUrgency } from "@/lib/auction-urgency"
 import type { SuddenDeath } from "@/lib/api/types"
 
 const minutes = (ms: number) => Math.round(ms / 60_000)
@@ -19,11 +19,17 @@ const minutes = (ms: number) => Math.round(ms / 60_000)
  */
 export function SuddenDeathBanner({
   suddenDeath,
+  urgency,
 }: {
   suddenDeath: SuddenDeath
+  /**
+   * Passed in rather than worked out again from `suddenDeath`. It now also
+   * depends on whether bidding is open, which this banner has no way of
+   * knowing — and two copies of the rule could disagree about which panel the
+   * arena is wearing.
+   */
+  urgency: AuctionUrgency
 }) {
-  const urgency = describeUrgency(suddenDeath)
-
   if (urgency === "calm") return null
 
   if (urgency === "closing") {
