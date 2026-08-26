@@ -375,6 +375,113 @@ describe('AuctionService', () => {
     });
   });
 
+  /**
+   * AUC-006 — the seller's own list, which is the only place DRAFT and
+   * CANCELLED auctions are visible at all. What these hold to is that seeing
+   * everything means everything *of theirs*: the wider status range must not
+   * become a wider row range.
+   */
+  describe('listOwnAuctions (AUC-006)', () => {
+    const listSucceeds = (
+      rows: ReturnType<typeof draftRow>[],
+      total = rows.length
+    ) => {
+      prisma.auction.findMany.mockResolvedValue(rows);
+      prisma.auction.count.mockResolvedValue(total);
+    };
+
+    const findManyArgs = () =>
+      (
+        prisma.auction.findMany.mock.calls as {
+          where: Record<string, unknown>;
+          orderBy: unknown;
+          skip: number;
+          take: number;
+        }[][]
+      )[0][0];
+
+    it('lists every status the seller owns, and nobody else’s rows', async () => {
+      listSucceeds([draftRow()]);
+
+      await service.listOwnAuctions(SELLER_ID, {});
+
+      expect(findManyArgs().where).toEqual({
+        sellerId: SELLER_ID,
+        deletedAt: null
+      });
+    });
+
+    it('narrows to one status when asked', async () => {
+      listSucceeds([]);
+
+      await service.listOwnAuctions(SELLER_ID, { status: 'SCHEDULED' });
+
+      expect(findManyArgs().where).toEqual({
+        sellerId: SELLER_ID,
+        deletedAt: null,
+        status: 'SCHEDULED'
+      });
+    });
+
+    it('keeps the seller scope when a status is named', async () => {
+      listSucceeds([]);
+
+      // The filter a client sends must narrow the list, never widen it — a
+      // status alone would otherwise read as "every seller's SOLD auctions".
+      await service.listOwnAuctions(SELLER_ID, { status: 'SOLD' });
+
+      expect(findManyArgs().where).toMatchObject({ sellerId: SELLER_ID });
+    });
+
+    it('shows the most recently touched first', async () => {
+      listSucceeds([]);
+
+      await service.listOwnAuctions(SELLER_ID, {});
+
+      expect(findManyArgs().orderBy).toEqual([
+        { updatedAt: 'desc' },
+        { id: 'asc' }
+      ]);
+    });
+
+    it('counts with exactly the same filter it lists with', async () => {
+      listSucceeds([]);
+
+      await service.listOwnAuctions(SELLER_ID, { status: 'DRAFT' });
+
+      const countArgs = (
+        prisma.auction.count.mock.calls as WhereArgs[][]
+      )[0][0];
+      expect(countArgs.where).toEqual(findManyArgs().where);
+    });
+
+    it('pages the same way the public list does', async () => {
+      listSucceeds([], 45);
+
+      const result = await service.listOwnAuctions(SELLER_ID, {
+        page: 3,
+        limit: 20
+      });
+
+      expect(findManyArgs()).toMatchObject({ skip: 40, take: 20 });
+      expect(result.meta).toEqual({
+        page: 3,
+        limit: 20,
+        total: 45,
+        totalPages: 3
+      });
+    });
+
+    // AUC-003 — the reserve is the seller's own, and this is their list
+    it('carries the reserve, unlike every buyer-facing list', async () => {
+      listSucceeds([draftRow()]);
+
+      const result = await service.listOwnAuctions(SELLER_ID, {});
+
+      expect(result.items[0]).toMatchObject({ reservePrice: '4500' });
+    });
+  });
+
   describe('validateOwnDraft (AUC-002)', () => {
     /** A row shaped like auctionPublishGateSelect, with real Decimals. */
     const gateRow = (overrides: Record<string, unknown> = {}) => ({

@@ -37,6 +37,7 @@ import { StorageService, type StoredImage } from '../storage/storage.service';
 import { PUBLIC_AUCTION_STATUSES } from './constants/public-auction-status.constant';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListAuctionsDto } from './dtos/list-auctions.dto';
+import { ListOwnAuctionsDto } from './dtos/list-own-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import {
   assertAuctionIsCancellable,
@@ -108,6 +109,50 @@ export class AuctionService {
     });
 
     return { items: drafts.map(toOwnerAuction) };
+  }
+
+  /**
+   * AUC-006 — everything this seller has, in any state.
+   *
+   * The wider view that `listOwnDrafts` above is not: that one answers "what
+   * have I still to finish", this one answers "what have I got". A published
+   * auction disappears from the drafts list by design, and before this there
+   * was nowhere it reappeared — the seller could only find it by going to the
+   * public listing and hunting for their own row.
+   *
+   * `toOwnerAuction`, so the seller sees their own reserve (AUC-003). Scoped
+   * by sellerId in the query rather than filtered afterwards, for the same
+   * reason `findOwnDraft` is: ownership decides what the database returns, not
+   * what this method chooses to hand back.
+   */
+  async listOwnAuctions(sellerId: string, dto: ListOwnAuctionsDto) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? DEFAULT_LIST_PAGE_SIZE;
+
+    const where: Prisma.AuctionWhereInput = {
+      sellerId,
+      deletedAt: null,
+      ...(dto.status ? { status: dto.status } : {})
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.auction.findMany({
+        where,
+        select: auctionRowSelect,
+        // Most recently touched first: the seller's own list is a workbench,
+        // and what they changed last is what they are most likely back for.
+        // `id` breaks ties so paging stays stable when timestamps collide.
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      this.prisma.auction.count({ where })
+    ]);
+
+    return {
+      items: items.map(toOwnerAuction),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
   }
 
   /**
