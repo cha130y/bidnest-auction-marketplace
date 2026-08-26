@@ -14,7 +14,7 @@ export const unreadNotificationsQueryKey = ["notifications", "unread"] as const
 
 /**
  * Wires Dev 1's presentational `SiteHeader` to live badges. Route-based nav
- * state (Auction vs E-commerce) is handled inside `SiteHeader`'s own gavel nav
+ * state (Auction vs Marketplace) is handled inside `SiteHeader`'s own gavel nav
  * via `usePathname`, so this wrapper only owns what the icons show.
  *
  * The bell asks `/notifications/unread-count` rather than counting a list it
