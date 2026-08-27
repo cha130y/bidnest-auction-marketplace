@@ -2,14 +2,14 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/auth/password-input"
-import { Label } from "@/components/ui/label"
+import { AuthCard, AuthLink } from "@/components/auth/auth-card"
+import { Field, FormError } from "@/components/auth/field"
 import { register as createAccount } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
 import { registerSchema, type RegisterValues } from "@/lib/auth/schemas"
@@ -63,110 +63,117 @@ export function RegisterForm() {
   const errors = form.formState.errors
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
-      <div>
-        <h1 className="text-xl font-semibold">สมัครสมาชิก</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          บัญชีเดียวใช้ได้ทั้งประมูลและซื้อขายสินค้า
-        </p>
-      </div>
+    <AuthCard
+      title="สมัครสมาชิก"
+      subtitle="บัญชีเดียวใช้ได้ทั้งประมูลและซื้อขายสินค้า"
+      footer={
+        <>
+          มีบัญชีอยู่แล้ว <AuthLink href="/login">เข้าสู่ระบบ</AuthLink>
+        </>
+      }
+    >
+      <form
+        onSubmit={form.handleSubmit(submit)}
+        className="space-y-5"
+        noValidate
+      >
+        <Field id="email" label="อีเมล" error={errors.email?.message}>
+          {(field) => (
+            <Input
+              {...field}
+              type="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="you@example.com"
+              {...form.register("email")}
+            />
+          )}
+        </Field>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">อีเมล</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          autoFocus
-          {...form.register("email")}
-        />
-        {errors.email && (
-          <p className="text-sm text-destructive">{errors.email.message}</p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="password">รหัสผ่าน</Label>
-        <PasswordInput
+        <Field
           id="password"
-          autoComplete="new-password"
-          {...form.register("password")}
-        />
-        {errors.password ? (
-          <p className="text-sm text-destructive">{errors.password.message}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            อย่างน้อย 8 ตัวอักษร มีทั้งตัวอักษรและตัวเลข
-          </p>
-        )}
-      </div>
+          label="รหัสผ่าน"
+          error={errors.password?.message}
+          hint="อย่างน้อย 8 ตัวอักษร มีทั้งตัวอักษรและตัวเลข"
+        >
+          {(field) => (
+            <PasswordInput
+              {...field}
+              autoComplete="new-password"
+              {...form.register("password")}
+            />
+          )}
+        </Field>
 
-      <div className="space-y-2">
-        <Label htmlFor="confirm">ยืนยันรหัสผ่าน</Label>
-        <PasswordInput
+        <Field
           id="confirm"
-          autoComplete="new-password"
-          {...form.register("confirm")}
-        />
-        {errors.confirm && (
-          <p className="text-sm text-destructive">{errors.confirm.message}</p>
-        )}
-      </div>
+          label="ยืนยันรหัสผ่าน"
+          error={errors.confirm?.message}
+        >
+          {(field) => (
+            <PasswordInput
+              {...field}
+              autoComplete="new-password"
+              {...form.register("confirm")}
+            />
+          )}
+        </Field>
 
-      <div className="space-y-2">
-        <Label htmlFor="firstName">ชื่อจริง</Label>
-        <Input
-          id="firstName"
-          autoComplete="given-name"
-          {...form.register("firstName")}
-        />
-        {errors.firstName && (
-          <p className="text-sm text-destructive">{errors.firstName.message}</p>
-        )}
-      </div>
+        {/* Two short boxes side by side from `sm` up: on a phone they stack,
+            and on anything wider a full-width surname next to a full-width
+            first name is a lot of empty line length for two words. */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            id="firstName"
+            label="ชื่อจริง"
+            error={errors.firstName?.message}
+          >
+            {(field) => (
+              <Input
+                {...field}
+                autoComplete="given-name"
+                {...form.register("firstName")}
+              />
+            )}
+          </Field>
 
-      <div className="space-y-2">
-        <Label htmlFor="lastName">นามสกุล (ไม่บังคับ)</Label>
-        <Input
-          id="lastName"
-          autoComplete="family-name"
-          {...form.register("lastName")}
-        />
-        {errors.lastName && (
-          <p className="text-sm text-destructive">{errors.lastName.message}</p>
-        )}
-      </div>
+          <Field
+            id="lastName"
+            label="นามสกุล"
+            optional
+            error={errors.lastName?.message}
+          >
+            {(field) => (
+              <Input
+                {...field}
+                autoComplete="family-name"
+                {...form.register("lastName")}
+              />
+            )}
+          </Field>
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="displayName">ชื่อที่แสดง</Label>
-        <Input
+        <Field
           id="displayName"
-          autoComplete="nickname"
-          {...form.register("displayName")}
-        />
-        {errors.displayName ? (
-          <p className="text-sm text-destructive">
-            {errors.displayName.message}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            ชื่อนี้จะแสดงบนหน้าประมูลและหน้าสินค้าให้คนอื่นเห็น
-          </p>
-        )}
-      </div>
+          label="ชื่อที่แสดง"
+          error={errors.displayName?.message}
+          hint="ชื่อนี้จะแสดงบนหน้าประมูลและหน้าสินค้าให้คนอื่นเห็น"
+        >
+          {(field) => (
+            <Input
+              {...field}
+              autoComplete="nickname"
+              {...form.register("displayName")}
+            />
+          )}
+        </Field>
 
-      {failure && <p className="text-sm text-destructive">{failure}</p>}
+        <FormError>{failure}</FormError>
 
-      <Button type="submit" className="w-full" disabled={busy}>
-        {busy ? "กำลังสมัคร..." : "สมัครสมาชิก"}
-      </Button>
-
-      <p className="text-center text-sm text-muted-foreground">
-        มีบัญชีอยู่แล้ว{" "}
-        <Link href="/login" className="underline">
-          เข้าสู่ระบบ
-        </Link>
-      </p>
-    </form>
+        <Button type="submit" size="lg" block disabled={busy}>
+          {busy ? "กำลังสมัคร..." : "สมัครสมาชิก"}
+        </Button>
+      </form>
+    </AuthCard>
   )
 }

@@ -457,14 +457,32 @@ describe('Admin auction oversight (e2e)', () => {
 
     // SRS 6 forbids disclosing the reserve, and moderating never needs it
     it('never sends the reserve, even to an admin', async () => {
-      await createDraft();
+      const draftId = await createDraft();
 
       const response = await request(app.getHttpServer())
         .get('/admin/auctions?limit=100')
         .set('Authorization', authOf(adminId))
         .expect(200);
 
-      expectNoReserve(response.body, 4500);
+      // The row this test made, not the whole page of them.
+      //
+      // `expectNoReserve` flags any value equal to the reserve, wherever it
+      // sits — which is what makes it worth having, and also why it must only
+      // be pointed at rows the test controls. Handed the whole list it also
+      // reads every auction seeded or left behind by something else, and an
+      // unrelated one whose *starting price* happens to be 4500 fails it while
+      // holding no reserve at all. That is not hypothetical: seed.ts:550 is
+      // exactly such an auction, and it turned this red the day it landed.
+      //
+      // Every other expectNoReserve call in the suite already passes a
+      // response the test's own fixture produced. This was the one that did
+      // not.
+      const mine = (response.body as { items: { id: string }[] }).items.find(
+        (auction) => auction.id === draftId
+      );
+
+      expect(mine).toBeDefined();
+      expectNoReserve(mine, 4500);
     });
 
     it('keeps ordinary users out', async () => {

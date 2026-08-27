@@ -9,13 +9,13 @@ import { cn } from "@/lib/utils"
 
 const TABS = [
   { label: "Auction", href: "/auctions", icon: Gavel },
-  { label: "E-commerce", href: "/shop", icon: ShoppingCart },
+  { label: "Marketplace", href: "/shop", icon: ShoppingCart },
 ] as const
 
 /**
  * `null` off an allowlist — home, watchlist, notifications, cart and every
  * other page outside `/auctions` and `/shop` are not "Auction" or
- * "E-commerce" just because they aren't `/shop`, so no tab lights up or
+ * "Marketplace" just because they aren't `/shop`, so no tab lights up or
  * carries the gavel there. Hovering still previews it regardless.
  */
 function useActiveTabIndex(): number | null {
@@ -27,7 +27,7 @@ function useActiveTabIndex(): number | null {
 
 /**
  * Desktop primary nav: an animated gavel tracks the hovered tab, cocks back,
- * then strikes down on click. Auction / E-commerce only — active tab is
+ * then strikes down on click. Auction / Marketplace only — active tab is
  * derived from the route, not a prop, so it stays correct across navigation.
  */
 function GavelNav() {

@@ -45,7 +45,12 @@ export const PasswordInput = React.forwardRef<
           aria-pressed={visible}
           aria-label={visible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
           title={visible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
-          className="flex shrink-0 cursor-pointer items-center rounded-r1 text-n-500 transition-colors hover:text-ink focus-visible:ring-3 focus-visible:ring-amber-500/30 focus-visible:outline-none [&_svg]:size-5"
+          // A 44px square around a 20px icon. The icon alone measured
+          // 20×20 — half the minimum a finger can reliably hit, and this is
+          // the one control on the screen someone reaches for while already
+          // mistyping. `-mr-3` pulls the extra width back out of the layout
+          // so the box does not grow to fit the new hit area.
+          className="-mr-3 flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-r2 text-n-600 transition-colors hover:text-ink focus-visible:ring-3 focus-visible:ring-amber-500/30 focus-visible:outline-none [&_svg]:size-5"
         >
           {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
         </button>

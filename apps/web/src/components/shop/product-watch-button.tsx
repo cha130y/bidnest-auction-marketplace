@@ -13,6 +13,7 @@ import {
   unwatchProduct,
   watchProduct,
 } from "@/lib/api/product-watchlist"
+import { useHydrated } from "@/lib/use-hydrated"
 import { cn } from "@/lib/utils"
 
 export const productWatchlistQueryKey = ["product-watchlist"] as const
@@ -32,8 +33,15 @@ export const productWatchlistQueryKey = ["product-watchlist"] as const
  */
 function useProductWatch(productId: string) {
   const router = useRouter()
-  const { token, ready } = useAuthToken()
+  const { token, ready: sessionReady } = useAuthToken()
   const queryClient = useQueryClient()
+
+  // Held back until after hydration, not merely until the session resolves —
+  // on a page whose cards sit inside a `<Suspense>` boundary those are two
+  // different moments. The boundary hydrates late enough that the session is
+  // already known, and rendering that answer there contradicts the HTML the
+  // server sent while signed out.
+  const ready = useHydrated() && sessionReady
   const isAuthenticated = ready && Boolean(token)
 
   const { data } = useQuery({
@@ -68,7 +76,7 @@ function useProductWatch(productId: string) {
 
   return {
     isWatching,
-    /** False until localStorage has been read, so neither state is claimed early. */
+    /** False until the browser knows the session, so neither state is claimed early. */
     ready,
     isAuthenticated,
     pending: mutation.isPending,

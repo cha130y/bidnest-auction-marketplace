@@ -375,6 +375,113 @@ describe('AuctionService', () => {
     });
   });
 
+  /**
+   * AUC-006 — the seller's own list, which is the only place DRAFT and
+   * CANCELLED auctions are visible at all. What these hold to is that seeing
+   * everything means everything *of theirs*: the wider status range must not
+   * become a wider row range.
+   */
+  describe('listOwnAuctions (AUC-006)', () => {
+    const listSucceeds = (
+      rows: ReturnType<typeof draftRow>[],
+      total = rows.length
+    ) => {
+      prisma.auction.findMany.mockResolvedValue(rows);
+      prisma.auction.count.mockResolvedValue(total);
+    };
+
+    const findManyArgs = () =>
+      (
+        prisma.auction.findMany.mock.calls as {
+          where: Record<string, unknown>;
+          orderBy: unknown;
+          skip: number;
+          take: number;
+        }[][]
+      )[0][0];
+
+    it('lists every status the seller owns, and nobody else’s rows', async () => {
+      listSucceeds([draftRow()]);
+
+      await service.listOwnAuctions(SELLER_ID, {});
+
+      expect(findManyArgs().where).toEqual({
+        sellerId: SELLER_ID,
+        deletedAt: null
+      });
+    });
+
+    it('narrows to one status when asked', async () => {
+      listSucceeds([]);
+
+      await service.listOwnAuctions(SELLER_ID, { status: 'SCHEDULED' });
+
+      expect(findManyArgs().where).toEqual({
+        sellerId: SELLER_ID,
+        deletedAt: null,
+        status: 'SCHEDULED'
+      });
+    });
+
+    it('keeps the seller scope when a status is named', async () => {
+      listSucceeds([]);
+
+      // The filter a client sends must narrow the list, never widen it — a
+      // status alone would otherwise read as "every seller's SOLD auctions".
+      await service.listOwnAuctions(SELLER_ID, { status: 'SOLD' });
+
+      expect(findManyArgs().where).toMatchObject({ sellerId: SELLER_ID });
+    });
+
+    it('shows the most recently touched first', async () => {
+      listSucceeds([]);
+
+      await service.listOwnAuctions(SELLER_ID, {});
+
+      expect(findManyArgs().orderBy).toEqual([
+        { updatedAt: 'desc' },
+        { id: 'asc' }
+      ]);
+    });
+
+    it('counts with exactly the same filter it lists with', async () => {
+      listSucceeds([]);
+
+      await service.listOwnAuctions(SELLER_ID, { status: 'DRAFT' });
+
+      const countArgs = (
+        prisma.auction.count.mock.calls as WhereArgs[][]
+      )[0][0];
+      expect(countArgs.where).toEqual(findManyArgs().where);
+    });
+
+    it('pages the same way the public list does', async () => {
+      listSucceeds([], 45);
+
+      const result = await service.listOwnAuctions(SELLER_ID, {
+        page: 3,
+        limit: 20
+      });
+
+      expect(findManyArgs()).toMatchObject({ skip: 40, take: 20 });
+      expect(result.meta).toEqual({
+        page: 3,
+        limit: 20,
+        total: 45,
+        totalPages: 3
+      });
+    });
+
+    // AUC-003 — the reserve is the seller's own, and this is their list
+    it('carries the reserve, unlike every buyer-facing list', async () => {
+      listSucceeds([draftRow()]);
+
+      const result = await service.listOwnAuctions(SELLER_ID, {});
+
+      expect(result.items[0]).toMatchObject({ reservePrice: '4500' });
+    });
+  });
+
   describe('validateOwnDraft (AUC-002)', () => {
     /** A row shaped like auctionPublishGateSelect, with real Decimals. */
     const gateRow = (overrides: Record<string, unknown> = {}) => ({
@@ -1877,6 +1984,187 @@ describe('AuctionService', () => {
         const last = orderBy[orderBy.length - 1];
 
         expect(Object.keys(last)).toEqual(['id']);
+      });
+    });
+
+    /**
+     * AUC-008 — the four filters, which mirror SearchProductDto so the same
+     * panel on screen can drive either list.
+     *
+     * The rule they all answer to is that a filter *narrows*: whatever the
+     * section already decided stays decided. A category is not a way to reach
+     * a DRAFT, and a price range is not a way past `deletedAt`.
+     */
+    describe('filters', () => {
+      /** Whatever the section's own keys are, minus what a filter added. */
+      const narrowingOf = (where: Record<string, unknown>) =>
+        (where.AND ?? []) as Record<string, unknown>[];
+
+      it('asks for nothing extra when no filter is sent', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({});
+
+        // Not `AND: []`: an unfiltered section must run the query it always
+        // ran, which is what every test above compares against.
+        expect(findManyArgs().where).not.toHaveProperty('AND');
+      });
+
+      it('narrows to the categories asked for', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ categoryIds: [CATEGORY_ID] });
+
+        expect(findManyArgs().where).toMatchObject({
+          categoryId: { in: [CATEGORY_ID] },
+          status: 'ACTIVE',
+          deletedAt: null
+        });
+      });
+
+      it('ignores an empty category list rather than matching nothing', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ categoryIds: [] });
+
+        expect(findManyArgs().where).not.toHaveProperty('categoryId');
+      });
+
+      it('searches the title and the description, either one', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ q: 'seiko' });
+
+        expect(narrowingOf(findManyArgs().where)[0]).toEqual({
+          OR: [
+            { title: { contains: 'seiko', mode: 'insensitive' } },
+            { description: { contains: 'seiko', mode: 'insensitive' } }
+          ]
+        });
+      });
+
+      // PROD-003's own fix, reached through the shared `escapeLike`: `%` and
+      // `_` are LIKE's wildcards, so "50% off" was unfindable by the part of
+      // its name that made it distinctive.
+      it('treats LIKE wildcards as characters somebody typed', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ q: '50% off_1' });
+
+        expect(narrowingOf(findManyArgs().where)[0]).toMatchObject({
+          OR: [{ title: { contains: '50\\% off\\_1' } }, expect.anything()]
+        });
+      });
+
+      /**
+       * An auction has two prices and the card shows whichever is in force, so
+       * the filter has to match the same one. Filed under `startingPrice`
+       * until somebody bids, or an auction opening at ฿3,000 would be missing
+       * from a ฿1,000–฿5,000 search while showing ฿3,000 on its own card.
+       */
+      it('matches the price the auction is actually showing', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ minPrice: 1000, maxPrice: 5000 });
+
+        expect(narrowingOf(findManyArgs().where)[0]).toEqual({
+          OR: [
+            { bidCount: { gt: 0 }, currentPrice: { gte: 1000, lte: 5000 } },
+            { bidCount: 0, startingPrice: { gte: 1000, lte: 5000 } }
+          ]
+        });
+      });
+
+      it('leaves the open end open when only one bound is given', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ minPrice: 1000 });
+
+        expect(narrowingOf(findManyArgs().where)[0]).toEqual({
+          OR: [
+            { bidCount: { gt: 0 }, currentPrice: { gte: 1000 } },
+            { bidCount: 0, startingPrice: { gte: 1000 } }
+          ]
+        });
+      });
+
+      // Mirrors ProductService.search, so a shopper who mistypes a range is
+      // told the same thing on either list rather than silently getting
+      // nothing back
+      it('refuses a range that runs backwards', async () => {
+        await expect(
+          service.listAuctions({ minPrice: 5000, maxPrice: 1000 })
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(prisma.auction.findMany).not.toHaveBeenCalled();
+      });
+
+      it('allows a range of exactly one price', async () => {
+        listSucceeds([]);
+
+        await expect(
+          service.listAuctions({ minPrice: 1000, maxPrice: 1000 })
+        ).resolves.toBeDefined();
+      });
+
+      /**
+       * The reason both live under one `AND`. As sibling `OR` keys the second
+       * would overwrite the first, and searching "seiko" under ฿5,000 would
+       * quietly return everything under ฿5,000.
+       */
+      it('applies a search and a price range together', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ q: 'seiko', maxPrice: 5000 });
+
+        expect(narrowingOf(findManyArgs().where)).toHaveLength(2);
+      });
+
+      it('cannot reach past the section it filters', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({
+          section: 'starting-soon',
+          q: 'seiko',
+          categoryIds: [CATEGORY_ID],
+          minPrice: 1000
+        });
+
+        // Still only scheduled, still nothing an admin removed
+        expect(findManyArgs().where).toMatchObject({
+          status: 'SCHEDULED',
+          deletedAt: null
+        });
+      });
+
+      it('counts with exactly the filter it lists with', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({
+          q: 'seiko',
+          categoryIds: [CATEGORY_ID],
+          minPrice: 1000,
+          maxPrice: 5000
+        });
+
+        const countArgs = (
+          prisma.auction.count.mock.calls as WhereArgs[][]
+        )[0][0];
+        expect(countArgs.where).toEqual(findManyArgs().where);
+      });
+
+      // AUC-008 — filters narrow, they do not rearrange: asking for a search
+      // must not become a way to get the hot list ordered differently.
+      it('leaves the section holding the order', async () => {
+        listSucceeds([]);
+
+        await service.listAuctions({ q: 'seiko' });
+
+        expect(findManyArgs().orderBy).toEqual([
+          { bidCount: 'desc' },
+          { currentEndAt: 'asc' },
+          { id: 'asc' }
+        ]);
       });
     });
   });

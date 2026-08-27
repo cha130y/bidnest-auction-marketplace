@@ -13,7 +13,7 @@
  * says so.
  */
 
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import net from "node:net"
 
 const SERVERS = [
@@ -72,6 +72,58 @@ const command = [
   ...missing.map((s) => `"pnpm ${s.script}"`)
 ].join(" ")
 
-const child = spawn(command, { stdio: "inherit", shell: true })
+const child = spawn(command, {
+  stdio: "inherit",
+  shell: true,
+  // POSIX only: makes the child its own process-group leader so `kill(-pid)`
+  // below reaches every descendant. It also takes the group out of the
+  // terminal's foreground, which is the point — Ctrl+C then arrives here
+  // and nowhere else, and this process decides what dies.
+  detached: process.platform !== "win32"
+})
+
+/**
+ * Kill the whole subtree, not just the process this script can see.
+ *
+ * Interrupting `pnpm dev` used to leave next and nest alive: between here and
+ * them sit a cmd.exe wrapper, two pnpm shims and concurrently, and the ones
+ * that take the interrupt exit without passing it down. What is left is a
+ * server nobody is watching that still holds 3000 or 4000 — so the next
+ * `pnpm dev` sees the port busy, starts only the other half, and the stack
+ * quietly doubles up. That is the whole orphan problem, at its source.
+ *
+ * `shell: true` means child.pid belongs to the shell rather than to pnpm, so
+ * on Windows only `/T` covers what actually needs to die.
+ */
+function killTree() {
+  // Already gone: the pid may since have been handed to something else, and
+  // taskkill does not care whose it is now.
+  if (!child.pid || child.exitCode !== null || child.signalCode) return
+
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore"
+    })
+  } else {
+    // Negative pid = the group created by `detached` above.
+    try {
+      process.kill(-child.pid, "SIGTERM")
+    } catch {
+      // Raced us to it — nothing left to signal.
+    }
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => {
+    killTree()
+    // 0, not 130: the run ended because it was asked to. A non-zero code here
+    // only makes pnpm print ELIFECYCLE over the top of a clean shutdown.
+    process.exit(0)
+  })
+}
+
+// Last resort — an uncaught throw or an explicit exit elsewhere still cleans up.
+process.on("exit", killTree)
 
 child.on("exit", (code) => process.exit(code ?? 0))
