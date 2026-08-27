@@ -36,3 +36,13 @@ export function formatPercent(percent: string | number): string {
   const value = typeof percent === "number" ? percent : Number(percent)
   return Number.isFinite(value) ? `${value}%` : "—"
 }
+
+/**
+ * The initial on an avatar, for an account with no picture. Falls back to the
+ * address when there is no name, and to "?" when there is neither — both
+ * columns are NOT NULL, but a session read mid-refresh can still arrive empty.
+ */
+export function initialOf(name?: string | null, email?: string | null): string {
+  const source = name?.trim() || email?.trim() || "?"
+  return source.charAt(0).toUpperCase()
+}

@@ -601,3 +601,11 @@ export const AUCTION_IMAGE_MIME_TYPES = [
 export const MAX_PRODUCT_IMAGES = 8
 export const MAX_PRODUCT_IMAGE_BYTES = MAX_AUCTION_IMAGE_BYTES
 export const PRODUCT_IMAGE_MIME_TYPES = AUCTION_IMAGE_MIME_TYPES
+
+/**
+ * USR-001 — and again for a profile picture. Aliases rather than their own
+ * figures for the reason above: /uploads/images is one endpoint with one
+ * ceiling, so a second set here could only ever drift out of step with it.
+ */
+export const MAX_AVATAR_BYTES = MAX_AUCTION_IMAGE_BYTES
+export const AVATAR_MIME_TYPES = AUCTION_IMAGE_MIME_TYPES

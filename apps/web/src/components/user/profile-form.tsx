@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
@@ -20,7 +20,8 @@ import {
   type UpdateMyProfile
 } from "@/lib/api/users"
 import { profileSchema, type ProfileValues } from "@/lib/auth/schemas"
-import { formatDateTime } from "@/lib/format"
+import { AvatarPicker } from "@/components/user/avatar-picker"
+import { formatDateTime, initialOf } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -105,6 +106,11 @@ export function ProfileForm() {
       postalCode: ""
     }
   })
+
+  // `useWatch` rather than `form.watch()`: watch() hands back a fresh function
+  // every render, which makes React Compiler skip memoising this whole
+  // component. The hook subscribes to one field and returns a plain value.
+  const avatarUrl = useWatch({ control: form.control, name: "avatarUrl" })
 
   const { reset } = form
   useEffect(() => {
@@ -229,19 +235,22 @@ export function ProfileForm() {
         </div>
 
         <div className="mt-5">
-          <Field
-            label="ลิงก์รูปโปรไฟล์"
-            id="avatarUrl"
-            hint="ไม่บังคับ — วางลิงก์รูปภาพ"
-            error={form.formState.errors.avatarUrl?.message}
-          >
-            <Input
-              id="avatarUrl"
-              inputMode="url"
-              placeholder="https://…"
-              {...form.register("avatarUrl")}
-            />
-          </Field>
+          {/* `shouldDirty`, or Save would stay disabled after a picture is
+              chosen: setValue does not mark the form dirty on its own, and a
+              new avatar is exactly the change someone would then try to save. */}
+          <AvatarPicker
+            value={avatarUrl}
+            onChange={(url) =>
+              form.setValue("avatarUrl", url, { shouldDirty: true })
+            }
+            fallback={initialOf(data.profile.displayName, data.email)}
+            disabled={busy}
+          />
+          {form.formState.errors.avatarUrl && (
+            <p role="alert" className="mt-2 text-sm font-medium text-red">
+              {form.formState.errors.avatarUrl.message}
+            </p>
+          )}
         </div>
 
         <div className="mt-5">
