@@ -52,7 +52,12 @@ const accountSelect = {
   passwordHash: true,
   createdAt: true,
   profile: {
-    select: { firstName: true, lastName: true, displayName: true }
+    select: {
+      firstName: true,
+      lastName: true,
+      displayName: true,
+      avatarUrl: true
+    }
   }
 } as const;
 
@@ -67,6 +72,7 @@ type Account = {
     firstName: string;
     lastName: string | null;
     displayName: string;
+    avatarUrl: string | null;
   } | null;
 };
 
@@ -521,6 +527,7 @@ export class AuthService {
       firstName: account.profile?.firstName ?? '',
       lastName: account.profile?.lastName ?? null,
       displayName: account.profile?.displayName ?? '',
+      avatarUrl: account.profile?.avatarUrl ?? null,
       createdAt: account.createdAt
     };
   }

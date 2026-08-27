@@ -109,9 +109,21 @@ export function AccountMenu({ className }: { className?: string }) {
         )}
         aria-label={`บัญชี: ${name}`}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
-          {initialOf(session.user?.name, session.user?.email)}
-        </span>
+        {session.user?.image ? (
+          // A plain <img> for the reason ProductImage gives: avatarUrl has no
+          // host allowlist, so next/image would need remotePatterns open to
+          // the whole internet to match it.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={session.user.image}
+            alt=""
+            className="size-8 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
+            {initialOf(session.user?.name, session.user?.email)}
+          </span>
+        )}
         <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">
           {name}
         </span>

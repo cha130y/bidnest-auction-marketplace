@@ -116,9 +116,14 @@ export function ProfileForm() {
     onSuccess: async (updated) => {
       queryClient.setQueryData(myProfileQueryKey, updated)
       reset(toFormValues(updated))
-      // The header reads the name off the session, not off this query, so a
-      // rename would otherwise only show up after signing in again.
-      await updateSession({ name: updated.profile.displayName })
+      // The header reads both off the session, not off this query, so a
+      // rename or a new picture would otherwise only show up after signing in
+      // again. Taken from the API's answer rather than the form values, so
+      // what the header draws is what was actually saved.
+      await updateSession({
+        name: updated.profile.displayName,
+        image: updated.profile.avatarUrl
+      })
     }
   })
 
