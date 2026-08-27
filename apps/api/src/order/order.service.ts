@@ -21,6 +21,20 @@ const orderInclude = {
             take: 1
           }
         }
+      },
+      // A line is a product or a won auction, never both. Selected the same
+      // shape so `toOrderView` can present either without the reader of an
+      // order having to know which it was.
+      auction: {
+        select: {
+          id: true,
+          title: true,
+          images: {
+            select: { url: true },
+            where: { isPrimary: true },
+            take: 1
+          }
+        }
       }
     }
   },
@@ -31,6 +45,40 @@ const orderInclude = {
 } satisfies Prisma.OrderInclude;
 
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
+
+/**
+ * What an order line was for, whichever half of the site it came from.
+ *
+ * `kind` is here because the reader has to do something different with it: a
+ * product opens at `/shop/:id` and a lot at `/auctions/:id`. Returning the
+ * two under one `product` key would have left every caller linking auctions
+ * into the shop, and the page they landed on would 404.
+ *
+ * The database allows a line with neither set; the checkout path never writes
+ * one. `null` says so honestly rather than crashing a whole order read over a
+ * single malformed row.
+ */
+function toListingView(item: OrderRow['items'][number]) {
+  if (item.product) {
+    return {
+      kind: 'PRODUCT' as const,
+      id: item.product.id,
+      title: item.product.title,
+      imageUrl: item.product.images[0]?.url ?? null
+    };
+  }
+
+  if (item.auction) {
+    return {
+      kind: 'AUCTION' as const,
+      id: item.auction.id,
+      title: item.auction.title,
+      imageUrl: item.auction.images[0]?.url ?? null
+    };
+  }
+
+  return null;
+}
 
 /**
  * What a caller may narrow an order list by. An object rather than four
@@ -156,11 +204,7 @@ export class OrderService {
         quantity: item.quantity,
         unitPrice: item.unitPrice.toFixed(2),
         lineTotal: item.unitPrice.mul(item.quantity).toFixed(2),
-        product: {
-          id: item.product.id,
-          title: item.product.title,
-          imageUrl: item.product.images[0]?.url ?? null
-        }
+        listing: toListingView(item)
       }))
     };
   }

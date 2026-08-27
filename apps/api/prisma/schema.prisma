@@ -394,6 +394,9 @@ model Auction {
   notifications Notification[]
   adminActions  AdminAction[]
   conversations Conversation[]
+  /// At most one — `OrderItem.auctionId` is unique. A list because that is the
+  /// only shape Prisma gives the other side of a one-to-many.
+  orderItems    OrderItem[]
 
   @@index([status, scheduledStartAt])
   @@index([status, currentEndAt])
@@ -630,15 +633,34 @@ model OrderAddress {
   @@map("order_addresses")
 }
 
+/// A line is for exactly one listing — a product or a won auction, never both.
+///
+/// Two nullable FKs rather than one polymorphic column, matching `Conversation`
+/// above: the app enforces "exactly one of the two is set" (see
+/// checkout.service.ts), and a real FK to each keeps referential integrity
+/// Prisma can check instead of trusting a discriminator.
+///
+/// `productId` used to be required. An auction lot is a row in `auctions`, not
+/// in `products`, so a winner could not be billed at all without either this or
+/// a shadow product — which would then appear in the catalogue.
 model OrderItem {
   id        String  @id @default(uuid()) @db.Uuid
   orderId   String  @map("order_id") @db.Uuid
-  productId String  @map("product_id") @db.Uuid
+  productId String? @map("product_id") @db.Uuid
+  /// Unique, so a lot can be paid for once. Postgres allows repeated NULLs, so
+  /// this constrains auction lines only and leaves product lines alone.
+  auctionId String? @unique @map("auction_id") @db.Uuid
   quantity  Int
-  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // ราคาปกติ หรือ negotiated price ถ้า offer accept แล้ว
+  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // ราคาปกติ, negotiated price ถ้า offer accept แล้ว, หรือ soldPrice ถ้ามาจากประมูล
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// `Restrict` on both, spelled out because Prisma's default for an optional
+  /// relation is `SetNull` — which here would quietly empty the only record of
+  /// what an order was for the moment somebody deleted the listing. An order
+  /// line is a receipt; it has to keep pointing at what was bought.
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  auction Auction? @relation(fields: [auctionId], references: [id], onDelete: Restrict)
 
   @@map("order_items")
 }

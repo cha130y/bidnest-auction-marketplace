@@ -25,7 +25,9 @@ import {
   myProfileQueryKey,
   type MyProfile,
 } from "@/lib/api/users"
+import { getArena } from "@/lib/api/auctions"
 import {
+  AUCTION_PARAM,
   SELECTION_PARAM,
   parseSelection,
   selectedItems,
@@ -113,6 +115,18 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string; hint: string }[] =
  * paying for, and two reads could disagree.
  */
 export function CheckoutView() {
+  const params = useSearchParams()
+  // A winner paying for a lot. Checked before anything to do with the cart,
+  // because arriving with this is a deliberate act and an empty cart is not —
+  // a winner with nothing in their basket must not be sent shopping.
+  const auctionId = params.get(AUCTION_PARAM)
+
+  if (auctionId) return <AuctionCheckout auctionId={auctionId} />
+
+  return <CartCheckout />
+}
+
+function CartCheckout() {
   const { cart, isLoading, isAuthenticated, isAuthReady } = useCart()
   const [result, setResult] = useState<CheckoutResult | null>(null)
   // CART-003 — which lines the buyer ticked in the cart. Absent means all of
@@ -190,7 +204,105 @@ export function CheckoutView() {
     )
   }
 
-  return <CheckoutForm items={paying} onDone={setResult} />
+  return (
+    <CheckoutForm
+      payable={{
+        kind: "CART",
+        items: paying,
+        isPartial: cart.items.length > paying.length,
+      }}
+      onDone={setResult}
+    />
+  )
+}
+
+/**
+ * A winner paying for the lot they won.
+ *
+ * Reads the arena rather than the auction: the auction alone says what it sold
+ * for, but not whether the person looking is the one who has to pay for it.
+ * `result.winner.isYours` is the same answer the result screen uses to decide
+ * whether to show the button that leads here, so the two agree by construction
+ * instead of by coincidence.
+ *
+ * Every refusal below is also enforced by the API. Repeated here so a winner
+ * finds out before filling in an address, never after.
+ */
+function AuctionCheckout({ auctionId }: { auctionId: string }) {
+  const { isAuthenticated, isAuthReady } = useCart()
+  const [result, setResult] = useState<CheckoutResult | null>(null)
+
+  const arena = useQuery({
+    queryKey: ["auctions", auctionId, "arena"],
+    queryFn: () => getArena(auctionId),
+    retry: false,
+  })
+
+  if (result) return <Receipt result={result} />
+
+  if (!isAuthReady || (isAuthenticated && arena.isPending)) {
+    return (
+      <div
+        className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
+        aria-hidden="true"
+      />
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Notice title="เข้าสู่ระบบก่อนชำระเงิน">
+        <Button variant="primary" size="lg" nativeButton={false} render={<Link href={loginHref()} />}>
+          เข้าสู่ระบบ
+        </Button>
+      </Notice>
+    )
+  }
+
+  if (arena.isError || !arena.data) {
+    return (
+      <Notice title="เปิดรายการประมูลนี้ไม่ได้">
+        <Button variant="primary" size="lg" nativeButton={false} render={<Link href="/auctions" />}>
+          กลับไปหน้าประมูล
+        </Button>
+      </Notice>
+    )
+  }
+
+  const { auction, result: outcome } = arena.data
+
+  // Not yours, or not sold, or still running. One message for all three: a
+  // page that distinguished them would tell anybody holding a lot id how that
+  // auction ended and who won it.
+  if (!outcome || outcome.winner?.isYours !== true || !outcome.soldPrice) {
+    return (
+      <Notice title="ไม่มีรายการที่ต้องชำระเงิน">
+        <p className="mb-6 text-base text-n-600">
+          รายการนี้อาจยังไม่จบ ไม่ได้จบด้วยการขาย หรือไม่ใช่รายการที่คุณชนะ
+        </p>
+        <Button
+          variant="primary"
+          size="lg"
+          nativeButton={false}
+          render={<Link href={`/auctions/${auctionId}`} />}
+        >
+          ดูรายการประมูล
+        </Button>
+      </Notice>
+    )
+  }
+
+  return (
+    <CheckoutForm
+      payable={{
+        kind: "AUCTION",
+        auctionId,
+        title: auction.title,
+        soldPrice: outcome.soldPrice,
+      }}
+      onDone={setResult}
+    />
+  )
 }
 
 function Notice({
@@ -208,19 +320,70 @@ function Notice({
   )
 }
 
+/**
+ * What this payment is for.
+ *
+ * The address form, the payment methods, the processing and failure screens
+ * and the receipt are identical either way — the two differ only in what is
+ * being bought and what the request has to say about it. Kept as one component
+ * with a two-shaped input rather than two components sharing a form, because
+ * the form is nearly all of it.
+ */
+type Payable =
+  | {
+      kind: "CART"
+      /** CART-003 — the lines this payment covers, already narrowed to the pick. */
+      items: CartItem[]
+      /** Whether anything is being left behind in the cart. */
+      isPartial: boolean
+    }
+  | { kind: "AUCTION"; auctionId: string; title: string; soldPrice: string }
+
+/**
+ * The one shape the summary panel and the request are both built from.
+ *
+ * A lot has no discount and exactly one seller, so those come out constant on
+ * that side rather than being computed — the arithmetic in `totalsOf` is about
+ * adding up cart lines, and there is nothing here to add up.
+ */
+function summarise(payable: Payable) {
+  if (payable.kind === "AUCTION") {
+    return {
+      itemCount: 1,
+      discountTotal: "0",
+      total: payable.soldPrice,
+      sellerCount: 1,
+      leftInCart: 0,
+      /** What the buyer is paying for, when it is not a basket. */
+      lotTitle: payable.title,
+      request: { auctionId: payable.auctionId },
+    }
+  }
+
+  const totals = totalsOf(payable.items)
+
+  return {
+    ...totals,
+    leftInCart: payable.isPartial ? payable.items.length : 0,
+    lotTitle: null,
+    // Sent only when it means something. Omitting it on a whole-cart checkout
+    // keeps that request identical to what it always was, and leaves nothing
+    // to go stale between here and the server.
+    request: payable.isPartial
+      ? { cartItemIds: payable.items.map((item) => item.id) }
+      : {},
+  }
+}
+
 function CheckoutForm({
-  items,
+  payable,
   onDone,
 }: {
-  /** CART-003 — the lines this payment covers, already narrowed to the pick. */
-  items: CartItem[]
+  payable: Payable
   onDone: (result: CheckoutResult) => void
 }) {
-  const { cart } = useCart()
   const queryClient = useQueryClient()
   const [method, setMethod] = useState<PaymentMethod>("CARD")
-  const totals = totalsOf(items)
-  const isPartial = (cart?.items.length ?? 0) > items.length
 
   const [showFailure, setShowFailure] = useState(false)
 
@@ -241,6 +404,7 @@ function CheckoutForm({
   })
 
   const address = profileAddressDefaults(profile.data)
+  const summary = summarise(payable)
 
   const pay = useMutation({
     mutationFn: async (form: FormData) => {
@@ -259,10 +423,7 @@ function CheckoutForm({
             postalCode: String(form.get("postalCode") ?? "").trim(),
             phone: String(form.get("phone") ?? "").trim(),
           },
-          // Sent only when it means something. Omitting it on a whole-cart
-          // checkout keeps that request identical to what it always was, and
-          // leaves nothing to go stale between here and the server.
-          ...(isPartial ? { cartItemIds: items.map((item) => item.id) } : {}),
+          ...summary.request,
         }),
         wait(MIN_PROCESSING_MS),
       ])
@@ -436,16 +597,25 @@ function CheckoutForm({
       <aside className="rounded-r4 bg-white p-6 shadow-sh1 lg:sticky lg:top-6">
         <h2 className="font-display text-lg font-bold text-ink">สรุปยอด</h2>
 
+        {/* Named on this side only. A cart is a stack of things the buyer just
+            picked out and still remembers; a lot is one item won some time ago,
+            possibly among several, and "1 ชิ้น" alone would not say which. */}
+        {summary.lotTitle && (
+          <p className="mt-3 line-clamp-2 font-semibold text-ink">
+            {summary.lotTitle}
+          </p>
+        )}
+
         <dl className="mt-4 space-y-2 text-sm">
           <div className="flex justify-between">
             <dt className="text-n-600">จำนวนสินค้า</dt>
-            <dd className="font-semibold text-ink">{totals.itemCount} ชิ้น</dd>
+            <dd className="font-semibold text-ink">{summary.itemCount} ชิ้น</dd>
           </div>
-          {Number(totals.discountTotal) > 0 && (
+          {Number(summary.discountTotal) > 0 && (
             <div className="flex justify-between">
               <dt className="text-n-600">ส่วนลด</dt>
               <dd className="font-semibold text-green">
-                −{formatTHB(totals.discountTotal)}
+                −{formatTHB(summary.discountTotal)}
               </dd>
             </div>
           )}
@@ -454,25 +624,25 @@ function CheckoutForm({
         <div className="mt-4 flex items-baseline justify-between border-t border-n-200 pt-4">
           <span className="font-semibold text-ink">ยอดที่ต้องชำระ</span>
           <span className="font-display text-2xl font-extrabold text-ink">
-            {formatTHB(totals.total)}
+            {formatTHB(summary.total)}
           </span>
         </div>
 
         {/* CART-003 — the split is decided by what is being paid for, not by
             this form */}
-        {totals.sellerCount > 1 && (
+        {summary.sellerCount > 1 && (
           <p className="mt-3 rounded-r3 bg-n-100 px-3 py-2 text-xs text-n-600">
-            จ่ายครั้งเดียว แล้วระบบจะแยกเป็น {totals.sellerCount} คำสั่งซื้อ
+            จ่ายครั้งเดียว แล้วระบบจะแยกเป็น {summary.sellerCount} คำสั่งซื้อ
             ตามร้าน
           </p>
         )}
 
         {/* The buyer chose this on the previous screen, but the address form
             is long enough that it is worth repeating what is not in it. */}
-        {isPartial && (
+        {payable.kind === "CART" && payable.isPartial && (
           <p className="mt-3 rounded-r3 bg-amber-50 px-3 py-2 text-xs text-ink">
-            ชำระเฉพาะ {items.length} รายการที่เลือกไว้ — อีก{" "}
-            {(cart?.items.length ?? 0) - items.length} รายการจะยังอยู่ในตะกร้า
+            ชำระเฉพาะ {payable.items.length} รายการที่เลือกไว้ —
+            รายการที่เหลือจะยังอยู่ในตะกร้า
           </p>
         )}
 
@@ -490,15 +660,25 @@ function CheckoutForm({
         {/* A failure is reported by the overlay above, not here — it is the
             whole screen's answer, not a footnote under the button. */}
 
+        {/* Back to wherever this came from. A winner has no cart to edit, and
+            sending them to one would be a dead end. */}
         <Button
           variant="ghost"
           size="sm"
           block
           className="mt-2"
           nativeButton={false}
-          render={<Link href="/cart" />}
+          render={
+            <Link
+              href={
+                payable.kind === "AUCTION"
+                  ? `/auctions/${payable.auctionId}`
+                  : "/cart"
+              }
+            />
+          }
         >
-          กลับไปแก้ตะกร้า
+          {payable.kind === "AUCTION" ? "กลับไปหน้าประมูล" : "กลับไปแก้ตะกร้า"}
         </Button>
       </aside>
     </form>

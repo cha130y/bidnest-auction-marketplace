@@ -140,8 +140,8 @@ function OrderRow({ order }: { order: Order }) {
             {order.items.slice(0, 3).map((item) => (
               <ProductImage
                 key={item.id}
-                src={item.product.imageUrl}
-                alt={item.product.title}
+                src={item.listing?.imageUrl ?? null}
+                alt={item.listing?.title ?? ""}
                 className="size-14 rounded-r3 border-2 border-white object-cover"
               />
             ))}
@@ -149,7 +149,7 @@ function OrderRow({ order }: { order: Order }) {
 
           <div className="min-w-0 flex-1">
             <p className="line-clamp-1 font-semibold text-ink">
-              {order.items[0]?.product.title ?? "—"}
+              {order.items[0]?.listing?.title ?? "—"}
               {order.items.length > 1 && (
                 <span className="font-normal text-n-500">
                   {" "}
