@@ -53,6 +53,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           id: tokens.user.id,
           email: tokens.user.email,
           name: tokens.user.displayName,
+          // `image` rather than a field of our own: NextAuth already carries
+          // it from here to `session.user.image` through the token's standard
+          // `picture` claim, and the header wants it on every page — fetching
+          // the profile again just to draw a 32px circle would be a request
+          // per page load for something the sign-in already knew.
+          image: tokens.user.avatarUrl ?? undefined,
           role: tokens.user.role,
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken
@@ -78,9 +84,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // passed to `update()`, which is client input and not to be trusted with
       // anything that decides access.
       if (trigger === "update" && session && typeof session === "object") {
-        const patch = session as { name?: unknown }
+        const patch = session as { name?: unknown; image?: unknown }
         if (typeof patch.name === "string" && patch.name.trim() !== "") {
           token.name = patch.name
+        }
+        // The picture, on the same terms as the name: without this, changing
+        // it would leave the old one in the header until the next sign-in.
+        //
+        // Blank clears rather than being ignored, because "remove my picture"
+        // is a thing someone does deliberately and the header has an initial
+        // to fall back to. Same trust note as the name above: this is what the
+        // caller passed to `update()`, so it decides what is drawn and nothing
+        // else.
+        if (typeof patch.image === "string") {
+          token.picture = patch.image.trim() === "" ? undefined : patch.image
+        } else if (patch.image === null) {
+          token.picture = undefined
         }
       }
 
@@ -136,7 +155,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.accessToken = carried.accessToken
       session.role = carried.role
       session.error = carried.error
-      if (session.user) session.user.id = token.sub ?? ""
+      if (session.user) {
+        session.user.id = token.sub ?? ""
+        // Set from the token rather than left to the default mapping, for the
+        // reason the two fields above are: this callback is where the session
+        // is decided, and a picture that only appears when something else
+        // happens to fill it in is the kind of thing that works until it does
+        // not.
+        session.user.image = token.picture ?? null
+      }
       return session
     }
   }

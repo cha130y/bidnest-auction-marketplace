@@ -14,6 +14,8 @@ export type ApiUser = {
   firstName: string
   lastName: string | null
   displayName: string
+  /** USR-001 — null until one is chosen; the header falls back to an initial. */
+  avatarUrl: string | null
   createdAt: string
 }
 
