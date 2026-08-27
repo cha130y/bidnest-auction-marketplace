@@ -104,6 +104,24 @@ export type CategoryTree = Category & { children: Category[] }
 // ── src/cart/cart.service.ts → buildCartView / buildLine ────────────────────
 export type CartItemIssue = "PRODUCT_UNAVAILABLE" | "INSUFFICIENT_STOCK"
 
+/**
+ * CART-001 — why a change to the cart was refused, in a form the screen can
+ * branch on instead of printing the API's English sentence at a Thai buyer.
+ *
+ * A superset of `CartItemIssue`: those two are the only ones that can be true
+ * of a line already sitting in a cart, while these also cover the ways adding
+ * one can fail.
+ */
+export type CartErrorCode = CartItemIssue | "OWN_LISTING" | "NOT_FOUND"
+
+/** Extra fields the API sends beside the message so the screen can reword it. */
+export type CartErrorBody = {
+  code?: CartErrorCode
+  /** How many are really on the shelf, on an INSUFFICIENT_STOCK refusal. */
+  available?: number
+  title?: string
+}
+
 export type CartItem = {
   id: string
   quantity: number
@@ -192,6 +210,45 @@ export type CheckoutResult = {
   total: string
   /** CART-003 — one entry per seller that had lines in the cart */
   orders: { id: string; sellerId: string; subtotal: string }[]
+}
+
+/**
+ * CART-004 — why a checkout was refused, in a form a screen can branch on.
+ *
+ * The API answers every refusal with one of these beside the sentence it
+ * always sent. Matching on the code rather than on that sentence is the whole
+ * point: the sentences are English, they are what the API docs quote, and a
+ * reworded one should not silently turn the out-of-stock screen back into the
+ * generic failure screen.
+ */
+export type CheckoutErrorCode =
+  | "ITEMS_UNAVAILABLE"
+  | "STOCK_LOST_AFTER_CHARGE"
+  | "CART_EMPTY"
+  | "PAYMENT_DECLINED"
+  | "AUCTION_UNPAYABLE"
+  | "AUCTION_ALREADY_PAID"
+
+/**
+ * The first two are spelled the same as `CartItemIssue` on purpose — the cart
+ * screen already says both of them in Thai, and the same fact should not get a
+ * second vocabulary just because it was discovered one screen later.
+ */
+export type CheckoutIssueCode =
+  | "PRODUCT_UNAVAILABLE"
+  | "INSUFFICIENT_STOCK"
+  | "OWN_LISTING"
+  | "NOT_IN_CART"
+
+export type CheckoutIssue = {
+  code: CheckoutIssueCode
+  productId: string | null
+  title: string
+  /** How many are really on the shelf. Null when the refusal is not about count. */
+  available: number | null
+  requested: number | null
+  /** The API's own English sentence. A fallback, not what the screen shows. */
+  message: string
 }
 
 // ── src/shipment/shipment.service.ts → getTimeline ──────────────────────────

@@ -234,9 +234,13 @@ Content-Type: application/json
 
 { "productId": "{{declineProductId}}", "quantity": 1 }
 
-### CART-004 จ่ายเงินไม่ผ่าน. expect 400 { message: "Payment failed", checkoutSessionId, reason }
+### CART-004 จ่ายเงินไม่ผ่าน. expect 400 { message: "Payment failed", code: "PAYMENT_DECLINED", checkoutSessionId, reason }
 # ผลข้างเคียงที่ต้องเป็นจริง: ไม่มีออเดอร์เกิดขึ้น + ของยังอยู่ในตะกร้าครบ
 # แต่ยังมีแถวใน payment_transactions สถานะ FAILED ไว้กระทบยอด
+#
+# `code` คือตัวที่หน้าเว็บใช้แยกว่าจะขึ้นจอไหน — เส้นนี้เส้นเดียวที่กด "ลองใหม่" แล้วผ่านได้
+# ของหมดจะได้ code: "ITEMS_UNAVAILABLE" พร้อม issues[] และแพ้ race หลังตัดเงินได้
+# code: "STOCK_LOST_AFTER_CHARGE" ซึ่งเป็นเส้นเดียวที่มี charge ค้างโดยไม่มีออเดอร์
 POST {{baseUrl}}/orders/checkout
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json

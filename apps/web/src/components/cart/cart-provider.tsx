@@ -11,7 +11,22 @@ export const cartQueryKey = ["cart"] as const
 
 type CartContextValue = {
   cart: Cart | undefined
-  isLoading: boolean
+  /**
+   * No cart yet, and no answer that there never will be one.
+   *
+   * `isPending`, not `isLoading`. React Query's `isLoading` is
+   * `isPending && isFetching`, so it is *false* on the render where the query
+   * has only just been enabled — the token has arrived but the request has not
+   * left yet. A screen that gates on `isLoading` falls through on exactly that
+   * render, sees `cart === undefined`, and flashes "your cart is empty" at
+   * somebody whose cart is about to arrive full.
+   *
+   * `isPending` covers that gap and still goes false on error, so a cart that
+   * cannot be read never leaves a screen waiting forever.
+   */
+  isPending: boolean
+  /** The read failed — a 401 or an unreachable API, not an empty cart. */
+  isError: boolean
   /** False while `ready` is false too — check `isAuthReady` before acting on it. */
   isAuthenticated: boolean
   isAuthReady: boolean
@@ -31,7 +46,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
   const isAuthenticated = ready && Boolean(token)
 
-  const { data, isLoading } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: cartQueryKey,
     queryFn: getCart,
     enabled: isAuthenticated,
@@ -41,7 +56,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const value: CartContextValue = {
     cart: data,
-    isLoading,
+    isPending,
+    isError,
     isAuthenticated,
     isAuthReady: ready,
     itemCount: data?.summary.itemCount ?? 0,

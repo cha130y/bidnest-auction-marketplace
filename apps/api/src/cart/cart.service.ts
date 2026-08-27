@@ -35,6 +35,27 @@ type CartItemRow = Prisma.CartItemGetPayload<{
   include: typeof cartItemInclude;
 }>;
 
+/**
+ * CART-001 — why a listing cannot go in a cart, or cannot stay in one.
+ *
+ * One vocabulary for both answers this module gives. `GET /cart` reports it
+ * per line as `issue`, and the routes that change a cart report it beside the
+ * message when they refuse — so the cart screen says the same words whether it
+ * noticed the problem itself or was told about it.
+ *
+ * The English sentence stays where it always was: it is what the API docs
+ * quote and what a non-browser client reads. The code is what the screen
+ * branches on, because matching prose breaks the moment anyone rewords it.
+ */
+export const CartIssueCode = {
+  PRODUCT_UNAVAILABLE: 'PRODUCT_UNAVAILABLE',
+  INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
+  OWN_LISTING: 'OWN_LISTING',
+  NOT_FOUND: 'NOT_FOUND'
+} as const;
+
+export type CartIssueCode = (typeof CartIssueCode)[keyof typeof CartIssueCode];
+
 @Injectable()
 export class CartService {
   constructor(private readonly prisma: PrismaService) {}
@@ -122,7 +143,10 @@ export class CartService {
     });
 
     if (!item || item.cartId !== cartId) {
-      throw new NotFoundException('Cart item not found');
+      throw new NotFoundException({
+        message: 'Cart item not found',
+        code: CartIssueCode.NOT_FOUND
+      });
     }
 
     return item;
@@ -141,20 +165,26 @@ export class CartService {
     });
 
     if (!product || product.status === 'REMOVED') {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException({
+        message: 'Product not found',
+        code: CartIssueCode.NOT_FOUND
+      });
     }
 
     // CART-001 — a seller cannot buy their own listing
     if (product.sellerId === buyerId) {
-      throw new ForbiddenException(
-        'You cannot add your own product to the cart'
-      );
+      throw new ForbiddenException({
+        message: 'You cannot add your own product to the cart',
+        code: CartIssueCode.OWN_LISTING
+      });
     }
 
     if (product.status !== 'ACTIVE') {
-      throw new BadRequestException(
-        `"${product.title}" is not available for purchase`
-      );
+      throw new BadRequestException({
+        message: `"${product.title}" is not available for purchase`,
+        code: CartIssueCode.PRODUCT_UNAVAILABLE,
+        title: product.title
+      });
     }
 
     return product;
@@ -164,9 +194,14 @@ export class CartService {
     // CART-001 — quantity is capped by live stock; nothing is reserved here,
     // the real decrement happens at checkout (PROD-005).
     if (quantity > stockQty) {
-      throw new BadRequestException(
-        `Only ${stockQty} unit(s) of "${title}" are in stock`
-      );
+      // `available` is what lets the screen say how many are left in its own
+      // language instead of reprinting the sentence below.
+      throw new BadRequestException({
+        message: `Only ${stockQty} unit(s) of "${title}" are in stock`,
+        code: CartIssueCode.INSUFFICIENT_STOCK,
+        available: stockQty,
+        title
+      });
     }
   }
 
@@ -239,9 +274,9 @@ export class CartService {
     status: string,
     quantity: number,
     stockQty: number
-  ): string | null {
-    if (status !== 'ACTIVE') return 'PRODUCT_UNAVAILABLE';
-    if (quantity > stockQty) return 'INSUFFICIENT_STOCK';
+  ): CartIssueCode | null {
+    if (status !== 'ACTIVE') return CartIssueCode.PRODUCT_UNAVAILABLE;
+    if (quantity > stockQty) return CartIssueCode.INSUFFICIENT_STOCK;
     return null;
   }
 }

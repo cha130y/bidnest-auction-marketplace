@@ -8,7 +8,7 @@ import { ArrowRight, Check, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
 import { addCartItem } from "@/lib/api/cart"
-import { ApiError } from "@/lib/api/client"
+import { cartErrorText } from "@/lib/cart-errors"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { cn } from "@/lib/utils"
 
@@ -94,8 +94,8 @@ export function AddToCartButton({
           <ArrowRight className="size-4" />
         </Link>
       )}
-      {error instanceof ApiError && (
-        <p className="text-xs text-red">{error.message}</p>
+      {error !== null && (
+        <p className="text-xs text-red">{cartErrorText(error)}</p>
       )}
     </div>
   )

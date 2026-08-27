@@ -4,21 +4,18 @@ import { useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-  XCircle,
-} from "lucide-react"
+import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react"
 
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
+import {
+  FailureOverlay,
+  checkoutFailure,
+} from "@/components/checkout/failure-overlay"
 import { ordersQueryKey } from "@/components/order/order-list"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { loginHref } from "@/lib/api/auth/login-redirect"
-import { ApiError } from "@/lib/api/client"
 import { checkout } from "@/lib/api/orders"
 import {
   getMyProfile,
@@ -48,17 +45,6 @@ import type { CartItem, CheckoutResult, PaymentMethod } from "@/lib/api/types"
 const MIN_PROCESSING_MS = 3_000
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-/** CART-004 — what the API says went wrong, when it says anything. */
-function declineReason(error: unknown): string | null {
-  if (!(error instanceof ApiError)) return null
-  const body = error.body
-  if (typeof body === "object" && body !== null && "reason" in body) {
-    const { reason } = body as { reason: unknown }
-    if (typeof reason === "string") return reason
-  }
-  return null
-}
 
 /** The six address inputs, keyed the way both the form and the API name them. */
 type AddressDefaults = Record<
@@ -126,8 +112,42 @@ export function CheckoutView() {
   return <CartCheckout />
 }
 
+/**
+ * CART-004 — a refused payment, held above everything that could withdraw it.
+ *
+ * The overlay cannot live inside the form. A refusal over stock invalidates
+ * the cart — deliberately, so the cart screen agrees about what is left — and
+ * the refreshed cart no longer passes the gate below, which unmounts the form
+ * and every screen it was drawing. The buyer sees the explanation appear and
+ * vanish in the same instant.
+ *
+ * So it is hoisted here, for the same reason and to the same place as the
+ * receipt: an answer about a payment has to outlive the conditions that
+ * produced it.
+ *
+ * The gate underneath is free to fall through to a notice while this is up —
+ * that notice is the correct thing to be standing behind the overlay once it
+ * is dismissed, since the cart really does need fixing by then.
+ */
 function CartCheckout() {
-  const { cart, isLoading, isAuthenticated, isAuthReady } = useCart()
+  const [failure, setFailure] = useState<unknown>(null)
+
+  return (
+    <>
+      {failure !== null && (
+        <FailureOverlay
+          error={failure}
+          context="CART"
+          onRetry={() => setFailure(null)}
+        />
+      )}
+      <CartGate onFailed={setFailure} />
+    </>
+  )
+}
+
+function CartGate({ onFailed }: { onFailed: (error: unknown) => void }) {
+  const { cart, isPending, isAuthenticated, isAuthReady } = useCart()
   const [result, setResult] = useState<CheckoutResult | null>(null)
   // CART-003 — which lines the buyer ticked in the cart. Absent means all of
   // them, which is what every link into this page meant before selection.
@@ -138,7 +158,11 @@ function CartCheckout() {
   // successful payment would show as an empty cart.
   if (result) return <Receipt result={result} />
 
-  if (!isAuthReady || (isAuthenticated && isLoading && !cart)) {
+  // Waits for the cart itself, not just for the request to be in flight. On
+  // the render where the token has landed but the fetch has not started, the
+  // old condition fell through and flashed "ไม่มีสินค้าให้ชำระเงิน" — the one
+  // screen a buyer arriving at checkout must never be shown by accident.
+  if (!isAuthReady || (isAuthenticated && isPending)) {
     return (
       <div
         className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
@@ -212,6 +236,7 @@ function CartCheckout() {
         isPartial: cart.items.length > paying.length,
       }}
       onDone={setResult}
+      onFailed={onFailed}
     />
   )
 }
@@ -229,6 +254,32 @@ function CartCheckout() {
  * finds out before filling in an address, never after.
  */
 function AuctionCheckout({ auctionId }: { auctionId: string }) {
+  const [failure, setFailure] = useState<unknown>(null)
+
+  return (
+    <>
+      {/* Hoisted for the same reason as the cart's — see `CartCheckout`. A lot
+          paid for in another tab makes the gate below refuse this one, and the
+          screen saying so must not be taken down by that refusal. */}
+      {failure !== null && (
+        <FailureOverlay
+          error={failure}
+          context="AUCTION"
+          onRetry={() => setFailure(null)}
+        />
+      )}
+      <AuctionGate auctionId={auctionId} onFailed={setFailure} />
+    </>
+  )
+}
+
+function AuctionGate({
+  auctionId,
+  onFailed,
+}: {
+  auctionId: string
+  onFailed: (error: unknown) => void
+}) {
   const { isAuthenticated, isAuthReady } = useCart()
   const [result, setResult] = useState<CheckoutResult | null>(null)
 
@@ -301,6 +352,7 @@ function AuctionCheckout({ auctionId }: { auctionId: string }) {
         soldPrice: outcome.soldPrice,
       }}
       onDone={setResult}
+      onFailed={onFailed}
     />
   )
 }
@@ -378,14 +430,19 @@ function summarise(payable: Payable) {
 function CheckoutForm({
   payable,
   onDone,
+  onFailed,
 }: {
   payable: Payable
   onDone: (result: CheckoutResult) => void
+  /**
+   * Reported upward rather than drawn here — see `CartCheckout`. This
+   * component is one of the things a refusal can take off the screen, so it
+   * cannot be the one holding the explanation.
+   */
+  onFailed: (error: unknown) => void
 }) {
   const queryClient = useQueryClient()
   const [method, setMethod] = useState<PaymentMethod>("CARD")
-
-  const [showFailure, setShowFailure] = useState(false)
 
   /*
    * CART-004 — the saved address the inputs below start from.
@@ -446,7 +503,21 @@ function CheckoutForm({
 
       onDone(result)
     },
-    onError: () => setShowFailure(true),
+    onError: (error) => {
+      onFailed(error)
+
+      // The refusal is itself the news that this cart is out of date — the
+      // stock it was priced against is gone. Without this, "กลับไปที่ตะกร้า"
+      // lands on a cart that still looks fine, and the buyer is told the item
+      // sold out on one screen and that all is well on the next.
+      //
+      // Refetching is enough: the cart route recomputes `issue` per line, so
+      // the red "ของเหลือไม่พอ" row appears on arrival rather than after
+      // whatever would eventually have refetched it.
+      if (checkoutFailure(error).kind === "UNAVAILABLE") {
+        void queryClient.invalidateQueries({ queryKey: cartQueryKey })
+      }
+    },
   })
 
   /*
@@ -472,20 +543,13 @@ function CheckoutForm({
 
   return (
     <>
-      {/* Both live above the form rather than replacing it. The address is in
+      {/* Above the form rather than replacing it. The address is in
           uncontrolled inputs, so unmounting to show a result would throw away
           everything the buyer typed — and "try again" would mean typing it all
-          a second time. */}
+          a second time.
+          The failure screen is drawn by the caller for a related reason: this
+          component does not always survive its own refusals. */}
       {pay.isPending && <ProcessingOverlay />}
-      {showFailure && !pay.isPending && (
-        <FailureOverlay
-          error={pay.error}
-          onRetry={() => {
-            setShowFailure(false)
-            pay.reset()
-          }}
-        />
-      )}
 
     <form
       onSubmit={(event) => {
@@ -705,74 +769,6 @@ function ProcessingOverlay() {
         <p className="mt-1 text-sm text-n-600">
           กรุณาอย่าปิดหน้านี้หรือกดย้อนกลับ
         </p>
-      </div>
-    </div>
-  )
-}
-
-/**
- * CART-004 — the charge was refused.
- *
- * Nothing was created: the API declines before it opens the transaction, so
- * the cart is exactly as it was and pressing again is a real retry, not a
- * risk of paying twice. Saying so is the point of this screen — a buyer who
- * is not told will go and check their cart, or worse, their bank.
- */
-function FailureOverlay({
-  error,
-  onRetry,
-}: {
-  error: unknown
-  onRetry: () => void
-}) {
-  const reason = declineReason(error)
-
-  return (
-    <div
-      role="alertdialog"
-      aria-labelledby="checkout-failed-title"
-      className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm"
-    >
-      <div className="w-full max-w-110 rounded-r4 bg-white px-6 py-8 text-center shadow-sh2">
-        <XCircle className="mx-auto size-10 text-red" aria-hidden="true" />
-        <h2
-          id="checkout-failed-title"
-          className="mt-4 font-display text-xl font-extrabold text-ink"
-        >
-          ชำระเงินไม่สำเร็จ
-        </h2>
-
-        <p className="mt-2 text-sm text-n-600">
-          {error instanceof ApiError
-            ? error.message
-            : "เกิดข้อผิดพลาดระหว่างชำระเงิน"}
-          {reason && (
-            <span className="mt-1 block text-xs text-n-500">
-              เหตุผลจากระบบชำระเงิน: {reason}
-            </span>
-          )}
-        </p>
-
-        <p className="mt-4 flex items-start gap-2 rounded-r3 bg-n-100 px-3 py-2 text-left text-xs text-n-600">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          ยังไม่มีการตัดเงินและยังไม่มีคำสั่งซื้อเกิดขึ้น
-          สินค้าในตะกร้าของคุณยังอยู่ครบ กดลองใหม่ได้ทันที
-        </p>
-
-        <div className="mt-6 flex flex-col gap-2">
-          <Button variant="primary" size="lg" block onClick={onRetry}>
-            ลองใหม่อีกครั้ง
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            block
-            nativeButton={false}
-            render={<Link href="/cart" />}
-          >
-            กลับไปแก้ตะกร้า
-          </Button>
-        </div>
       </div>
     </div>
   )

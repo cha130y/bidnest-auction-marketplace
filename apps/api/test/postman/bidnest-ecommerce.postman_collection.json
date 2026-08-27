@@ -3002,6 +3002,12 @@
                   "  const b = pm.response.json();",
                   "  pm.expect(b.message).to.eql('Payment failed');",
                   "  pm.expect(b).to.have.property('checkoutSessionId');",
+                  "});",
+                  "",
+                  "pm.test('บอกชนิดของความล้มเหลว ไม่ใช่แค่ข้อความ', function () {",
+                  "  // หน้าเว็บแยกจอจาก code ตัวนี้ ไม่ใช่จากข้อความอังกฤษ",
+                  "  // PAYMENT_DECLINED = เส้นเดียวที่กดลองใหม่แล้วผ่านได้",
+                  "  pm.expect(pm.response.json().code).to.eql('PAYMENT_DECLINED');",
                   "});"
                 ]
               }
