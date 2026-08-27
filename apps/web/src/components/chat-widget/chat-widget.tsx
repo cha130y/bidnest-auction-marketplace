@@ -68,16 +68,21 @@ export function ChatWidget() {
         </div>
       )}
 
-      <Button
-        variant="dark"
-        size="icon"
-        pill
-        aria-label={isOpen ? 'ปิดแชท' : 'เปิดแชท'}
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="size-14 shadow-sh2"
-      >
-        {isOpen ? <X className="size-6" /> : <MessageCircle className="size-6" />}
-      </Button>
+      {/* Hidden while open rather than turned into a second close (X): the
+          panel's own header already has one, and showing both reads as two
+          different close buttons for the same action. */}
+      {!isOpen && (
+        <Button
+          variant="dark"
+          size="icon"
+          pill
+          aria-label="เปิดแชท"
+          onClick={() => setIsOpen(true)}
+          className="size-14 shadow-sh2"
+        >
+          <MessageCircle className="size-6" />
+        </Button>
+      )}
     </div>
   );
 }
