@@ -30,7 +30,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { DevTokenSwitcher } from '@/components/dev/dev-token-switcher';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -111,7 +110,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">
         <Skeleton className="h-8 w-48" />
-        <DevTokenSwitcher />
       </div>
     );
   }
@@ -130,7 +128,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             เข้าสู่ระบบ
           </Button>
         </Card>
-        <DevTokenSwitcher />
       </div>
     );
   }
@@ -139,7 +136,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">
         <p className="text-n-600">คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (ต้องเป็นบัญชี Admin)</p>
-        <DevTokenSwitcher />
       </div>
     );
   }
@@ -291,8 +287,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
-
-      <DevTokenSwitcher />
     </div>
   );
 }
