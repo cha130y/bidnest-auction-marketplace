@@ -4,6 +4,13 @@ import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
+import {
+  findMockImages,
+  fromExistingUrl,
+  slugifyName,
+  uploadMockImage
+} from './mock-image-loader';
+import { AUCTION_IMAGE_URLS, PRODUCT_IMAGE_URLS } from './mock-image-urls';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
@@ -233,8 +240,7 @@ async function seedProducts() {
       negotiationFloor: '2000.00',
       // PROD-007 — buy 3+, get 10% off
       quantityDiscountMinQty: 3,
-      quantityDiscountPercent: '10.00',
-      imageUrl: 'https://placehold.co/600x400?text=Keyboard'
+      quantityDiscountPercent: '10.00'
     },
     {
       id: '00000000-0000-4000-8000-000000000202',
@@ -247,8 +253,7 @@ async function seedProducts() {
       condition: 'NEW' as const,
       negotiationFloor: null,
       quantityDiscountMinQty: null,
-      quantityDiscountPercent: null,
-      imageUrl: 'https://placehold.co/600x400?text=USB-C+Hub'
+      quantityDiscountPercent: null
     },
     {
       id: '00000000-0000-4000-8000-000000000203',
@@ -261,8 +266,7 @@ async function seedProducts() {
       condition: 'USED' as const,
       negotiationFloor: '1500.00',
       quantityDiscountMinQty: null,
-      quantityDiscountPercent: null,
-      imageUrl: 'https://placehold.co/600x400?text=Denim+Jacket'
+      quantityDiscountPercent: null
     },
     {
       id: '00000000-0000-4000-8000-000000000204',
@@ -275,27 +279,42 @@ async function seedProducts() {
       condition: 'NEW' as const,
       negotiationFloor: null,
       quantityDiscountMinQty: null,
-      quantityDiscountPercent: null,
-      imageUrl: 'https://placehold.co/600x400?text=Figurine'
+      quantityDiscountPercent: null
     }
   ];
 
-  for (const { imageUrl, ...product } of products) {
+  for (const product of products) {
     await prisma.product.upsert({
       where: { id: product.id },
       update: {},
-      create: {
-        ...product,
-        status: 'ACTIVE',
-        images: {
-          create: {
-            storageKey: `seed/${product.id}`,
-            url: imageUrl,
-            position: 0,
-            isPrimary: true
-          }
-        }
-      }
+      create: { ...product, status: 'ACTIVE' }
+    });
+
+    // A separate upsert, not nested under `create` above — that only runs
+    // the first time the row is created, so a photo curated in
+    // mock-image-urls.ts after this product already exists in a teammate's
+    // database would never be picked up otherwise.
+    const slug = slugifyName(product.title);
+    const curatedUrl = PRODUCT_IMAGE_URLS[slug]?.[0];
+    const [sourceFile] = findMockImages('products', slug);
+    const stored = curatedUrl
+      ? fromExistingUrl(curatedUrl)
+      : sourceFile
+        ? await uploadMockImage(sourceFile, `bidnest-mock/products/${slug}/0`)
+        : null;
+    const image = {
+      storageKey: stored?.storageKey ?? `seed/${product.id}`,
+      url:
+        stored?.url ??
+        `https://placehold.co/600x400?text=${encodeURIComponent(product.title)}`,
+      position: 0,
+      isPrimary: true
+    };
+
+    await prisma.productImage.upsert({
+      where: { productId_position: { productId: product.id, position: 0 } },
+      create: { productId: product.id, ...image },
+      update: image
     });
   }
 }
@@ -739,6 +758,47 @@ const AUCTION_FIXTURES: SeedAuction[] = [
 ];
 
 /**
+ * Real photos for a fixture, position by position — curated
+ * (mock-image-urls.ts) first, a locally-dropped file second, `fixture.images`
+ * itself (the placehold.co set already written above) last.
+ *
+ * A fixture with zero images (draftIncomplete — AUC-002's "can't publish
+ * without one" case) stays at zero: that empty array is the fixture, not a
+ * gap to fill in.
+ */
+async function resolveAuctionImages(
+  fixture: SeedAuction
+): Promise<{ storageKey: string; url: string }[]> {
+  if (fixture.images.length === 0) return [];
+
+  const slug = slugifyName(fixture.title);
+  const curatedUrls = AUCTION_IMAGE_URLS[slug] ?? [];
+  const localFiles = findMockImages('auctions', slug);
+
+  const resolved: { storageKey: string; url: string }[] = [];
+  for (let position = 0; position < fixture.images.length; position += 1) {
+    const curatedUrl = curatedUrls[position];
+    const sourceFile = localFiles[position];
+    const stored = curatedUrl
+      ? fromExistingUrl(curatedUrl)
+      : sourceFile
+        ? await uploadMockImage(
+            sourceFile,
+            `bidnest-mock/auctions/${slug}/${position}`
+          )
+        : null;
+
+    resolved.push(
+      stored ?? {
+        storageKey: `seed/${fixture.id}/${position}`,
+        url: fixture.images[position]
+      }
+    );
+  }
+  return resolved;
+}
+
+/**
  * AUC-001..008 / BID-001..005 / LIV-001..005 — the auction fixtures.
  *
  * Deleted and rebuilt rather than upserted, which is the one thing here that
@@ -785,6 +845,7 @@ async function seedAuctions() {
     // fixtures are written in ascending order, so this is the last of them.
     const leading = bids[bids.length - 1];
     const sold = fixture.status === 'SOLD';
+    const images = await resolveAuctionImages(fixture);
 
     await prisma.auction.create({
       data: {
@@ -818,9 +879,9 @@ async function seedAuctions() {
         extensionCount: fixture.extensionCount ?? 0,
         cancellationReason: fixture.cancellationReason,
         images: {
-          create: fixture.images.map((url, index) => ({
-            storageKey: `seed/${fixture.id}/${index}`,
-            url,
+          create: images.map((image, index) => ({
+            storageKey: image.storageKey,
+            url: image.url,
             position: index,
             isPrimary: index === 0
           }))

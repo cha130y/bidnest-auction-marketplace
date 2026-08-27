@@ -1,5 +1,5 @@
 /**
- * DEV ONLY — bulk mock data for building the e-commerce screens against.
+ * DEV ONLY — mock data for building the e-commerce screens against.
  * Never point this at anything but a local database.
  *
  * Scope is the e-commerce domain plus the shared users/categories. Auction,
@@ -7,15 +7,29 @@
  * alone; MOCK_SELLER_IDS / MOCK_BUYER_IDS / MOCK_CATEGORY_IDS are exported so
  * they can build on top of these accounts instead of inventing their own.
  *
- * Everything is keyed off fixed ids and a fixed PRNG seed, so re-running
- * replaces the same rows and every developer ends up with identical data.
- * The fixture rows created by seed.ts are never touched.
+ * The product catalogue is a fixed, hand-written list (PRODUCTS below) rather
+ * than combinatorial "adjective + noun" generation — every title is unique,
+ * real, and shoppable for an actual photo, which is what mock-image-urls.ts
+ * maps a real Cloudinary photo onto. A generated catalogue could never do
+ * that: two rows both titled "Compact Ceramic Mug" have nothing that tells
+ * them apart, so there's no single photo either one of them is "of".
+ *
+ * Everything else is keyed off a fixed PRNG seed, so re-running replaces the
+ * same rows and every developer ends up with identical data. The fixture
+ * rows created by seed.ts are never touched.
  */
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
 import { PrismaClient } from '../generated/prisma/client';
+import {
+  findMockImages,
+  fromExistingUrl,
+  slugifyName,
+  uploadMockImage
+} from './mock-image-loader';
+import { PRODUCT_IMAGE_URLS } from './mock-image-urls';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
@@ -53,23 +67,146 @@ const int = (min: number, max: number) =>
 const pick = <T>(items: readonly T[]): T => items[int(0, items.length - 1)];
 const chance = (percent: number) => rnd() * 100 < percent;
 
+// ---------------------------------------------------------------- products
+// The whole catalogue, by hand. categoryName must match a child name in
+// CATEGORY_TREE below; seedProducts() resolves it and throws early if it
+// doesn't, rather than writing a product with a broken category FK.
+//
+// Status mix is deliberate, not random, so every UI state a listing can be
+// in has at least one row behind it, on every run: 6 ACTIVE (with stock, so
+// carts/orders always have somewhere to draw from), 1 INACTIVE (the "broken
+// cart" case seedCarts() exercises on purpose), 1 OUT_OF_STOCK, 1 SUSPENDED,
+// 1 REMOVED (excluded from order/conversation history, same as production).
+
+type ProductSeed = {
+  title: string;
+  description: string;
+  categoryName: string;
+  price: number;
+  condition: 'NEW' | 'USED';
+  stockQty: number;
+  status: 'ACTIVE' | 'INACTIVE' | 'OUT_OF_STOCK' | 'REMOVED' | 'SUSPENDED';
+  /** PROD-006 — optional, and never above price. Only set on one row for coverage. */
+  negotiationFloor?: number;
+  /** PROD-007 — a discount rule is all-or-nothing. Only set on one row for coverage. */
+  quantityDiscountMinQty?: number;
+  quantityDiscountPercent?: number;
+};
+
+const PRODUCTS: ProductSeed[] = [
+  {
+    title: 'Ceramic Mug',
+    description: 'Hand-glazed stoneware mug, holds 350ml, dishwasher safe.',
+    categoryName: 'Kitchenware',
+    price: 320,
+    condition: 'NEW',
+    stockQty: 40,
+    status: 'ACTIVE'
+  },
+  {
+    title: 'Cast Iron Skillet',
+    description: '10-inch pre-seasoned skillet, ready for stovetop or oven.',
+    categoryName: 'Kitchenware',
+    price: 1450,
+    condition: 'USED',
+    stockQty: 15,
+    status: 'ACTIVE',
+    negotiationFloor: 1160
+  },
+  {
+    title: 'Bamboo Cutting Board',
+    description: 'Solid bamboo board with juice groove, 40x30cm.',
+    categoryName: 'Kitchenware',
+    price: 590,
+    condition: 'NEW',
+    stockQty: 60,
+    status: 'ACTIVE',
+    quantityDiscountMinQty: 3,
+    quantityDiscountPercent: 10
+  },
+  {
+    title: 'Linen Throw Cushion',
+    description: '60x60cm linen cover, feather insert included.',
+    categoryName: 'Furniture',
+    price: 690,
+    condition: 'USED',
+    stockQty: 12,
+    // PROD-002 — deactivated by its seller. seedCarts() deliberately leaves
+    // one cart holding this, so the UI has an `issue` line to render.
+    status: 'INACTIVE'
+  },
+  {
+    title: 'Rattan Floor Lamp',
+    description: 'Handwoven rattan shade on a solid oak base.',
+    categoryName: 'Furniture',
+    price: 2890,
+    condition: 'NEW',
+    stockQty: 8,
+    status: 'ACTIVE'
+  },
+  {
+    title: 'Aluminum Cycling Helmet',
+    description: 'Lightweight aluminium-vent shell, adjustable fit dial.',
+    categoryName: 'Cycling',
+    price: 1990,
+    condition: 'NEW',
+    stockQty: 25,
+    status: 'ACTIVE'
+  },
+  {
+    title: 'Camping Lantern',
+    description: 'Rechargeable LED lantern, 300 lumens, USB-C.',
+    categoryName: 'Camping',
+    price: 890,
+    condition: 'USED',
+    // PROD-005 — stock and status must agree.
+    stockQty: 0,
+    status: 'OUT_OF_STOCK'
+  },
+  {
+    title: 'Leather-Bound Notebook',
+    description: 'A5 dot-grid notebook, full-grain leather cover.',
+    categoryName: 'Notebooks',
+    price: 450,
+    condition: 'NEW',
+    stockQty: 50,
+    status: 'ACTIVE'
+  },
+  {
+    title: 'Lavender Facial Serum',
+    description: '30ml lavender and niacinamide serum, all skin types.',
+    categoryName: 'Skincare',
+    price: 690,
+    condition: 'NEW',
+    stockQty: 20,
+    // ADM-005 — admin-suspended; the seller cannot switch it back themselves.
+    status: 'SUSPENDED'
+  },
+  {
+    title: 'Sandalwood Aroma Diffuser',
+    description: 'Ultrasonic diffuser with sandalwood-finish base.',
+    categoryName: 'Fragrance',
+    price: 990,
+    condition: 'USED',
+    stockQty: 5,
+    // Withdrawn by its seller — excluded from order/conversation history the
+    // same way a real removed listing would be.
+    status: 'REMOVED'
+  }
+];
+
 const COUNTS = {
   sellers: 8,
   buyers: 16,
   suspended: 1,
-  products: 120,
+  products: PRODUCTS.length,
   carts: 6,
-  // ~70% of sessions hold one seller and ~30% hold two or three, so each session
-  // averages about 1.45 orders — 28 sessions is what lands near 40 orders.
-  checkoutSessions: 28,
+  checkoutSessions: 14,
   failedPayments: 3,
-  conversations: 12
+  conversations: 8
 } as const;
 
 // ------------------------------------------------------------------- corpus
-// Written by hand rather than generated: the smoke-test fixtures own the words
-// "keyboard", "hub", "denim" and "figurine", and a stray match would break
-// its exact-count search assertions.
 
 const FIRST_NAMES = [
   'Kittipong',
@@ -109,57 +246,6 @@ const CATEGORY_TREE = [
   { name: 'Sports & Outdoor', children: ['Cycling', 'Camping'] },
   { name: 'Books & Stationery', children: ['Notebooks'] },
   { name: 'Beauty & Care', children: ['Skincare', 'Fragrance'] }
-] as const;
-
-const PRODUCT_NOUNS = [
-  'Ceramic Mug',
-  'Cast Iron Pan',
-  'Bamboo Cutting Board',
-  'Linen Cushion',
-  'Floor Lamp',
-  'Storage Basket',
-  'Stainless Bottle',
-  'Cycling Helmet',
-  'Camping Lantern',
-  'Trekking Pole',
-  'Yoga Mat',
-  'Sleeping Bag',
-  'Leather Notebook',
-  'Fountain Pen',
-  'Desk Organiser',
-  'Watercolour Set',
-  'Sunscreen Lotion',
-  'Facial Serum',
-  'Aroma Diffuser',
-  'Hair Dryer',
-  'Wall Clock',
-  'Picture Frame',
-  'Throw Blanket',
-  'Espresso Cup',
-  'Dumbbell Set',
-  'Resistance Band',
-  'Travel Backpack',
-  'Folding Chair',
-  'Reading Lamp',
-  'Spice Rack'
-] as const;
-const PRODUCT_ADJ = [
-  'Handmade',
-  'Classic',
-  'Compact',
-  'Premium',
-  'Everyday',
-  'Lightweight',
-  'Rustic',
-  'Modern'
-] as const;
-const PRODUCT_BLURB = [
-  'Barely used, kept in a smoke-free home.',
-  'Brand new in the original packaging.',
-  'Small scuff on the base, works perfectly.',
-  'Bought last year, replaced with a larger one.',
-  'Sealed, never opened.',
-  'Gently used for a single season.'
 ] as const;
 
 const CITIES = [
@@ -224,6 +310,9 @@ export const MOCK_CATEGORY_IDS = CATEGORY_NAMES.map((_, i) =>
   mockId(KIND.category, i + 1)
 );
 const INACTIVE_CATEGORY_ID = mockId(KIND.category, CATEGORY_NAMES.length + 1);
+const CATEGORY_ID_BY_NAME = new Map<string, string>(
+  CATEGORY_NAMES.map((name, i) => [name, MOCK_CATEGORY_IDS[i]])
+);
 
 const PRODUCT_IDS = Array.from({ length: COUNTS.products }, (_, i) =>
   mockId(KIND.product, i + 1)
@@ -231,22 +320,24 @@ const PRODUCT_IDS = Array.from({ length: COUNTS.products }, (_, i) =>
 const CONVERSATION_IDS = Array.from({ length: COUNTS.conversations }, (_, i) =>
   mockId(KIND.conversation, i + 1)
 );
-// Postgres uuid columns cannot be matched by prefix, so every id we might have
-// written is listed explicitly for the wipe to target.
-const PAYMENT_IDS = [
-  ...Array.from({ length: COUNTS.checkoutSessions }, (_, i) =>
-    mockId(KIND.payment, i + 1)
-  ),
-  ...Array.from({ length: COUNTS.failedPayments }, (_, i) =>
-    mockId(KIND.payment, 900 + i)
-  )
-];
+// PaymentTransaction carries no user column of its own — a *successful*
+// payment's mock rows are found through the orders relation instead (see
+// wipe()), but a *failed* one never became an order, so it has nothing to be
+// found through. This fixed, never-shrunk list is the only way to reach it.
+const FAILED_PAYMENT_IDS = Array.from(
+  { length: COUNTS.failedPayments },
+  (_, i) => mockId(KIND.payment, 900 + i)
+);
 
 // ------------------------------------------------------------------- wipe
 
 /**
- * Removes every mock row before rebuilding, in foreign-key order. Scoped to the
- * mock id ranges so seed.ts fixtures and anything a teammate created survive.
+ * Removes every mock row before rebuilding, in foreign-key order. Scoped to
+ * MOCK_SELLER_IDS/ALL_USER_IDS rather than a count-sized id array wherever
+ * possible — a product/session count that shrinks between runs (as it just
+ * did: 120 products down to 10) must not leave the old, now out-of-range
+ * rows behind as orphans. seed.ts fixtures and anything a teammate created
+ * outside these ids survive either way.
  */
 async function wipe() {
   await prisma.message.deleteMany({
@@ -270,21 +361,34 @@ async function wipe() {
   await prisma.orderItem.deleteMany({
     where: { order: { buyerId: { in: ALL_USER_IDS } } }
   });
+  // PaymentTransaction carries no user column of its own, so this is the only
+  // way to find our rows — but `Order.paymentTransactionId` has no cascade
+  // (Restrict), so the referencing Order has to be gone *first* or the delete
+  // below hits a foreign-key violation. Captured here, while the relation
+  // still resolves, then deleted after.
+  const orderScopedPaymentIds = (
+    await prisma.paymentTransaction.findMany({
+      where: { orders: { some: { buyerId: { in: ALL_USER_IDS } } } },
+      select: { id: true }
+    })
+  ).map((row) => row.id);
   await prisma.order.deleteMany({ where: { buyerId: { in: ALL_USER_IDS } } });
   await prisma.paymentTransaction.deleteMany({
-    where: { id: { in: PAYMENT_IDS } }
+    where: { id: { in: [...orderScopedPaymentIds, ...FAILED_PAYMENT_IDS] } }
   });
   await prisma.cartItem.deleteMany({
     where: { cart: { userId: { in: ALL_USER_IDS } } }
   });
   await prisma.cart.deleteMany({ where: { userId: { in: ALL_USER_IDS } } });
   await prisma.productImage.deleteMany({
-    where: { productId: { in: PRODUCT_IDS } }
+    where: { product: { sellerId: { in: MOCK_SELLER_IDS } } }
   });
   await prisma.adminAction.deleteMany({
-    where: { productId: { in: PRODUCT_IDS } }
+    where: { product: { sellerId: { in: MOCK_SELLER_IDS } } }
   });
-  await prisma.product.deleteMany({ where: { id: { in: PRODUCT_IDS } } });
+  await prisma.product.deleteMany({
+    where: { sellerId: { in: MOCK_SELLER_IDS } }
+  });
   await prisma.category.deleteMany({
     where: { id: { in: [...MOCK_CATEGORY_IDS, INACTIVE_CATEGORY_ID] } }
   });
@@ -412,39 +516,71 @@ async function seedProducts(): Promise<MockProduct[]> {
   const rows: Record<string, unknown>[] = [];
   const images: Record<string, unknown>[] = [];
 
-  for (const [index, id] of PRODUCT_IDS.entries()) {
+  for (const [index, item] of PRODUCTS.entries()) {
+    const id = PRODUCT_IDS[index];
     const sellerId = MOCK_SELLER_IDS[index % COUNTS.sellers];
-    const status = pickProductStatus();
-    // PROD-005 — stock and status must agree, or the API would contradict itself.
-    const stockQty = status === 'OUT_OF_STOCK' ? 0 : int(1, 40);
-    const price = priceForIndex(index);
+    const categoryId = CATEGORY_ID_BY_NAME.get(item.categoryName);
+    if (!categoryId) {
+      throw new Error(
+        `PRODUCTS[${index}] ("${item.title}") names category "${item.categoryName}", which isn't in CATEGORY_TREE`
+      );
+    }
 
-    // PROD-007 — a discount rule is all-or-nothing.
-    const hasDiscount = chance(25);
-    // PROD-006 — the floor is private and can never exceed the asking price.
-    const hasFloor = chance(30);
-
-    products.push({ id, sellerId, price, stockQty, status });
+    products.push({
+      id,
+      sellerId,
+      price: item.price,
+      stockQty: item.stockQty,
+      status: item.status
+    });
     rows.push({
       id,
       sellerId,
-      categoryId: pick(MOCK_CATEGORY_IDS),
-      title: `${pick(PRODUCT_ADJ)} ${pick(PRODUCT_NOUNS)}`,
-      description: pick(PRODUCT_BLURB),
-      price: price.toFixed(2),
-      stockQty,
-      condition: chance(45) ? 'NEW' : 'USED',
-      status,
-      negotiationFloor: hasFloor ? (price * 0.8).toFixed(2) : null,
-      quantityDiscountMinQty: hasDiscount ? int(2, 5) : null,
-      quantityDiscountPercent: hasDiscount ? int(5, 20).toFixed(2) : null
+      categoryId,
+      title: item.title,
+      description: item.description,
+      price: item.price.toFixed(2),
+      stockQty: item.stockQty,
+      condition: item.condition,
+      status: item.status,
+      negotiationFloor: item.negotiationFloor?.toFixed(2) ?? null,
+      quantityDiscountMinQty: item.quantityDiscountMinQty ?? null,
+      quantityDiscountPercent: item.quantityDiscountPercent?.toFixed(2) ?? null
     });
 
-    for (let position = 0; position < int(1, 3); position += 1) {
+    // A product's own slug now, not a shared noun's — every title here is
+    // unique, so there's a one-to-one photo, the same way auctions work.
+    const slug = slugifyName(item.title);
+    // A curated url (mock-image-urls.ts) wins over a local file at the same
+    // position — no reason to re-upload something that's on Cloudinary
+    // already, and the curated one is what every developer's seed run agrees
+    // on.
+    const curatedUrls = PRODUCT_IMAGE_URLS[slug] ?? [];
+    const localFiles = findMockImages('products', slug);
+    // PROD-001 — a listing needs at least one picture, curated or not.
+    const desiredCount = Math.min(
+      Math.max(curatedUrls.length, localFiles.length, 1),
+      3
+    );
+
+    for (let position = 0; position < desiredCount; position += 1) {
+      const curatedUrl = curatedUrls[position];
+      const sourceFile = localFiles[position];
+      const stored = curatedUrl
+        ? fromExistingUrl(curatedUrl)
+        : sourceFile
+          ? await uploadMockImage(
+              sourceFile,
+              `bidnest-mock/products/${slug}/${position}`
+            )
+          : null;
+
       images.push({
         productId: id,
-        storageKey: `mock/${id}/${position}`,
-        url: `https://placehold.co/600x400?text=Item+${index + 1}-${position + 1}`,
+        storageKey: stored?.storageKey ?? `mock/${id}/${position}`,
+        url:
+          stored?.url ??
+          `https://placehold.co/600x400?text=${encodeURIComponent(item.title)}`,
         position,
         isPrimary: position === 0
       });
@@ -455,23 +591,6 @@ async function seedProducts(): Promise<MockProduct[]> {
   await prisma.productImage.createMany({ data: images as never });
 
   return products;
-}
-
-/** Roughly the mix a real catalogue shows, so every UI state has data behind it. */
-function pickProductStatus(): MockProduct['status'] {
-  const roll = int(1, 100);
-  if (roll <= 70) return 'ACTIVE';
-  if (roll <= 82) return 'OUT_OF_STOCK';
-  if (roll <= 92) return 'INACTIVE';
-  if (roll <= 97) return 'SUSPENDED';
-  return 'REMOVED';
-}
-
-/** Spread across three bands so price filters and sorting have something to bite on. */
-function priceForIndex(index: number): number {
-  if (index % 10 === 0) return int(8000, 50000);
-  if (index % 3 === 0) return int(1000, 8000);
-  return int(50, 1000);
 }
 
 // ------------------------------------------------------------------- carts
@@ -522,7 +641,9 @@ const SHIPMENT_TRAIL = {
 type ShipmentStatus = keyof typeof SHIPMENT_TRAIL;
 
 async function seedOrders(products: MockProduct[]) {
-  // Only sellable listings end up in order history, mirroring a real checkout.
+  // Order history can reference a listing that isn't buyable any more
+  // (out of stock, suspended, deactivated) — only a *removed* one is
+  // excluded, same as production.
   const sellable = products.filter((p) => p.status !== 'REMOVED');
   const notifications: Record<string, unknown>[] = [];
   let orderSeq = 0;
@@ -830,8 +951,8 @@ async function main() {
   // A few declined attempts that never became orders — the checkout path keeps
   // these on purpose so a charge is never lost.
   await prisma.paymentTransaction.createMany({
-    data: Array.from({ length: COUNTS.failedPayments }, (_, i) => ({
-      id: mockId(KIND.payment, 900 + i),
+    data: FAILED_PAYMENT_IDS.map((id, i) => ({
+      id,
       checkoutSessionId: mockId(KIND.payment, 950 + i),
       status: 'FAILED' as const,
       method: 'CARD'
@@ -904,13 +1025,22 @@ async function tally() {
     prisma.category.count({
       where: { id: { in: [...MOCK_CATEGORY_IDS, INACTIVE_CATEGORY_ID] } }
     }),
-    prisma.product.count({ where: { id: { in: PRODUCT_IDS } } }),
-    prisma.productImage.count({ where: { productId: { in: PRODUCT_IDS } } }),
+    prisma.product.count({ where: { sellerId: { in: MOCK_SELLER_IDS } } }),
+    prisma.productImage.count({
+      where: { product: { sellerId: { in: MOCK_SELLER_IDS } } }
+    }),
     prisma.cart.count({ where: { userId: { in: ALL_USER_IDS } } }),
     prisma.cartItem.count({
       where: { cart: { userId: { in: ALL_USER_IDS } } }
     }),
-    prisma.paymentTransaction.count({ where: { id: { in: PAYMENT_IDS } } }),
+    prisma.paymentTransaction.count({
+      where: {
+        OR: [
+          { orders: { some: { buyerId: { in: ALL_USER_IDS } } } },
+          { id: { in: FAILED_PAYMENT_IDS } }
+        ]
+      }
+    }),
     prisma.order.count({ where: { buyerId: { in: ALL_USER_IDS } } }),
     prisma.orderItem.count({
       where: { order: { buyerId: { in: ALL_USER_IDS } } }
