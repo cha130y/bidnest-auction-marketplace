@@ -25,6 +25,21 @@ const SELLER_A_ID = '00000000-0000-4000-8000-000000000002';
 const SELLER_B_ID = '00000000-0000-4000-8000-000000000003';
 const BUYER_ID = '00000000-0000-4000-8000-000000000004';
 
+/**
+ * One admin each, so the team is not queueing behind a single login.
+ *
+ * Sharing `admin@bidnest.test` meant that whatever one person did to the admin
+ * screens, everyone else was looking at — and an audit trail with one name on
+ * it says nothing about who actually did anything.
+ *
+ * `@bidnest.test` addresses receive no mail, which is fine now that
+ * ADMIN_SKIP_2FA exists: an admin never waits on a code. Turn that setting off
+ * and these five accounts become unreachable, which is the intended trade.
+ */
+const ADMIN_2_ID = '00000000-0000-4000-8000-000000000005';
+const ADMIN_3_ID = '00000000-0000-4000-8000-000000000006';
+const ADMIN_4_ID = '00000000-0000-4000-8000-000000000007';
+
 const CATEGORY_ELECTRONICS_ID = '00000000-0000-4000-8000-000000000101';
 const CATEGORY_FASHION_ID = '00000000-0000-4000-8000-000000000102';
 const CATEGORY_COLLECTIBLES_ID = '00000000-0000-4000-8000-000000000103';
@@ -78,6 +93,27 @@ async function seedUsers() {
       displayName: 'BidNest Admin'
     },
     {
+      id: ADMIN_2_ID,
+      email: 'admin2@bidnest.test',
+      role: 'ADMIN' as const,
+      firstName: 'Admin',
+      displayName: 'BidNest Admin 2'
+    },
+    {
+      id: ADMIN_3_ID,
+      email: 'admin3@bidnest.test',
+      role: 'ADMIN' as const,
+      firstName: 'Admin',
+      displayName: 'BidNest Admin 3'
+    },
+    {
+      id: ADMIN_4_ID,
+      email: 'admin4@bidnest.test',
+      role: 'ADMIN' as const,
+      firstName: 'Admin',
+      displayName: 'BidNest Admin 4'
+    },
+    {
       id: SELLER_A_ID,
       email: 'seller-a@bidnest.test',
       role: 'USER' as const,
@@ -108,7 +144,19 @@ async function seedUsers() {
       // Sets the password on a row that already exists from an earlier seed
       // run too, not only on first creation — re-running this is how an
       // already-seeded database picks it up.
-      update: { passwordHash, emailVerifiedAt: new Date() },
+      //
+      // `role` and `status` are written back for the same reason. A seeded
+      // actor is a fixture: it is supposed to be in a known state after every
+      // run. Without these, an ADM-002 test that suspends seller-a leaves it
+      // suspended for good, and the re-seed someone runs to put things right
+      // quietly does not — which is a slow afternoon spent on a bug that was
+      // never in the code.
+      update: {
+        passwordHash,
+        emailVerifiedAt: new Date(),
+        role,
+        status: 'ACTIVE'
+      },
       create: {
         id,
         email,
@@ -926,9 +974,11 @@ async function main() {
   await seedAuctions();
 
   console.log(
-    `Seeded accounts all share the password "${SEED_PASSWORD}" — sign in ` +
-      'at /login with any of their emails, then read the OTP from Maildev ' +
-      '(http://localhost:1080).'
+    `Seeded accounts all share the password "${SEED_PASSWORD}".\n` +
+      '  admin@bidnest.test, admin2@, admin3@, admin4@ — one each, and with\n' +
+      '  ADMIN_SKIP_2FA=true they sign in on the password alone. These\n' +
+      '  addresses receive no mail, so without that setting they cannot.\n' +
+      '  Everyone else reads their code from Maildev (http://localhost:1080).'
   );
   printAccessTokens();
   printAuctionGuide();
