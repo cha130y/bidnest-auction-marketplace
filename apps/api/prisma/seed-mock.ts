@@ -311,17 +311,29 @@ async function seedUsers() {
       displayName: isSeller
         ? `${pick(SHOP_WORDS)} ${pick(SHOP_SUFFIX)}`
         : `${firstName} ${String.fromCharCode(65 + (index % 26))}.`,
-      address: `${int(1, 999)} ${pick(STREETS)}, ${pick(CITIES)} ${int(10000, 90000)}`
+      // Generated as separate parts rather than one string that later has to
+      // be taken apart: the profile stores the same six fields checkout does,
+      // so a mock address that arrives already split is one that can be
+      // prefilled straight into the form and paid with.
+      line1: `${int(1, 999)} ${pick(STREETS)}`,
+      city: pick(CITIES),
+      postalCode: String(int(10000, 90000)),
+      phone: `08${int(10000000, 99999999)}`
     };
   });
 
   await prisma.user.createMany({
-    data: rows.map(({ firstName, displayName, address, ...user }) => {
-      void firstName;
-      void displayName;
-      void address;
-      return user;
-    })
+    data: rows.map(
+      ({ firstName, displayName, line1, city, postalCode, phone, ...user }) => {
+        void firstName;
+        void displayName;
+        void line1;
+        void city;
+        void postalCode;
+        void phone;
+        return user;
+      }
+    )
   });
 
   await prisma.userProfile.createMany({
@@ -329,7 +341,11 @@ async function seedUsers() {
       userId: row.id,
       firstName: row.firstName,
       displayName: row.displayName,
-      defaultShippingAddress: row.address
+      recipientName: row.displayName,
+      line1: row.line1,
+      city: row.city,
+      postalCode: row.postalCode,
+      phone: row.phone
     }))
   });
 

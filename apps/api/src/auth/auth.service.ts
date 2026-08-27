@@ -8,6 +8,8 @@ import {
   Logger,
   UnauthorizedException
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { EnvVariable } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AuthTokensResponse,
@@ -50,7 +52,12 @@ const accountSelect = {
   passwordHash: true,
   createdAt: true,
   profile: {
-    select: { firstName: true, lastName: true, displayName: true }
+    select: {
+      firstName: true,
+      lastName: true,
+      displayName: true,
+      avatarUrl: true
+    }
   }
 } as const;
 
@@ -65,6 +72,7 @@ type Account = {
     firstName: string;
     lastName: string | null;
     displayName: string;
+    avatarUrl: string | null;
   } | null;
 };
 
@@ -80,6 +88,7 @@ export class AuthService {
     private readonly passwordReset: PasswordResetService,
     private readonly oauth: OAuthService,
     private readonly trustedDevices: TrustedDeviceService,
+    private readonly config: ConfigService<EnvVariable, true>,
     @Inject(GOOGLE_VERIFIER) private readonly google: OAuthTokenVerifier,
     @Inject(LINE_VERIFIER) private readonly line: OAuthTokenVerifier
   ) {}
@@ -135,6 +144,18 @@ export class AuthService {
     dto: LoginDto
   ): Promise<PendingTwoFactorResponse | AuthTokensResponse> {
     const account = await this.authenticate(dto);
+
+    // An admin signs in on the password alone, where the environment allows
+    // it. Off by default and set per environment — see ADMIN_SKIP_2FA in
+    // config/env.validation.ts for what it costs and why it exists.
+    // AUTH-007 still holds for every ordinary account either way.
+    if (
+      account.role === 'ADMIN' &&
+      this.config.get('ADMIN_SKIP_2FA', { infer: true })
+    ) {
+      this.logger.warn(`Admin ${account.id} signed in without a code`);
+      return this.completeLogin(account);
+    }
 
     // AUTH-007 — a browser that has already answered a code for this account
     // is let through without another one. The password was still checked a
@@ -506,6 +527,7 @@ export class AuthService {
       firstName: account.profile?.firstName ?? '',
       lastName: account.profile?.lastName ?? null,
       displayName: account.profile?.displayName ?? '',
+      avatarUrl: account.profile?.avatarUrl ?? null,
       createdAt: account.createdAt
     };
   }

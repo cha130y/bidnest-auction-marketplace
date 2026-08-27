@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { initialOf } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -58,11 +59,9 @@ const LINKS: MenuLink[] = [
 const ITEM_CLASS =
   "flex cursor-pointer items-center gap-2.5 rounded-r2 px-3 py-2.5 text-sm text-ink no-underline outline-none select-none data-highlighted:bg-n-100 [&_svg]:size-4.5 [&_svg]:text-n-500"
 
-/** The initial on the avatar; falls back to the address when there is no name. */
-function initialOf(name?: string | null, email?: string | null) {
-  const source = name?.trim() || email?.trim() || "?"
-  return source.charAt(0).toUpperCase()
-}
+// initialOf now lives in lib/format: the profile form draws the same circle
+// for the same account, and two copies of this would be two ways to spell one
+// person's initial.
 
 export function AccountMenu({ className }: { className?: string }) {
   const { data: session, status } = useSession()
@@ -110,9 +109,21 @@ export function AccountMenu({ className }: { className?: string }) {
         )}
         aria-label={`บัญชี: ${name}`}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
-          {initialOf(session.user?.name, session.user?.email)}
-        </span>
+        {session.user?.image ? (
+          // A plain <img> for the reason ProductImage gives: avatarUrl has no
+          // host allowlist, so next/image would need remotePatterns open to
+          // the whole internet to match it.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={session.user.image}
+            alt=""
+            className="size-8 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
+            {initialOf(session.user?.name, session.user?.email)}
+          </span>
+        )}
         <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">
           {name}
         </span>

@@ -140,12 +140,31 @@ export type ShippingAddress = {
   phone: string
 }
 
+/**
+ * What an order line was for. A product from the shop, or a won auction.
+ *
+ * `kind` decides where it opens — `/shop/:id` against `/auctions/:id` — so
+ * anything rendering a link has to read it. `listingHref` in `lib/format.ts`
+ * is the one place that mapping lives.
+ */
+export type OrderListing = {
+  kind: "PRODUCT" | "AUCTION"
+  id: string
+  title: string
+  imageUrl: string | null
+}
+
 export type OrderItem = {
   id: string
   quantity: number
   unitPrice: string
   lineTotal: string
-  product: { id: string; title: string; imageUrl: string | null }
+  /**
+   * Null only for a row with neither a product nor an auction, which checkout
+   * never writes. Present in the type so one malformed row cannot take a whole
+   * order screen down with it.
+   */
+  listing: OrderListing | null
 }
 
 export type Order = {
@@ -601,3 +620,11 @@ export const AUCTION_IMAGE_MIME_TYPES = [
 export const MAX_PRODUCT_IMAGES = 8
 export const MAX_PRODUCT_IMAGE_BYTES = MAX_AUCTION_IMAGE_BYTES
 export const PRODUCT_IMAGE_MIME_TYPES = AUCTION_IMAGE_MIME_TYPES
+
+/**
+ * USR-001 — and again for a profile picture. Aliases rather than their own
+ * figures for the reason above: /uploads/images is one endpoint with one
+ * ceiling, so a second set here could only ever drift out of step with it.
+ */
+export const MAX_AVATAR_BYTES = MAX_AUCTION_IMAGE_BYTES
+export const AVATAR_MIME_TYPES = AUCTION_IMAGE_MIME_TYPES

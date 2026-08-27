@@ -36,3 +36,30 @@ export function formatPercent(percent: string | number): string {
   const value = typeof percent === "number" ? percent : Number(percent)
   return Number.isFinite(value) ? `${value}%` : "—"
 }
+
+/**
+ * The initial on an avatar, for an account with no picture. Falls back to the
+ * address when there is no name, and to "?" when there is neither — both
+ * columns are NOT NULL, but a session read mid-refresh can still arrive empty.
+ */
+export function initialOf(name?: string | null, email?: string | null): string {
+  const source = name?.trim() || email?.trim() || "?"
+  return source.charAt(0).toUpperCase()
+}
+
+/**
+ * Where an order line opens.
+ *
+ * A line can be a shop product or a won auction, and the two live on opposite
+ * halves of the site. Kept here rather than inline at each of the four order
+ * screens, so adding a third kind one day is one edit and not a hunt for the
+ * ones that were missed.
+ */
+export function listingHref(listing: {
+  kind: "PRODUCT" | "AUCTION"
+  id: string
+}): string {
+  return listing.kind === "AUCTION"
+    ? `/auctions/${listing.id}`
+    : `/shop/${listing.id}`
+}

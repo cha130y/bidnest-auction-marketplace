@@ -63,6 +63,35 @@ describe('env validation', () => {
     });
   });
 
+  describe('ADMIN_SKIP_2FA', () => {
+    // The setting takes the second factor off the highest-privilege role, so
+    // what matters most is that anything other than a deliberate "true" reads
+    // as off — an env file arrives as strings, and a string is always truthy.
+    it('is off when nothing says otherwise', () => {
+      expect(validate(required).ADMIN_SKIP_2FA).toBe(false);
+    });
+
+    it('is off for a blank line', () => {
+      expect(validate({ ...required, ADMIN_SKIP_2FA: '' }).ADMIN_SKIP_2FA).toBe(
+        false
+      );
+    });
+
+    it('is off for "false" rather than truthy for being a string', () => {
+      expect(
+        validate({ ...required, ADMIN_SKIP_2FA: 'false' }).ADMIN_SKIP_2FA
+      ).toBe(false);
+    });
+
+    it('is on for "true", however it was capitalised or spaced', () => {
+      for (const written of ['true', 'TRUE', ' True ']) {
+        expect(
+          validate({ ...required, ADMIN_SKIP_2FA: written }).ADMIN_SKIP_2FA
+        ).toBe(true);
+      }
+    });
+  });
+
   it('refuses to start on a short signing secret', () => {
     // AUTH-002/AUTH-004 — the one class of misconfiguration that must stop the
     // app rather than degrade it.

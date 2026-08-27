@@ -12,9 +12,21 @@ import { MockPaymentProvider } from '../payment/payment.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CheckoutDto } from './dtos/checkout.dto';
 
+/**
+ * One thing being bought, priced by this server.
+ *
+ * `productId` and `auctionId` are exactly-one-of, mirroring `OrderItem`. A
+ * cart line has a product and a `cartItemId` to clear afterwards; an auction
+ * win has neither, which is why both are nullable here rather than the type
+ * being split in two — everything downstream of pricing (grouping by seller,
+ * charging, writing the order, notifying) treats them identically, and only
+ * the two steps that are genuinely about stock and carts have to look.
+ */
 type PricedLine = {
-  cartItemId: string;
-  productId: string;
+  /** The cart line to clear once paid, or null for an auction win. */
+  cartItemId: string | null;
+  productId: string | null;
+  auctionId: string | null;
   title: string;
   sellerId: string;
   quantity: number;
@@ -32,7 +44,20 @@ export class CheckoutService {
   ) {}
 
   async checkout(buyerId: string, dto: CheckoutDto) {
-    const lines = await this.priceCart(buyerId, dto.cartItemIds);
+    if (dto.auctionId && dto.cartItemIds) {
+      throw new BadRequestException(
+        'Send either auctionId or cartItemIds, not both'
+      );
+    }
+
+    // The only fork in this method. Everything past it — the charge, the
+    // payment row, the order, the address snapshot, the notifications — is one
+    // path, because paying for a won lot and paying for a basket differ in
+    // what is being bought and in nothing else.
+    const lines = dto.auctionId
+      ? await this.priceAuction(buyerId, dto.auctionId)
+      : await this.priceCart(buyerId, dto.cartItemIds);
+
     const grandTotal = lines.reduce(
       (sum, line) => sum.plus(line.subtotal),
       new Prisma.Decimal(0)
@@ -68,13 +93,102 @@ export class CheckoutService {
       });
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.runOrderTransaction(
+      buyerId,
+      dto,
+      lines,
+      payment.id,
+      checkoutSessionId
+    );
+
+    // Emitted after commit so no one is notified about a rolled-back order
+    for (const notification of result.notifications) {
+      this.realtime.emitNotificationCreated(notification.userId, notification);
+    }
+
+    // CHAT-004 — same reason: a seller's auto-reply should never appear to
+    // have been sent for an order that did not, in the end, go through.
+    //
+    // Skipped for an auction win: the auto-reply opens a thread about a
+    // product, and a lot is not one. Nobody is left without a way to reach the
+    // seller either — bidding on an auction already gives it a conversation.
+    for (const order of result.orders) {
+      if (order.productId === null) continue;
+
+      void this.chat.sendPurchaseAutoReply(
+        order.sellerId,
+        buyerId,
+        order.productId
+      );
+    }
+
+    return {
+      checkoutSessionId,
+      paymentStatus: 'SUCCEEDED',
+      paymentReference: charge.reference,
+      total: grandTotal.toFixed(2),
+      orders: result.orders
+    };
+  }
+
+  /**
+   * Writes the orders, and turns the one database error that is really a
+   * conflict into one.
+   *
+   * `order_items.auction_id` is unique, so two payments racing for the same
+   * lot end with the loser hitting P2002 here. Left alone that surfaces as a
+   * 500 — after the charge has already been committed, which is the worst
+   * possible moment to say "something went wrong" and nothing else. The
+   * ordinary double-click never reaches this far: `priceAuction` refuses it
+   * before any money moves. This is only for the genuine race, and it answers
+   * it the way `decrementStock` already answers its own — with the session id
+   * support needs to reconcile a charge against no order.
+   */
+  private async runOrderTransaction(
+    buyerId: string,
+    dto: CheckoutDto,
+    lines: PricedLine[],
+    paymentTransactionId: string,
+    checkoutSessionId: string
+  ) {
+    try {
+      return await this.writeOrders(
+        buyerId,
+        dto,
+        lines,
+        paymentTransactionId,
+        checkoutSessionId
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException({
+          message:
+            'That auction was paid for while this payment was going through',
+          checkoutSessionId
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  private async writeOrders(
+    buyerId: string,
+    dto: CheckoutDto,
+    lines: PricedLine[],
+    paymentTransactionId: string,
+    checkoutSessionId: string
+  ) {
+    return this.prisma.$transaction(async (tx) => {
       const bySeller = this.groupBySeller(lines);
       const orders: {
         id: string;
         sellerId: string;
         subtotal: string;
-        productId: string;
+        productId: string | null;
       }[] = [];
 
       for (const [sellerId, sellerLines] of bySeller) {
@@ -88,12 +202,13 @@ export class CheckoutService {
             checkoutSessionId,
             sellerId,
             buyerId,
-            paymentTransactionId: payment.id,
+            paymentTransactionId,
             subtotal,
             status: 'PAID',
             items: {
               create: sellerLines.map((line) => ({
                 productId: line.productId,
+                auctionId: line.auctionId,
                 quantity: line.quantity,
                 unitPrice: line.unitPrice
               }))
@@ -117,17 +232,30 @@ export class CheckoutService {
           // CHAT-004 — the auto-reply needs *a* listing to attach its thread
           // to; the first line in the order is as good a choice as any when
           // a seller sold several products in the same checkout.
+          //
+          // Null for an auction win: `sendPurchaseAutoReply` opens a thread
+          // about a product, and a lot is not one. A won auction already has
+          // its own conversation from the bidding, so there is no silence to
+          // fill here.
           productId: sellerLines[0].productId
         });
       }
 
+      // Both of these are about products in a cart, and an auction win is
+      // neither — it has no stock to draw down and no cart line to clear.
+      // Filtering rather than branching keeps the mixed case correct for free,
+      // if a later change ever lets one checkout carry both.
       await this.decrementStock(tx, lines, checkoutSessionId);
 
       // Only the lines that were actually priced and ordered are cleared —
       // anything added to the cart mid-checkout stays put.
-      await tx.cartItem.deleteMany({
-        where: { id: { in: lines.map((line) => line.cartItemId) } }
-      });
+      const cartItemIds = lines
+        .map((line) => line.cartItemId)
+        .filter((id): id is string => id !== null);
+
+      if (cartItemIds.length > 0) {
+        await tx.cartItem.deleteMany({ where: { id: { in: cartItemIds } } });
+      }
 
       const notifications = await this.createOrderPlacedNotifications(
         tx,
@@ -137,29 +265,6 @@ export class CheckoutService {
 
       return { orders, notifications };
     });
-
-    // Emitted after commit so no one is notified about a rolled-back order
-    for (const notification of result.notifications) {
-      this.realtime.emitNotificationCreated(notification.userId, notification);
-    }
-
-    // CHAT-004 — same reason: a seller's auto-reply should never appear to
-    // have been sent for an order that did not, in the end, go through.
-    for (const order of result.orders) {
-      void this.chat.sendPurchaseAutoReply(
-        order.sellerId,
-        buyerId,
-        order.productId
-      );
-    }
-
-    return {
-      checkoutSessionId,
-      paymentStatus: 'SUCCEEDED',
-      paymentReference: charge.reference,
-      total: grandTotal.toFixed(2),
-      orders: result.orders
-    };
   }
 
   /**
@@ -242,6 +347,7 @@ export class CheckoutService {
       return {
         cartItemId,
         productId: product.id,
+        auctionId: null,
         title: product.title,
         sellerId: product.sellerId,
         quantity,
@@ -249,6 +355,71 @@ export class CheckoutService {
         subtotal: line.subtotal
       };
     });
+  }
+
+  /**
+   * Prices a won auction. The counterpart to `priceCart`, and trusts the
+   * client exactly as little.
+   *
+   * The amount is the lot's own `soldPrice`, written by settlement from the
+   * highest bid — there is no field on the request that could influence it.
+   * The right to pay comes from `winnerUserId`, so somebody else's lot id
+   * bought nothing and gives nothing away: the same refusal answers "that is
+   * not yours" and "that does not exist".
+   *
+   * One line, quantity one. A lot is a single thing, so there is no stock to
+   * check and no quantity discount to apply.
+   */
+  private async priceAuction(
+    buyerId: string,
+    auctionId: string
+  ): Promise<PricedLine[]> {
+    const auction = await this.prisma.auction.findFirst({
+      where: { id: auctionId, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        sellerId: true,
+        status: true,
+        winnerUserId: true,
+        soldPrice: true,
+        orderItems: { select: { id: true }, take: 1 }
+      }
+    });
+
+    // Deliberately the same message for "no such auction" and "not your win".
+    // A distinct 404 would let anyone holding an id learn whether it exists
+    // and whether it sold.
+    if (!auction || auction.winnerUserId !== buyerId) {
+      throw new BadRequestException('No auction of yours is awaiting payment');
+    }
+
+    if (auction.status !== 'SOLD' || auction.soldPrice === null) {
+      throw new BadRequestException(`"${auction.title}" did not end in a sale`);
+    }
+
+    // The unique index on `order_items.auction_id` is the real guarantee — two
+    // simultaneous payments end with one of them failing there. This is the
+    // readable refusal for the ordinary case of somebody opening the checkout
+    // link a second time, and it happens before any money is taken.
+    if (auction.orderItems.length > 0) {
+      throw new ConflictException(
+        `"${auction.title}" has already been paid for`
+      );
+    }
+
+    return [
+      {
+        cartItemId: null,
+        productId: null,
+        auctionId: auction.id,
+        title: auction.title,
+        sellerId: auction.sellerId,
+        quantity: 1,
+        unitPrice: auction.soldPrice,
+        subtotal: auction.soldPrice
+      }
+    ];
   }
 
   private groupBySeller(lines: PricedLine[]): Map<string, PricedLine[]> {
@@ -270,9 +441,18 @@ export class CheckoutService {
    */
   private async decrementStock(
     tx: Prisma.TransactionClient,
-    lines: PricedLine[],
+    allLines: PricedLine[],
     checkoutSessionId: string
   ) {
+    // An auction lot has no stock column — there was one of it, and the
+    // bidding decided who got it.
+    const lines = allLines.filter(
+      (line): line is PricedLine & { productId: string } =>
+        line.productId !== null
+    );
+
+    if (lines.length === 0) return;
+
     for (const line of lines) {
       const { count } = await tx.product.updateMany({
         where: {

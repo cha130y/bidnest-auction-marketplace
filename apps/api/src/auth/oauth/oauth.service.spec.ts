@@ -71,54 +71,102 @@ describe('OAuthService (AUTH-003 / AUTH-006)', () => {
     });
   });
 
-  describe('linking to an existing account', () => {
+  /**
+   * AUTH-003 / AUTH-006 — one address, one way in.
+   *
+   * A provider is never joined to an account that already exists, whatever
+   * the account signs in with today. Every case below is a refusal; what
+   * changes between them is only which door the answer points at.
+   */
+  describe('an address that already has an account', () => {
     beforeEach(() => prisma.authAccount.findUnique.mockResolvedValue(null));
 
-    it('links when the provider vouched for the address', async () => {
+    /** Nothing is ever linked, so this must hold for every case here. */
+    const expectRefused = async (call: Promise<unknown>) => {
+      await expect(call).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.authAccount.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    };
+
+    it('refuses a password account, even on an address Google verified', async () => {
+      // The case this rule was written for. Verified or not, a password
+      // account does not gain a second, password-less way in.
       prisma.user.findUnique.mockResolvedValue({
-        ...activeUser,
+        passwordHash: 'argon2-hash',
         authAccounts: []
       });
 
-      const result = await service.resolveAccount(googleProfile());
-
-      expect(prisma.authAccount.create).toHaveBeenCalledWith({
-        data: {
-          userId: 'u1',
-          provider: 'GOOGLE',
-          providerAccountId: 'google-sub-1'
-        }
-      });
-      expect(result.outcome).toBe('RESOLVED');
+      await expectRefused(service.resolveAccount(googleProfile()));
     });
 
-    it('refuses to link on an address the provider did not verify', async () => {
-      // AUTH-006: linking must never happen on an unverified email alone.
+    it('points a password account back at its password', async () => {
       prisma.user.findUnique.mockResolvedValue({
-        ...activeUser,
+        passwordHash: 'argon2-hash',
         authAccounts: []
+      });
+
+      await expect(service.resolveAccount(googleProfile())).rejects.toThrow(
+        /registered with a password/i
+      );
+    });
+
+    it('refuses Line on an address that signs in with Google', async () => {
+      // Provider to provider, which used to link silently the same way.
+      prisma.user.findUnique.mockResolvedValue({
+        passwordHash: null,
+        authAccounts: [{ provider: 'GOOGLE' }]
+      });
+
+      await expectRefused(
+        service.resolveAccount(
+          lineProfile({ emailVerified: true, email: 'somchai@example.com' })
+        )
+      );
+    });
+
+    it('names the provider that does work', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        passwordHash: null,
+        authAccounts: [{ provider: 'GOOGLE' }]
       });
 
       await expect(
         service.resolveAccount(
+          lineProfile({ emailVerified: true, email: 'somchai@example.com' })
+        )
+      ).rejects.toThrow(
+        'That address is already registered with Google. Sign in with Google instead.'
+      );
+    });
+
+    it('refuses an address the provider did not verify', async () => {
+      // AUTH-006: an address the caller merely typed proves nothing, and
+      // someone else's is as easy to type as your own.
+      prisma.user.findUnique.mockResolvedValue({
+        passwordHash: null,
+        authAccounts: [{ provider: 'GOOGLE' }]
+      });
+
+      await expectRefused(
+        service.resolveAccount(
           lineProfile({ emailVerified: false }),
           'somchai@example.com'
         )
-      ).rejects.toBeInstanceOf(ConflictException);
-      expect(prisma.authAccount.create).not.toHaveBeenCalled();
+      );
     });
 
-    it('refuses a second provider account on one platform account', async () => {
+    it('refuses a second Google account on one platform account', async () => {
       // AUTH-003 / AUTH-006 — one Google or Line account each, no more.
       prisma.user.findUnique.mockResolvedValue({
-        ...activeUser,
-        authAccounts: [{ providerAccountId: 'some-other-sub' }]
+        passwordHash: null,
+        authAccounts: [{ provider: 'GOOGLE' }]
       });
 
       await expect(
-        service.resolveAccount(googleProfile())
-      ).rejects.toBeInstanceOf(ConflictException);
-      expect(prisma.authAccount.create).not.toHaveBeenCalled();
+        service.resolveAccount(
+          googleProfile({ providerAccountId: 'some-other-sub' })
+        )
+      ).rejects.toThrow(/already linked to a different Google account/);
     });
   });
 

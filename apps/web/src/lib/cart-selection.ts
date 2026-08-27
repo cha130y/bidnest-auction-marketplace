@@ -14,6 +14,18 @@ import type { Cart, CartItem } from "@/lib/api/types"
  */
 export const SELECTION_PARAM = "items"
 
+/**
+ * The auction a winner is paying for, when `/checkout` is opened from a result
+ * screen rather than from the cart.
+ *
+ * In the URL for the same reason `items` is: reloading the page, or opening it
+ * in a second tab, has to still be paying for the same lot. The two are
+ * mutually exclusive — the API refuses a request carrying both — and this one
+ * takes precedence on screen, because arriving with it is a deliberate act
+ * while an empty cart is not.
+ */
+export const AUCTION_PARAM = "auction"
+
 /** Cart line ids from the URL, or null for "all of it". */
 export function parseSelection(raw: string | null): string[] | null {
   if (!raw) return null

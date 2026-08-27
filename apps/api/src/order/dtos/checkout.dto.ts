@@ -74,4 +74,20 @@ export class CheckoutDto {
   @IsUUID('4', { each: true })
   @IsOptional()
   cartItemIds?: string[];
+
+  /**
+   * The auction being paid for, when this is a win rather than a cart.
+   *
+   * Only the id: the price comes from the lot's own `soldPrice`, and who is
+   * allowed to pay comes from its `winnerUserId`. Nothing about either is
+   * taken from the client, exactly as nothing about a cart's prices is.
+   *
+   * Mutually exclusive with `cartItemIds` — they name two different things to
+   * buy, and a request carrying both has not said which. Refused in the
+   * service rather than here, because a cross-field rule reads better where
+   * the other side of it lives.
+   */
+  @IsUUID('4')
+  @IsOptional()
+  auctionId?: string;
 }

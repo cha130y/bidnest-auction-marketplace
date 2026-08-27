@@ -15,9 +15,13 @@ const profileSelect = {
       displayName: true,
       avatarUrl: true,
       bio: true,
+      // The default shipping address, in checkout's own six fields
       phone: true,
-      location: true,
-      defaultShippingAddress: true,
+      recipientName: true,
+      line1: true,
+      line2: true,
+      city: true,
+      postalCode: true,
       updatedAt: true
     }
   }
