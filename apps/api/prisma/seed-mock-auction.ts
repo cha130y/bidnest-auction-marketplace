@@ -21,6 +21,13 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
+import {
+  findMockImages,
+  fromExistingUrl,
+  slugifyName,
+  uploadMockImage
+} from './mock-image-loader';
+import { AUCTION_IMAGE_URLS } from './mock-image-urls';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
@@ -68,7 +75,10 @@ const AUCTIONS: MockAuction[] = [
     title: 'Limited Edition Sneakers, Size 42',
     description: 'Deadstock pair, box included, never worn outside.',
     condition: 'NEW',
-    startingPrice: 4500,
+    // Not 4500 — auction.e2e-spec.ts's reserve-leak checks use that exact
+    // number as a sentinel and would false-positive on any public field
+    // that happens to equal it, on any auction in the table.
+    startingPrice: 4300,
     bidCount: 9,
     minBidIncrement: 200,
     endsInMinutes: 35
@@ -105,7 +115,9 @@ const AUCTIONS: MockAuction[] = [
     description: 'Open box, all accessories included, 20-hour battery.',
     condition: 'NEW',
     startingPrice: 2200,
-    bidCount: 22,
+    // 22 put currentPrice + minBidIncrement (the next-bid floor) at exactly
+    // 4500 — the same reserve-leak sentinel startingPrice above avoids.
+    bidCount: 21,
     minBidIncrement: 100,
     endsInMinutes: 720
   },
@@ -166,34 +178,90 @@ async function main() {
     const endsAt = new Date(now + auction.endsInMinutes * 60_000);
     const startedAt = new Date(now - (index + 1) * 3_600_000);
 
+    // `endsInMinutes` is relative to "now" — *this* run's now, not the first
+    // one. `update: {}` used to leave that first run's timestamps in place
+    // forever, so an auction seeded with a short countdown (this file has a
+    // few, on purpose, for "ending soon") would really end, a real
+    // settlement job would really flip it to SOLD/UNSOLD, and no later
+    // reseed ever brought it back. update mirrors create for exactly that
+    // reason: a reseed is a full reset back to the pristine state the
+    // AUCTIONS entry describes, not a patch on top of whatever happened to
+    // this row since.
+    const data = {
+      sellerId,
+      categoryId,
+      title: auction.title,
+      description: auction.description,
+      condition: auction.condition,
+      status: 'ACTIVE' as const,
+      startingPrice: auction.startingPrice.toFixed(2),
+      minBidIncrement: auction.minBidIncrement.toFixed(2),
+      currentPrice: currentPriceFor(auction).toFixed(2),
+      bidCount: auction.bidCount,
+      originalEndAt: endsAt,
+      currentEndAt: endsAt,
+      publishedAt: startedAt,
+      startedAt,
+      endedAt: null,
+      winnerUserId: null,
+      winningBidId: null,
+      soldPrice: null,
+      extensionCount: 0,
+      cancellationReason: null
+    };
+
     await prisma.auction.upsert({
       where: { id },
-      update: {},
-      create: {
-        id,
-        sellerId,
-        categoryId,
-        title: auction.title,
-        description: auction.description,
-        condition: auction.condition,
-        status: 'ACTIVE',
-        startingPrice: auction.startingPrice.toFixed(2),
-        minBidIncrement: auction.minBidIncrement.toFixed(2),
-        currentPrice: currentPriceFor(auction).toFixed(2),
-        bidCount: auction.bidCount,
-        originalEndAt: endsAt,
-        currentEndAt: endsAt,
-        publishedAt: startedAt,
-        startedAt,
-        images: {
-          create: {
-            storageKey: `seed-auction/${id}`,
-            url: `https://placehold.co/600x400?text=${encodeURIComponent(auction.title)}`,
-            position: 0,
-            isPrimary: true
-          }
-        }
-      }
+      update: data,
+      create: { id, ...data }
+    });
+
+    // Separate upserts, keyed on the same (auctionId, position) the schema
+    // already makes unique, rather than nesting under `create` above — that
+    // only runs the first time a row is created, so a photo added after the
+    // auction row already exists would never be picked up.
+    const slug = slugifyName(auction.title);
+    const curatedUrls = AUCTION_IMAGE_URLS[slug] ?? [];
+    const localFiles = findMockImages('auctions', slug);
+    // AUC-001 — a listing needs at least one picture, curated or not. Up to 3,
+    // same cap as a product's, now that the detail page's gallery can show more
+    // than one (apps/web/src/app/auctions/[id]/page.tsx splits primary + rest).
+    const desiredCount = Math.min(
+      Math.max(curatedUrls.length, localFiles.length, 1),
+      3
+    );
+
+    for (let position = 0; position < desiredCount; position += 1) {
+      const curatedUrl = curatedUrls[position];
+      const sourceFile = localFiles[position];
+      const stored = curatedUrl
+        ? fromExistingUrl(curatedUrl)
+        : sourceFile
+          ? await uploadMockImage(
+              sourceFile,
+              `bidnest-mock/auctions/${slug}/${position}`
+            )
+          : null;
+      const image = {
+        storageKey: stored?.storageKey ?? `seed-auction/${id}/${position}`,
+        url:
+          stored?.url ??
+          `https://placehold.co/600x400?text=${encodeURIComponent(auction.title)}`,
+        position,
+        isPrimary: position === 0
+      };
+
+      await prisma.auctionImage.upsert({
+        where: { auctionId_position: { auctionId: id, position } },
+        create: { auctionId: id, ...image },
+        update: image
+      });
+    }
+
+    // A photo count that shrinks between runs (3 curated urls down to 1,
+    // say) must not leave the higher positions behind as stale rows.
+    await prisma.auctionImage.deleteMany({
+      where: { auctionId: id, position: { gte: desiredCount } }
     });
   }
 
