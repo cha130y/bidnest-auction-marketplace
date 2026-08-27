@@ -3,7 +3,6 @@ import { Poppins, Plus_Jakarta_Sans, Noto_Sans_Thai } from 'next/font/google';
 import './globals.css';
 import Providers from '@/app/providers';
 import { ChatWidget } from '@/components/chat-widget/chat-widget';
-import { auth } from '@/auth';
 
 const poppins = Poppins({
   variable: '--font-poppins',
@@ -28,18 +27,11 @@ export const metadata: Metadata = {
   description: 'BidNest — Auction & Marketplace',
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Handed to `SessionProvider` below so its first client render already
-  // knows what the server knew, instead of starting at "loading" and
-  // resolving a moment later — the mismatch between those two first paints
-  // was showing up as a hydration warning on every `aria-pressed` gated by
-  // `useAuthToken()`'s `ready` flag.
-  const session = await auth();
-
   return (
     <html
       lang="th"
@@ -51,7 +43,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <Providers session={session}>
+        <Providers>
           {children}
           <ChatWidget />
         </Providers>
