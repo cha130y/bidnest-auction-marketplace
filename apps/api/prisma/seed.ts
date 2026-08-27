@@ -103,12 +103,41 @@ async function seedUsers() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
 
   for (const { id, email, role, firstName, displayName } of users) {
+    /*
+     * A complete default address, in the six fields checkout reads, so a
+     * seeded account can go straight to paying without typing one out.
+     */
+    const address = {
+      recipientName: displayName,
+      phone: '0812345678',
+      line1: '123 Sukhumvit Rd',
+      line2: null,
+      city: 'Bangkok',
+      postalCode: '10110'
+    };
+
     await prisma.user.upsert({
       where: { id },
       // Sets the password on a row that already exists from an earlier seed
       // run too, not only on first creation — re-running this is how an
       // already-seeded database picks it up.
-      update: { passwordHash, emailVerifiedAt: new Date() },
+      update: {
+        passwordHash,
+        emailVerifiedAt: new Date(),
+        // And the address for the same reason. Putting it only in `create`
+        // below would mean every database that had already been seeded once
+        // kept whatever it had — which is exactly the machine this is meant to
+        // fix, since the migration could only move the old free-text blob into
+        // `line1` and had nothing to put in the other four fields.
+        //
+        // `upsert` rather than `update`: a user row can predate its profile.
+        profile: {
+          upsert: {
+            create: { firstName, displayName, ...address },
+            update: address
+          }
+        }
+      },
       create: {
         id,
         email,
@@ -116,13 +145,7 @@ async function seedUsers() {
         status: 'ACTIVE',
         passwordHash,
         emailVerifiedAt: new Date(),
-        profile: {
-          create: {
-            firstName,
-            displayName,
-            defaultShippingAddress: '123 Sukhumvit Rd, Bangkok 10110'
-          }
-        }
+        profile: { create: { firstName, displayName, ...address } }
       }
     });
   }

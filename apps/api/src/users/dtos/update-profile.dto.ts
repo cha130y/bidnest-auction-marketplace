@@ -77,25 +77,72 @@ export class UpdateProfileDto {
   @Transform(trimOrNull)
   phone?: string | null;
 
-  @ApiPropertyOptional({ maxLength: 200, nullable: true })
+  /*
+   * The five below, with `phone` above them, are the default shipping address.
+   *
+   * Every `@MaxLength` here is copied from `ShippingAddressDto` rather than
+   * chosen — these values exist to be sent to `POST /orders/checkout`, and a
+   * profile that accepted a longer city than checkout does would let someone
+   * save an address that then fails at the till, with nothing on the profile
+   * screen to say why.
+   *
+   * Prefills the checkout address form (CART-004). The order keeps its own
+   * snapshot, so editing these later never rewrites past orders.
+   */
+
+  @ApiPropertyOptional({
+    example: 'สมชาย ใจดี',
+    maxLength: 150,
+    nullable: true
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(150)
+  @Transform(trimOrNull)
+  recipientName?: string | null;
+
+  @ApiPropertyOptional({
+    example: '123 ถนนสุขุมวิท',
+    maxLength: 200,
+    nullable: true
+  })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsString()
   @MaxLength(200)
   @Transform(trimOrNull)
-  location?: string | null;
+  line1?: string | null;
 
   @ApiPropertyOptional({
-    maxLength: 1000,
-    nullable: true,
-    description:
-      'Prefills the checkout address form (CART-004). The order keeps its own ' +
-      'snapshot, so editing this later never rewrites past orders.'
+    example: 'อาคาร A ชั้น 5',
+    maxLength: 200,
+    nullable: true
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(200)
   @Transform(trimOrNull)
-  defaultShippingAddress?: string | null;
+  line2?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'กรุงเทพมหานคร',
+    maxLength: 100,
+    nullable: true
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(100)
+  @Transform(trimOrNull)
+  city?: string | null;
+
+  @ApiPropertyOptional({ example: '10110', maxLength: 20, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(20)
+  @Transform(trimOrNull)
+  postalCode?: string | null;
 }
