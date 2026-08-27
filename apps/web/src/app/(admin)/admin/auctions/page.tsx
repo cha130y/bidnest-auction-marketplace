@@ -91,7 +91,7 @@ export default function AdminAuctionsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-ink">Auctions (ADM-001)</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Auctions</h1>
 
       <Select
         value={status ?? ''}

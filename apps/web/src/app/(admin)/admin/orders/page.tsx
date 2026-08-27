@@ -52,11 +52,7 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-ink">Orders (ADM-006)</h1>
-      <p className="max-w-xl text-sm text-n-600">
-        อ่านอย่างเดียว — SRS เลื่อนการจัดการข้อพิพาท/คืนเงินออกไปแล้ว ไม่มี endpoint แก้ไข
-        (owner: Dev3)
-      </p>
+      <h1 className="font-display text-2xl font-bold text-ink">Orders</h1>
 
       <Select
         value={status ?? ''}

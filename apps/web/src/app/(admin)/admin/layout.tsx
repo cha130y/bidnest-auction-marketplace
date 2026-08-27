@@ -30,18 +30,57 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { DevTokenSwitcher } from '@/components/dev/dev-token-switcher';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-  { href: '/admin/users', label: 'Users', code: 'ADM-002', icon: Users },
-  { href: '/admin/audit-log', label: 'Audit Log', code: 'ADM-004', icon: ScrollText },
-  { href: '/admin/auctions', label: 'Auctions', code: 'ADM-001', icon: Gavel },
-  { href: '/admin/products', label: 'Products', code: 'ADM-005', icon: Package },
-  { href: '/admin/orders', label: 'Orders', code: 'ADM-006', icon: ShoppingBag },
-  { href: '/admin/categories', label: 'Categories', code: 'ADM-003', icon: FolderTree },
-  { href: '/admin/support', label: 'Support Chat', icon: MessageCircle },
+  {
+    href: '/admin',
+    label: 'Overview',
+    description: 'ศูนย์รวม endpoint แอดมินของทั้งทีม',
+    icon: LayoutDashboard,
+  },
+  {
+    href: '/admin/users',
+    label: 'Users',
+    description: 'ดูรายชื่อผู้ใช้ suspend/reactivate บัญชี',
+    icon: Users,
+  },
+  {
+    href: '/admin/audit-log',
+    label: 'Audit Log',
+    description: 'ดู log การกระทำของ admin ทั้งหมด กรองตาม action type',
+    icon: ScrollText,
+  },
+  {
+    href: '/admin/auctions',
+    label: 'Auctions',
+    description: 'ดูรายการประมูลทุกสถานะ ยกเลิกประมูลได้ (พร้อมเหตุผล)',
+    icon: Gavel,
+  },
+  {
+    href: '/admin/products',
+    label: 'Products',
+    description: 'ปิด/เปิดการขายสินค้า',
+    icon: Package,
+  },
+  {
+    href: '/admin/orders',
+    label: 'Orders',
+    description: 'ดูคำสั่งซื้อทั้งหมด อ่านอย่างเดียว',
+    icon: ShoppingBag,
+  },
+  {
+    href: '/admin/categories',
+    label: 'Categories',
+    description: 'จัดการหมวดหมู่ที่ใช้ร่วมกันทั้งประมูลและ e-commerce',
+    icon: FolderTree,
+  },
+  {
+    href: '/admin/support',
+    label: 'Support Chat',
+    description: 'ตอบแชทลูกค้าที่ AI ตอบไม่ได้',
+    icon: MessageCircle,
+  },
 ];
 
 function useCurrentNavItem() {
@@ -55,7 +94,6 @@ function useCurrentNavItem() {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { token, ready } = useAuthToken();
   const currentItem = useCurrentNavItem();
 
@@ -72,7 +110,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">
         <Skeleton className="h-8 w-48" />
-        <DevTokenSwitcher />
       </div>
     );
   }
@@ -91,7 +128,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             เข้าสู่ระบบ
           </Button>
         </Card>
-        <DevTokenSwitcher />
       </div>
     );
   }
@@ -100,7 +136,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">
         <p className="text-n-600">คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (ต้องเป็นบัญชี Admin)</p>
-        <DevTokenSwitcher />
       </div>
     );
   }
@@ -137,16 +172,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   className={cn('size-4.5 shrink-0', active ? 'text-amber-600' : 'text-n-400')}
                 />
                 <span className="flex-1">{item.label}</span>
-                {item.code && (
-                  <span
-                    className={cn(
-                      'text-[10px] font-semibold tracking-wide',
-                      active ? 'text-amber-500' : 'text-n-400'
-                    )}
-                  >
-                    {item.code}
-                  </span>
-                )}
               </Link>
             );
           })}
@@ -216,16 +241,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       )}
                     />
                     <span className="flex-1">{item.label}</span>
-                    {item.code && (
-                      <span
-                        className={cn(
-                          'text-[10px] font-semibold tracking-wide',
-                          active ? 'text-amber-500' : 'text-n-400'
-                        )}
-                      >
-                        {item.code}
-                      </span>
-                    )}
                   </SheetClose>
                 );
               })}
@@ -267,15 +282,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <header className="hidden items-center justify-between border-b border-n-200 bg-white px-6 py-4 lg:flex">
           <div>
             <h1 className="font-display text-lg font-bold text-ink">{currentItem.label}</h1>
-            <p className="text-xs text-n-500">
-              {pathname === '/admin' ? 'ศูนย์รวม endpoint แอดมินของทั้งทีม' : (currentItem.code ?? '')}
-            </p>
+            <p className="text-xs text-n-500">{currentItem.description}</p>
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
-
-      <DevTokenSwitcher />
     </div>
   );
 }
