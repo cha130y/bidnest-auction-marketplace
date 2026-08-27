@@ -99,8 +99,11 @@ describe('Users profile (e2e)', () => {
         displayName: `renamed-${run}`,
         bio: 'Collector of old keyboards',
         phone: '0812345678',
-        location: 'Bangkok',
-        defaultShippingAddress: '123 Sukhumvit, Bangkok 10110'
+        recipientName: 'Somsak Jaidee',
+        line1: '123 Sukhumvit Rd',
+        line2: 'Floor 5',
+        city: 'Bangkok',
+        postalCode: '10110'
       }).expect(200);
 
       expect(
@@ -111,9 +114,26 @@ describe('Users profile (e2e)', () => {
         displayName: `renamed-${run}`,
         bio: 'Collector of old keyboards',
         phone: '0812345678',
-        location: 'Bangkok',
-        defaultShippingAddress: '123 Sukhumvit, Bangkok 10110'
+        recipientName: 'Somsak Jaidee',
+        line1: '123 Sukhumvit Rd',
+        line2: 'Floor 5',
+        city: 'Bangkok',
+        postalCode: '10110'
       });
+    });
+
+    /*
+     * The widths are not arbitrary — they are checkout's, and the reason the
+     * profile has them is so an address saved here can always be sent to
+     * `POST /orders/checkout`. If someone widens one of these without widening
+     * the other, this is the test that says so.
+     */
+    it('refuses a city longer than checkout would accept', () => {
+      return patch({ city: 'ก'.repeat(101) }).expect(400);
+    });
+
+    it('refuses a postal code longer than checkout would accept', () => {
+      return patch({ postalCode: '1'.repeat(21) }).expect(400);
     });
 
     it('leaves fields it was not given alone', async () => {
@@ -134,11 +154,10 @@ describe('Users profile (e2e)', () => {
     });
 
     it('treats an empty string as clearing, not as a blank value', async () => {
-      const response = await patch({ location: '   ' }).expect(200);
+      const response = await patch({ city: '   ' }).expect(200);
 
       expect(
-        (response.body as { profile: { location: string | null } }).profile
-          .location
+        (response.body as { profile: { city: string | null } }).profile.city
       ).toBeNull();
     });
 

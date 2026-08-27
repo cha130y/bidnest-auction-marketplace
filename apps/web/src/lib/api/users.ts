@@ -20,9 +20,17 @@ export type MyProfile = {
     displayName: string
     avatarUrl: string | null
     bio: string | null
+    /**
+     * The default shipping address, in the same six fields `ShippingAddress`
+     * uses. Checkout prefills its form straight from these — see
+     * `profileAddressDefaults` in `checkout-view.tsx`.
+     */
     phone: string | null
-    location: string | null
-    defaultShippingAddress: string | null
+    recipientName: string | null
+    line1: string | null
+    line2: string | null
+    city: string | null
+    postalCode: string | null
     updatedAt: string
   }
 }
@@ -40,9 +48,23 @@ export type UpdateMyProfile = {
   avatarUrl?: string | null
   bio?: string | null
   phone?: string | null
-  location?: string | null
-  defaultShippingAddress?: string | null
+  recipientName?: string | null
+  line1?: string | null
+  line2?: string | null
+  city?: string | null
+  postalCode?: string | null
 }
+
+/**
+ * Kept here, next to the fetch, rather than in the screen that reads it.
+ *
+ * It used to live in `profile-form.tsx`, which was fine while that form was
+ * the only caller. Checkout now reads the same profile to prefill its address,
+ * and importing the key from there would have pulled the whole profile screen
+ * — react-hook-form, the zod resolver and all — into the checkout module for
+ * the sake of two strings.
+ */
+export const myProfileQueryKey = ["users", "me"] as const
 
 export function getMyProfile(): Promise<MyProfile> {
   return apiFetch<MyProfile>("/users/me")

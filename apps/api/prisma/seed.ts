@@ -139,6 +139,19 @@ async function seedUsers() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
 
   for (const { id, email, role, firstName, displayName } of users) {
+    /*
+     * A complete default address, in the six fields checkout reads, so a
+     * seeded account can go straight to paying without typing one out.
+     */
+    const address = {
+      recipientName: displayName,
+      phone: '0812345678',
+      line1: '123 Sukhumvit Rd',
+      line2: null,
+      city: 'Bangkok',
+      postalCode: '10110'
+    };
+
     await prisma.user.upsert({
       where: { id },
       // Sets the password on a row that already exists from an earlier seed
@@ -151,11 +164,26 @@ async function seedUsers() {
       // suspended for good, and the re-seed someone runs to put things right
       // quietly does not — which is a slow afternoon spent on a bug that was
       // never in the code.
+      //
+      // The address is here for exactly that reason too. Left only in `create`
+      // below, every database that had already been seeded once kept whatever
+      // it had — which is the machine this was meant to fix, since the
+      // migration could only move the old free-text blob into `line1` and had
+      // nothing to put in the other four fields.
+      //
+      // `upsert` rather than `update` on the profile: a user row can predate
+      // one.
       update: {
         passwordHash,
         emailVerifiedAt: new Date(),
         role,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        profile: {
+          upsert: {
+            create: { firstName, displayName, ...address },
+            update: address
+          }
+        }
       },
       create: {
         id,
@@ -164,13 +192,7 @@ async function seedUsers() {
         status: 'ACTIVE',
         passwordHash,
         emailVerifiedAt: new Date(),
-        profile: {
-          create: {
-            firstName,
-            displayName,
-            defaultShippingAddress: '123 Sukhumvit Rd, Bangkok 10110'
-          }
-        }
+        profile: { create: { firstName, displayName, ...address } }
       }
     });
   }

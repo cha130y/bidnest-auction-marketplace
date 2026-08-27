@@ -206,11 +206,24 @@ model UserProfile {
   displayName            String   @map("display_name") @db.VarChar(100)
   avatarUrl              String?  @map("avatar_url")
   bio                    String?
-  phone                  String?  @db.VarChar(30)
-  location               String?
-  defaultShippingAddress String?  @map("default_shipping_address") @db.Text
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  /// USR-001/CART-004 — the default shipping address, in the same six fields
+  /// `OrderAddress` uses, at the same widths. Checkout prefills its form from
+  /// these, so a shape that did not line up would need a parser between them —
+  /// and a width that did not would let someone save an address here that
+  /// checkout then refuses.
+  ///
+  /// All nullable, unlike OrderAddress: this one is a convenience the buyer
+  /// may never fill in, while an order's copy is the address a parcel really
+  /// went to and cannot be missing.
+  phone         String? @db.VarChar(30)
+  recipientName String? @map("recipient_name") @db.VarChar(150)
+  line1         String? @db.VarChar(200)
+  line2         String? @db.VarChar(200)
+  city          String? @db.VarChar(100)
+  postalCode    String? @map("postal_code") @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

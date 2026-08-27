@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,6 +20,11 @@ import { Label } from "@/components/ui/label"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { ApiError } from "@/lib/api/client"
 import { checkout } from "@/lib/api/orders"
+import {
+  getMyProfile,
+  myProfileQueryKey,
+  type MyProfile,
+} from "@/lib/api/users"
 import {
   SELECTION_PARAM,
   parseSelection,
@@ -51,6 +56,44 @@ function declineReason(error: unknown): string | null {
     if (typeof reason === "string") return reason
   }
   return null
+}
+
+/** The six address inputs, keyed the way both the form and the API name them. */
+type AddressDefaults = Record<
+  "recipientName" | "line1" | "line2" | "city" | "postalCode" | "phone",
+  string
+>
+
+const NO_ADDRESS: AddressDefaults = {
+  recipientName: "",
+  line1: "",
+  line2: "",
+  city: "",
+  postalCode: "",
+  phone: "",
+}
+
+/**
+ * CART-004 — the buyer's saved address, as starting values for the form.
+ *
+ * A straight rename and nothing more: the profile stores exactly these six
+ * fields at exactly these widths, which is the whole reason USR-001 was
+ * reshaped. Nothing is derived or guessed — in particular `recipientName` is
+ * not filled in from the account's own name, because the person a parcel is
+ * addressed to is not always the person paying, and a wrong name silently
+ * prefilled is worse than an empty box somebody has to look at.
+ */
+function profileAddressDefaults(profile: MyProfile | undefined): AddressDefaults {
+  if (!profile) return NO_ADDRESS
+
+  return {
+    recipientName: profile.profile.recipientName ?? "",
+    line1: profile.profile.line1 ?? "",
+    line2: profile.profile.line2 ?? "",
+    city: profile.profile.city ?? "",
+    postalCode: profile.profile.postalCode ?? "",
+    phone: profile.profile.phone ?? "",
+  }
 }
 
 /** The three the API accepts, said the way a buyer reads them. */
@@ -181,6 +224,24 @@ function CheckoutForm({
 
   const [showFailure, setShowFailure] = useState(false)
 
+  /*
+   * CART-004 — the saved address the inputs below start from.
+   *
+   * Same key as the profile screen's own query, so arriving here from
+   * `/profile` reads the copy that screen already has rather than asking
+   * again, and saving there is seen here without a refetch.
+   *
+   * `retry: false` because the only likely failure is a 401, which trying
+   * again does not fix.
+   */
+  const profile = useQuery({
+    queryKey: myProfileQueryKey,
+    queryFn: getMyProfile,
+    retry: false,
+  })
+
+  const address = profileAddressDefaults(profile.data)
+
   const pay = useMutation({
     mutationFn: async (form: FormData) => {
       // Held alongside the request, not before it — a charge that takes longer
@@ -227,6 +288,27 @@ function CheckoutForm({
     onError: () => setShowFailure(true),
   })
 
+  /*
+   * Below every hook, so none of them is skipped on the pending render.
+   *
+   * Waiting at all is not a nicety: the inputs are uncontrolled, so a
+   * `defaultValue` only counts on their first render. If the profile landed
+   * after that, the saved address would never appear, and the feature would
+   * work or not work depending on how fast the network happened to be.
+   *
+   * `isPending` rather than `isSuccess`, deliberately — a profile that cannot
+   * be loaded must never stop anyone from paying. On error this falls straight
+   * through to a blank form, which is the form that existed before this.
+   */
+  if (profile.isPending) {
+    return (
+      <div
+        className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
+        aria-hidden="true"
+      />
+    )
+  }
+
   return (
     <>
       {/* Both live above the form rather than replacing it. The address is in
@@ -257,19 +339,52 @@ function CheckoutForm({
             ที่อยู่จัดส่ง
           </h2>
 
+          {/* Every box starts from the address saved on the profile, and every
+              one of them can still be typed over — this parcel may not be
+              going where the last one went. */}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field name="recipientName" label="ชื่อผู้รับ" maxLength={150} className="sm:col-span-2" />
-            <Field name="line1" label="ที่อยู่" maxLength={200} className="sm:col-span-2" />
+            <Field
+              name="recipientName"
+              label="ชื่อผู้รับ"
+              maxLength={150}
+              defaultValue={address.recipientName}
+              className="sm:col-span-2"
+            />
+            <Field
+              name="line1"
+              label="ที่อยู่"
+              maxLength={200}
+              defaultValue={address.line1}
+              className="sm:col-span-2"
+            />
             <Field
               name="line2"
               label="ที่อยู่เพิ่มเติม"
               maxLength={200}
+              defaultValue={address.line2}
               optional
               className="sm:col-span-2"
             />
-            <Field name="city" label="จังหวัด / เขต" maxLength={100} />
-            <Field name="postalCode" label="รหัสไปรษณีย์" maxLength={20} />
-            <Field name="phone" label="เบอร์โทรศัพท์" maxLength={30} type="tel" className="sm:col-span-2" />
+            <Field
+              name="city"
+              label="จังหวัด / เขต"
+              maxLength={100}
+              defaultValue={address.city}
+            />
+            <Field
+              name="postalCode"
+              label="รหัสไปรษณีย์"
+              maxLength={20}
+              defaultValue={address.postalCode}
+            />
+            <Field
+              name="phone"
+              label="เบอร์โทรศัพท์"
+              maxLength={30}
+              type="tel"
+              defaultValue={address.phone}
+              className="sm:col-span-2"
+            />
           </div>
         </section>
 
@@ -489,6 +604,7 @@ function Field({
   maxLength,
   optional,
   type = "text",
+  defaultValue,
   className,
 }: {
   name: string
@@ -496,6 +612,12 @@ function Field({
   maxLength: number
   optional?: boolean
   type?: string
+  /**
+   * The saved address, if there is one. `defaultValue` and not `value`: the
+   * box stays uncontrolled, so this is a starting point the buyer types over
+   * rather than a value that fights them for the field.
+   */
+  defaultValue?: string
   className?: string
 }) {
   return (
@@ -510,6 +632,7 @@ function Field({
         type={type}
         required={!optional}
         maxLength={maxLength}
+        defaultValue={defaultValue}
       />
     </div>
   )
