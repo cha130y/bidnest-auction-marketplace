@@ -156,12 +156,25 @@ export class ShipmentService {
       data: { status: 'CANCELLED' }
     });
 
+    // Product lines only. A line can also be a won auction, which has no stock
+    // column to put anything back into — the lot was one thing, the bidding
+    // decided who got it, and cancelling the parcel does not re-run that.
+    // Filtered at the query rather than after it, so the loop below cannot be
+    // handed a null id.
     const items = await tx.orderItem.findMany({
-      where: { orderId },
+      where: { orderId, productId: { not: null } },
       select: { productId: true, quantity: true }
     });
 
+    const productIds = items
+      .map((item) => item.productId)
+      .filter((id): id is string => id !== null);
+
+    if (productIds.length === 0) return;
+
     for (const item of items) {
+      if (item.productId === null) continue;
+
       await tx.product.update({
         where: { id: item.productId },
         data: { stockQty: { increment: item.quantity } }
@@ -172,7 +185,7 @@ export class ShipmentService {
     // seller/admin states and must survive a restock (same rule as PROD-005).
     await tx.product.updateMany({
       where: {
-        id: { in: items.map((item) => item.productId) },
+        id: { in: productIds },
         status: 'OUT_OF_STOCK',
         stockQty: { gt: 0 }
       },

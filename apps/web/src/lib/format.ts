@@ -46,3 +46,20 @@ export function initialOf(name?: string | null, email?: string | null): string {
   const source = name?.trim() || email?.trim() || "?"
   return source.charAt(0).toUpperCase()
 }
+
+/**
+ * Where an order line opens.
+ *
+ * A line can be a shop product or a won auction, and the two live on opposite
+ * halves of the site. Kept here rather than inline at each of the four order
+ * screens, so adding a third kind one day is one edit and not a hunt for the
+ * ones that were missed.
+ */
+export function listingHref(listing: {
+  kind: "PRODUCT" | "AUCTION"
+  id: string
+}): string {
+  return listing.kind === "AUCTION"
+    ? `/auctions/${listing.id}`
+    : `/shop/${listing.id}`
+}
