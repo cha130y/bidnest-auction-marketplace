@@ -20,57 +20,43 @@ import { Skeleton } from '@/components/ui/skeleton';
 const SECTIONS: {
   href: string;
   title: string;
-  code: string;
   description: string;
-  owner: string;
   icon: LucideIcon;
 }[] = [
   {
     href: '/admin/users',
     title: 'Users',
-    code: 'ADM-002',
     description: 'ดูรายชื่อผู้ใช้ suspend/reactivate บัญชี',
-    owner: 'Dev 5',
     icon: Users,
   },
   {
     href: '/admin/audit-log',
     title: 'Audit Log',
-    code: 'ADM-004',
     description: 'ดู log การกระทำของ admin ทั้งหมด กรองตาม action type',
-    owner: 'Dev 5',
     icon: ScrollText,
   },
   {
     href: '/admin/auctions',
     title: 'Auctions',
-    code: 'ADM-001',
     description: 'ดูรายการประมูลทุกสถานะ ยกเลิกประมูลได้ (พร้อมเหตุผล)',
-    owner: 'Dev 4',
     icon: Gavel,
   },
   {
     href: '/admin/products',
     title: 'Products',
-    code: 'ADM-005',
     description: 'ปิด/เปิดการขายสินค้า',
-    owner: 'Dev 3',
     icon: Package,
   },
   {
     href: '/admin/orders',
     title: 'Orders',
-    code: 'ADM-006',
     description: 'ดูคำสั่งซื้อทั้งหมด อ่านอย่างเดียว',
-    owner: 'Dev 3',
     icon: ShoppingBag,
   },
   {
     href: '/admin/categories',
     title: 'Categories',
-    code: 'ADM-003',
     description: 'จัดการหมวดหมู่ที่ใช้ร่วมกันทั้งประมูลและ e-commerce',
-    owner: 'Dev 2',
     icon: FolderTree,
   },
 ];
@@ -159,15 +145,11 @@ export default function AdminOverviewPage() {
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-r3 bg-amber-50 text-amber-600">
                       <Icon className="size-5" />
                     </span>
-                    <div>
-                      <CardTitle className="text-base">{section.title}</CardTitle>
-                      <span className="text-xs font-medium text-n-400">{section.code}</span>
-                    </div>
+                    <CardTitle className="text-base">{section.title}</CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-2 text-sm text-n-600">
+                <CardContent className="text-sm text-n-600">
                   <p>{section.description}</p>
-                  <span className="text-xs text-n-400">Backend: {section.owner}</span>
                 </CardContent>
               </Card>
             </Link>
