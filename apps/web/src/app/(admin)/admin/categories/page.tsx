@@ -125,11 +125,7 @@ export default function AdminCategoriesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-ink">Categories (ADM-003)</h1>
-      <p className="max-w-xl text-sm text-n-600">
-        หมวดหมู่ชุดเดียวใช้ร่วมกันทั้งประมูลและ e-commerce (owner: Dev2) ปิดใช้งานเท่านั้น
-        ไม่มีการลบถาวร ต้นไม้ลึกแค่ 2 ระดับ
-      </p>
+      <h1 className="font-display text-2xl font-bold text-ink">Categories</h1>
 
       <Card>
         <CardHeader>
