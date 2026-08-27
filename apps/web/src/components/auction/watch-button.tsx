@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api/client"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
 import { listWatchlist, unwatchAuction, watchAuction } from "@/lib/api/watchlist"
+import { useHydrated } from "@/lib/use-hydrated"
 import { cn } from "@/lib/utils"
 
 export const auctionWatchlistQueryKey = ["auction-watchlist"] as const
@@ -28,14 +29,21 @@ export const auctionWatchlistQueryKey = ["auction-watchlist"] as const
  *
  * Signed-in-ness comes from `useAuthToken` rather than from whether an authed
  * read happened to succeed. Its `ready` flag is the point: it stays false
- * until localStorage has been read after hydration, so nothing renders a
+ * until the session has resolved in the browser, so nothing renders a
  * "sign in" prompt at somebody who is signed in, nor a filled heart at
  * somebody who is not, while the answer is still unknown.
  */
 function useAuctionWatch(auctionId: string) {
   const router = useRouter()
-  const { token, ready } = useAuthToken()
+  const { token, ready: sessionReady } = useAuthToken()
   const queryClient = useQueryClient()
+
+  // Held back until after hydration, not merely until the session resolves —
+  // on a page whose cards sit inside a `<Suspense>` boundary those are two
+  // different moments. The boundary hydrates late enough that the session is
+  // already known, and rendering that answer there contradicts the HTML the
+  // server sent while signed out.
+  const ready = useHydrated() && sessionReady
   const isAuthenticated = ready && Boolean(token)
 
   // WAT-002 answers "is this one of mine" without a route of its own. The list
@@ -73,7 +81,7 @@ function useAuctionWatch(auctionId: string) {
 
   return {
     isWatching,
-    /** False until localStorage has been read, so neither state is claimed early. */
+    /** False until the browser knows the session, so neither state is claimed early. */
     ready,
     isAuthenticated,
     pending: mutation.isPending,
