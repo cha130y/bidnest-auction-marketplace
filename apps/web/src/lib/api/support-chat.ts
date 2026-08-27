@@ -1,10 +1,12 @@
 import { apiFetch } from '@/lib/api/client';
 
+export type SupportSessionStatus = 'AI_ONLY' | 'ESCALATED' | 'RESOLVED';
+
 export interface ChatMessage {
   id: string;
   /** `null` for a guest turn — nothing was persisted to have an id for. */
   sessionId: string | null;
-  role: 'USER' | 'ASSISTANT';
+  role: 'USER' | 'ASSISTANT' | 'ADMIN';
   body: string;
   createdAt: string;
 }
@@ -47,5 +49,31 @@ export function sendSupportChatMessage(
         ?.slice(-10)
         .map(({ role, body }) => ({ role, body })),
     }),
+  });
+}
+
+/**
+ * "คุยกับแอดมิน" — only reachable once `escalated` has come back true from
+ * `sendSupportChatMessage`, and only for a signed-in caller (there is no
+ * `sessionId` at all for a guest, since nothing is persisted for one).
+ */
+export function escalateSupportSession(
+  sessionId: string,
+): Promise<{ id: string; status: SupportSessionStatus }> {
+  return apiFetch(`/support/chat/${sessionId}/escalate`, { method: 'POST' });
+}
+
+/**
+ * A message into an already-escalated session — no AI reply comes back from
+ * this one; the admin's reply arrives over the realtime channel instead (see
+ * useSupportSessionRoom).
+ */
+export function sendSupportSessionMessage(
+  sessionId: string,
+  body: string,
+): Promise<ChatMessage> {
+  return apiFetch<ChatMessage>(`/support/chat/${sessionId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
   });
 }

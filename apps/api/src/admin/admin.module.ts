@@ -12,6 +12,8 @@ import { AdminActionsController } from './actions.controller';
 import { AdminActionsService } from './actions.service';
 import { AdminOverviewController } from './overview.controller';
 import { AdminOverviewService } from './overview.service';
+import { AdminSupportController } from './support.controller';
+import { AdminSupportService } from './support.service';
 
 /**
  * Admin module — ADM-001, ADM-002, ADM-004, ADM-005, ADM-006
@@ -29,6 +31,7 @@ import { AdminOverviewService } from './overview.service';
  * | auctions.controller.ts | ADM-001     | Dev 4   |
  * | products.controller.ts | ADM-005     | Dev 3   |
  * | orders.controller.ts   | ADM-006     | Dev 3   |
+ * | support.controller.ts  | AI-001 escalation | Dev 5 |
  *
  * ADM-003 (หมวดหมู่, Dev 2) **ไม่ได้อยู่ที่นี่** — อยู่ที่ `src/categories/`
  * เพราะ `GET /categories` เป็น endpoint สาธารณะ
@@ -44,7 +47,8 @@ import { AdminOverviewService } from './overview.service';
     AdminProductsController,
     AdminOrdersController,
     AdminActionsController,
-    AdminOverviewController
+    AdminOverviewController,
+    AdminSupportController
   ],
   providers: [
     AdminUsersService,
@@ -52,7 +56,8 @@ import { AdminOverviewService } from './overview.service';
     AdminProductsService,
     AdminOrdersService,
     AdminActionsService,
-    AdminOverviewService
+    AdminOverviewService,
+    AdminSupportService
   ]
 })
 export class AdminModule {}

@@ -8,6 +8,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiResponse } from '@nestjs/swagger';
 import { SanitizePromptPipe } from '../common/pipes/sanitize-prompt.pipe';
 import { SendSupportChatMessageDto } from './dto/send-message.dto';
+import { SendUserMessageDto } from './dto/send-user-message.dto';
 import { ChatMessageDto, SendMessageResponseDto } from './dto/chat-message.dto';
 
 @Controller('support/chat')
@@ -47,6 +48,38 @@ export class SupportChatController {
       dto.message,
       dto.sessionId,
       dto.history
+    );
+  }
+
+  /**
+   * "คุยกับแอดมิน" — requires a real session, which requires being signed in
+   * (no `@Public()`/`@OptionalCurrentUser()` here), which is what makes
+   * "guest can't talk to admin" true without any separate check.
+   */
+  @Post(':sessionId/escalate')
+  escalate(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.supportChatService.escalate(sessionId, user.id);
+  }
+
+  /**
+   * A message into an already-escalated session — no AI call, straight to an
+   * admin, so SanitizePromptPipe does not apply here: that pipe defends the
+   * Gemini prompt specifically (and reads `.message`, a field this DTO
+   * doesn't have).
+   */
+  @Post(':sessionId/messages')
+  sendMessageToAdmin(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SendUserMessageDto
+  ): Promise<ChatMessageDto> {
+    return this.supportChatService.sendUserMessageToAdmin(
+      sessionId,
+      user.id,
+      dto.body
     );
   }
 }

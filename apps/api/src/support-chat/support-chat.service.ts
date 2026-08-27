@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException
@@ -10,7 +11,8 @@ import {
   ChatHistoryItem,
   PromptBuilderService
 } from '../ai-tools/prompt-builder.service';
-import { ChatRole } from '../../generated/prisma/enums';
+import { RealtimeService } from '../realtime/realtime.service';
+import { ChatRole, SupportSessionStatus } from '../../generated/prisma/enums';
 import { ChatMessageDto, SendMessageResponseDto } from './dto/chat-message.dto';
 
 const ESCALATION_THRESHOLD = 3;
@@ -21,7 +23,8 @@ export class SupportChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geminiClient: GeminiClientService,
-    private readonly promptBuilder: PromptBuilderService
+    private readonly promptBuilder: PromptBuilderService,
+    private readonly realtime: RealtimeService
   ) {}
 
   async getHistory(
@@ -58,6 +61,12 @@ export class SupportChatService {
       ? await this.getOwnedSession(sessionId, userId)
       : await this.prisma.supportChatSession.create({ data: { userId } });
 
+    if (session.status !== SupportSessionStatus.AI_ONLY) {
+      throw new BadRequestException(
+        'บทสนทนานี้ย้ายไปคุยกับแอดมินแล้ว ใช้ endpoint ส่งข้อความถึงแอดมินแทน'
+      );
+    }
+
     await this.prisma.supportChatMessage.create({
       data: { sessionId: session.id, role: ChatRole.USER, body: message }
     });
@@ -83,6 +92,57 @@ export class SupportChatService {
       reply: replyMessage,
       escalated: await this.isSessionEscalated(session.id)
     };
+  }
+
+  /**
+   * User-triggered — the "คุยกับแอดมิน" button, shown only once the AI has
+   * already failed. Re-checks the escalation heuristic server-side rather
+   * than trusting the client's own `escalated` flag, so a session can't be
+   * pushed into an admin's queue by an unearned button click.
+   *
+   * Idempotent once escalated (or resolved): a double-click, or the button
+   * still being visible from a stale render, just returns the current state
+   * instead of erroring.
+   */
+  async escalate(sessionId: string, userId: string) {
+    const session = await this.getOwnedSession(sessionId, userId);
+
+    if (session.status !== SupportSessionStatus.AI_ONLY) return session;
+
+    if (!(await this.isSessionEscalated(sessionId))) {
+      throw new BadRequestException('ยังไม่ถึงจุดที่ต้องคุยกับแอดมิน');
+    }
+
+    const updated = await this.prisma.supportChatSession.update({
+      where: { id: sessionId },
+      data: { status: SupportSessionStatus.ESCALATED }
+    });
+
+    this.realtime.emitSupportInboxUpdate({ sessionId, userId });
+
+    return updated;
+  }
+
+  /**
+   * A message into an already-escalated session — no Gemini call, this goes
+   * straight to whichever admin is watching (or the next one to open the
+   * queue). `sendMessage` above is the AI turn; this is the human one.
+   */
+  async sendUserMessageToAdmin(
+    sessionId: string,
+    userId: string,
+    body: string
+  ): Promise<ChatMessageDto> {
+    await this.getOwnedSession(sessionId, userId);
+
+    const message = await this.prisma.supportChatMessage.create({
+      data: { sessionId, role: ChatRole.USER, body }
+    });
+
+    this.realtime.emitSupportMessage(sessionId, message);
+    this.realtime.emitSupportInboxUpdate({ sessionId, userId });
+
+    return message;
   }
 
   private async sendGuestMessage(

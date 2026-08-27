@@ -1,8 +1,13 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { GeminiClientService } from '../ai-tools/gemini-client.service';
 import { PromptBuilderService } from '../ai-tools/prompt-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { SupportChatService } from './support-chat.service';
 
 const FALLBACK = 'ยังไม่มีข้อมูลเรื่องนี้ แนะนำให้ติดต่อแอดมินเพิ่มเติม';
@@ -13,17 +18,35 @@ describe('SupportChatService', () => {
 
   let service: SupportChatService;
   let prisma: {
-    supportChatSession: { findUnique: jest.Mock; create: jest.Mock };
+    supportChatSession: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
     supportChatMessage: { findMany: jest.Mock; create: jest.Mock };
   };
   let geminiClient: { generateReply: jest.Mock };
   let promptBuilder: { buildSupportPrompt: jest.Mock };
+  let realtime: {
+    emitSupportMessage: jest.Mock;
+    emitSupportInboxUpdate: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
       supportChatSession: {
         findUnique: jest.fn(),
-        create: jest.fn().mockResolvedValue({ id: SESSION_ID, userId: USER_ID })
+        create: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          userId: USER_ID,
+          status: 'AI_ONLY'
+        }),
+        update: jest
+          .fn()
+          .mockImplementation(
+            ({ where, data }: { where: { id: string }; data: object }) =>
+              Promise.resolve({ id: where.id, userId: USER_ID, ...data })
+          )
       },
       supportChatMessage: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -40,13 +63,18 @@ describe('SupportChatService', () => {
     promptBuilder = {
       buildSupportPrompt: jest.fn().mockReturnValue('a prompt')
     };
+    realtime = {
+      emitSupportMessage: jest.fn(),
+      emitSupportInboxUpdate: jest.fn()
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         SupportChatService,
         { provide: PrismaService, useValue: prisma },
         { provide: GeminiClientService, useValue: geminiClient },
-        { provide: PromptBuilderService, useValue: promptBuilder }
+        { provide: PromptBuilderService, useValue: promptBuilder },
+        { provide: RealtimeService, useValue: realtime }
       ]
     }).compile();
 
@@ -127,12 +155,25 @@ describe('SupportChatService', () => {
     it('reuses an existing session it owns', async () => {
       prisma.supportChatSession.findUnique.mockResolvedValue({
         id: SESSION_ID,
-        userId: USER_ID
+        userId: USER_ID,
+        status: 'AI_ONLY'
       });
 
       await service.sendMessage(USER_ID, 'สวัสดี', SESSION_ID);
 
       expect(prisma.supportChatSession.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to keep talking to the AI once the session has moved to an admin', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'ESCALATED'
+      });
+
+      await expect(
+        service.sendMessage(USER_ID, 'สวัสดี', SESSION_ID)
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('404s on a session that does not exist', async () => {
@@ -206,6 +247,109 @@ describe('SupportChatService', () => {
 
       await expect(
         service.getHistory(SESSION_ID, USER_ID)
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('escalate', () => {
+    it('refuses when the AI has not actually failed three times running', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'AI_ONLY'
+      });
+      prisma.supportChatMessage.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.escalate(SESSION_ID, USER_ID)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.supportChatSession.update).not.toHaveBeenCalled();
+    });
+
+    it('escalates once the heuristic is re-checked and holds server-side', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'AI_ONLY'
+      });
+      prisma.supportChatMessage.findMany.mockResolvedValue([
+        { body: FALLBACK },
+        { body: FALLBACK },
+        { body: FALLBACK }
+      ]);
+
+      const result = await service.escalate(SESSION_ID, USER_ID);
+
+      expect(prisma.supportChatSession.update).toHaveBeenCalledWith({
+        where: { id: SESSION_ID },
+        data: { status: 'ESCALATED' }
+      });
+      expect(realtime.emitSupportInboxUpdate).toHaveBeenCalled();
+      expect(result.status).toBe('ESCALATED');
+    });
+
+    it('is idempotent once already escalated', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'ESCALATED'
+      });
+
+      const result = await service.escalate(SESSION_ID, USER_ID);
+
+      expect(prisma.supportChatSession.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('ESCALATED');
+    });
+
+    it('refuses a session that belongs to somebody else', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: 'someone-else',
+        status: 'AI_ONLY'
+      });
+
+      await expect(
+        service.escalate(SESSION_ID, USER_ID)
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('sendUserMessageToAdmin', () => {
+    it('persists the message with no AI call and notifies over the realtime channel', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'ESCALATED'
+      });
+
+      const message = await service.sendUserMessageToAdmin(
+        SESSION_ID,
+        USER_ID,
+        'ยังไม่ได้รับพัสดุเลยครับ'
+      );
+
+      expect(geminiClient.generateReply).not.toHaveBeenCalled();
+      expect(message).toMatchObject({
+        sessionId: SESSION_ID,
+        role: 'USER',
+        body: 'ยังไม่ได้รับพัสดุเลยครับ'
+      });
+      expect(realtime.emitSupportMessage).toHaveBeenCalledWith(
+        SESSION_ID,
+        expect.objectContaining({ body: 'ยังไม่ได้รับพัสดุเลยครับ' })
+      );
+      expect(realtime.emitSupportInboxUpdate).toHaveBeenCalled();
+    });
+
+    it('refuses a session that belongs to somebody else', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: 'someone-else',
+        status: 'ESCALATED'
+      });
+
+      await expect(
+        service.sendUserMessageToAdmin(SESSION_ID, USER_ID, 'ข้อความ')
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
