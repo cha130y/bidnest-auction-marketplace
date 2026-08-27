@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { Settings } from "lucide-react"
 
 import { OwnedAuctionsList } from "@/components/auction/owned-auctions-screen"
 import { SellerShell } from "@/components/auction/seller-shell"
@@ -33,17 +32,12 @@ export default function OwnedAuctionsPage() {
           </p>
         </div>
 
+        {/* No link to /sell/settings from here, on purpose: the only setting
+            it holds is the after-sale auto-reply, which is sent for product
+            orders and skipped for an auction win (checkout.service.ts). A way
+            in from an auction screen reads as though it applied to auctions
+            too. It is reachable from /sell/products, where it does apply. */}
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="ghost"
-            size="lg"
-            aria-label="ตั้งค่าร้านค้า"
-            nativeButton={false}
-            render={<Link href="/sell/settings" />}
-          >
-            <Settings aria-hidden="true" />
-            ตั้งค่าร้าน
-          </Button>
           <Button
             variant="primary"
             size="lg"

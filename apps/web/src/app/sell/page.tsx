@@ -26,12 +26,6 @@ export default function SellPage() {
         >
           การประมูลของฉัน
         </Link>
-        <Link
-          href="/sell/settings"
-          className="mt-2 ml-4 inline-block text-sm font-semibold text-amber-600 hover:text-ink"
-        >
-          ตั้งค่าร้านค้า
-        </Link>
       </header>
 
       <CreateDraftScreen />

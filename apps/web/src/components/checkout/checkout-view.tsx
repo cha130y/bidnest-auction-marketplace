@@ -281,7 +281,15 @@ function AuctionGate({
   onFailed: (error: unknown) => void
 }) {
   const { isAuthenticated, isAuthReady } = useCart()
-  const [result, setResult] = useState<CheckoutResult | null>(null)
+  /*
+   * The lot's title is kept beside the result rather than read back off
+   * `arena` in the receipt: a receipt says what was paid for at the moment it
+   * was paid, and `arena` is a live query that can refetch underneath it.
+   */
+  const [paid, setPaid] = useState<{
+    result: CheckoutResult
+    lotTitle: string
+  } | null>(null)
 
   const arena = useQuery({
     queryKey: ["auctions", auctionId, "arena"],
@@ -289,7 +297,7 @@ function AuctionGate({
     retry: false,
   })
 
-  if (result) return <Receipt result={result} />
+  if (paid) return <Receipt result={paid.result} lotTitle={paid.lotTitle} />
 
   if (!isAuthReady || (isAuthenticated && arena.isPending)) {
     return (
@@ -351,7 +359,7 @@ function AuctionGate({
         title: auction.title,
         soldPrice: outcome.soldPrice,
       }}
-      onDone={setResult}
+      onDone={(result) => setPaid({ result, lotTitle: auction.title })}
       onFailed={onFailed}
     />
   )
@@ -819,8 +827,22 @@ function Field({
  *
  * Shown here rather than by redirecting to an order, because one payment can
  * become several orders and there would be no single one to redirect to.
+ *
+ * `lotTitle` is set only when a winner paid for a lot they won. That payment
+ * is one order for one thing, always, so the cart's arithmetic — "N orders,
+ * one per shop" — has nothing to count here, and the lot's name says more than
+ * the number 1 does. Left out, every word below is the cart's own wording,
+ * unchanged.
  */
-function Receipt({ result }: { result: CheckoutResult }) {
+function Receipt({
+  result,
+  lotTitle,
+}: {
+  result: CheckoutResult
+  lotTitle?: string
+}) {
+  const isLot = lotTitle !== undefined
+
   return (
     <div className="rounded-r4 bg-white p-6 shadow-sh1 md:p-8">
       <div className="text-center">
@@ -830,9 +852,11 @@ function Receipt({ result }: { result: CheckoutResult }) {
         </h2>
         <p className="mt-2 text-base text-n-600">
           ยอดรวม {formatTHB(result.total)} ·{" "}
-          {result.orders.length > 1
-            ? `แยกเป็น ${result.orders.length} คำสั่งซื้อตามร้าน`
-            : "1 คำสั่งซื้อ"}
+          {isLot
+            ? lotTitle
+            : result.orders.length > 1
+              ? `แยกเป็น ${result.orders.length} คำสั่งซื้อตามร้าน`
+              : "1 คำสั่งซื้อ"}
         </p>
       </div>
 
@@ -859,7 +883,7 @@ function Receipt({ result }: { result: CheckoutResult }) {
               className="flex items-center justify-between gap-4 rounded-r3 border border-n-200 px-4 py-3 transition-colors hover:border-amber-500"
             >
               <span className="font-semibold text-ink">
-                คำสั่งซื้อที่ {index + 1}
+                {isLot ? "ดูรายละเอียดคำสั่งซื้อ" : `คำสั่งซื้อที่ ${index + 1}`}
               </span>
               <span className="font-display font-bold text-ink">
                 {formatTHB(order.subtotal)}
@@ -871,10 +895,15 @@ function Receipt({ result }: { result: CheckoutResult }) {
 
       <div className="mt-8 flex flex-col items-center gap-2">
         <Button variant="primary" size="lg" nativeButton={false} render={<Link href="/orders" />}>
-          ดูคำสั่งซื้อทั้งหมด
+          {isLot ? "ดูคำสั่งซื้อของฉัน" : "ดูคำสั่งซื้อทั้งหมด"}
         </Button>
-        <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/shop" />}>
-          เลือกสินค้าต่อ
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<Link href={isLot ? "/auctions" : "/shop"} />}
+        >
+          {isLot ? "ดูรายการประมูลอื่น" : "เลือกสินค้าต่อ"}
         </Button>
       </div>
     </div>
