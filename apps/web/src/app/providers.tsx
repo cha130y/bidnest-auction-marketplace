@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider } from 'next-auth/react';
+import type { Session } from 'next-auth';
 
 import { SessionWatch } from '@/components/auth/session-watch';
 
@@ -41,12 +42,24 @@ const queryDefaults = {
   }
 };
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({
+  children,
+  session,
+}: {
+  children: React.ReactNode;
+  /**
+   * Read server-side in the root layout and handed down so the first client
+   * render already matches what SSR rendered, instead of starting at
+   * `status: "loading"` and resolving a moment later — that gap was the
+   * source of hydration mismatches on anything gated by `useSession()`.
+   */
+  session: Session | null;
+}) {
   const [queryClient] = useState(
     () => new QueryClient({ defaultOptions: queryDefaults })
   );
   return (
-    <SessionProvider>
+    <SessionProvider session={session}>
       {/* AUTH-004 — signs out once renewal is no longer possible. */}
       <SessionWatch />
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
