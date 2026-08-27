@@ -47,7 +47,21 @@ const AUCTION = {
   suddenDeath: '00000000-0000-4000-8000-000000000306',
   sold: '00000000-0000-4000-8000-000000000307',
   unsold: '00000000-0000-4000-8000-000000000308',
-  cancelled: '00000000-0000-4000-8000-000000000309'
+  cancelled: '00000000-0000-4000-8000-000000000309',
+  /**
+   * The three below are the ones still standing tomorrow.
+   *
+   * Everything above is written to be looked at within the hour: the closing
+   * and sudden-death pair are gone in minutes by design, the lobby opens in
+   * three. That is right for testing a transition and wrong for everything
+   * else — a teammate who seeded yesterday opened the home page to four empty
+   * sections, because settlement had taken the last running auction hours
+   * ago. These three keep the hot, ending-soon and starting-soon sections
+   * answering for days at a time.
+   */
+  longRunning: '00000000-0000-4000-8000-000000000310',
+  closingToday: '00000000-0000-4000-8000-000000000311',
+  scheduledLater: '00000000-0000-4000-8000-000000000312'
 } as const;
 
 const AUCTION_IDS = Object.values(AUCTION);
@@ -544,6 +558,113 @@ const AUCTION_FIXTURES: SeedAuction[] = [
     cancellationReason: 'Sold it to a friend before the auction opened',
     images: [image('WH-1000XM4')],
     note: 'AUC-006 — cancelled before it opened; visible only to its seller'
+  },
+  {
+    id: AUCTION.longRunning,
+    sellerId: SELLER_B_ID,
+    categoryId: CATEGORY_COLLECTIBLES_ID,
+    title: 'Leica M6 Classic (1988)',
+    description: 'Meter accurate, brassing on the edges, recent CLA.',
+    condition: 'USED',
+    status: 'ACTIVE',
+    startingPrice: '45000.00',
+    minBidIncrement: '1000.00',
+    reservePrice: '60000.00',
+    startAt: -2 * DAY,
+    endAt: 3 * DAY,
+    publishedAt: -3 * DAY,
+    startedAt: -2 * DAY,
+    endedAt: null,
+    images: [image('Leica+M6'), image('Leica+Top'), image('Leica+Lens')],
+    // The most bid-on auction in the set, which is what puts it at the head of
+    // the hot list — AUC-008 ranks that section by accepted bids.
+    bids: [
+      {
+        id: '00000000-0000-4000-8000-000000000451',
+        bidderId: BUYER_ID,
+        amount: '45000.00',
+        placedAt: -2 * DAY + HOUR
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000452',
+        bidderId: SELLER_A_ID,
+        amount: '48000.00',
+        placedAt: -DAY - 6 * HOUR
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000453',
+        bidderId: BUYER_ID,
+        amount: '52000.00',
+        placedAt: -DAY
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000454',
+        bidderId: SELLER_A_ID,
+        amount: '55000.00',
+        placedAt: -8 * HOUR
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000455',
+        bidderId: BUYER_ID,
+        amount: '58000.00',
+        placedAt: -2 * HOUR
+      }
+    ],
+    watchedBy: [BUYER_ID],
+    note: 'AUC-008 — tops the hot list and stays up for three days; reserve not met yet'
+  },
+  {
+    id: AUCTION.closingToday,
+    sellerId: SELLER_A_ID,
+    categoryId: CATEGORY_FASHION_ID,
+    title: 'Barbour Bedale (waxed, size 40)',
+    description: 're-waxed last winter, no tears.',
+    condition: 'USED',
+    status: 'ACTIVE',
+    startingPrice: '3200.00',
+    minBidIncrement: '200.00',
+    reservePrice: '4000.00',
+    startAt: -6 * HOUR,
+    endAt: 8 * HOUR,
+    publishedAt: -DAY,
+    startedAt: -6 * HOUR,
+    endedAt: null,
+    images: [image('Barbour+Bedale')],
+    bids: [
+      {
+        id: '00000000-0000-4000-8000-000000000461',
+        bidderId: BUYER_ID,
+        amount: '3200.00',
+        placedAt: -5 * HOUR
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000462',
+        bidderId: SELLER_B_ID,
+        amount: '4200.00',
+        placedAt: -90 * MINUTE
+      }
+    ],
+    note: 'AUC-008 — leads ending-soon for the rest of the day, reserve met'
+  },
+  {
+    id: AUCTION.scheduledLater,
+    sellerId: SELLER_B_ID,
+    categoryId: CATEGORY_ELECTRONICS_ID,
+    title: 'Technics SL-1200MK2 (pair)',
+    description: 'Both serviced, new pitch faders, cartridges not included.',
+    condition: 'USED',
+    status: 'SCHEDULED',
+    startingPrice: '28000.00',
+    minBidIncrement: '500.00',
+    reservePrice: '35000.00',
+    startAt: 6 * HOUR,
+    endAt: 2 * DAY,
+    publishedAt: -4 * HOUR,
+    startedAt: null,
+    endedAt: null,
+    images: [image('SL-1200MK2'), image('SL-1200+Platter')],
+    watchedBy: [BUYER_ID],
+    note: 'AUC-008 — keeps starting-soon answering after the three-minute lobby opens'
   }
 ];
 
