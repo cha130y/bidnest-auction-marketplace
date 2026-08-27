@@ -20,9 +20,22 @@ export const userRoom = (userId: string) => `user:${userId}`;
 export const conversationRoom = (conversationId: string) =>
   `conversation:${conversationId}`;
 
+/** One room per support session, joined by its owner and any admin. */
+export const supportRoom = (sessionId: string) => `support:${sessionId}`;
+
+/**
+ * Every connected admin auto-joins this on connect — it's what lets the
+ * `/admin/support` list page update live (a new escalation, a new message on
+ * someone else's thread) without a per-session join message.
+ */
+export const SUPPORT_ADMIN_INBOX_ROOM = 'support:admin-inbox';
+
 type AccessTokenClaims = { sub: string };
+type Identity = { userId: string; role: string };
 type JoinConversationPayload = { conversationId?: unknown };
 type JoinConversationResult = { conversationId: string; joined: boolean };
+type JoinSupportPayload = { sessionId?: unknown };
+type JoinSupportResult = { sessionId: string; joined: boolean };
 
 /**
  * SRS 4.1 — the channel for pushing things at one person: notifications
@@ -68,9 +81,9 @@ export class UserGateway {
    * nothing it could usefully do here.
    */
   async handleConnection(client: Socket): Promise<void> {
-    const userId = await this.identify(client);
+    const identity = await this.identify(client);
 
-    if (!userId) {
+    if (!identity) {
       // Expired, forged and missing are one answer, as they are over HTTP:
       // never say which it was.
       client.emit('connection:rejected', { reason: 'Unauthorized' });
@@ -78,12 +91,20 @@ export class UserGateway {
       return;
     }
 
-    // Remembered for 'conversation:join' below, so that message does not have
-    // to re-verify the token: this socket already proved who it is once.
-    (client.data as { userId?: string }).userId = userId;
+    // Remembered for 'conversation:join'/'support:join' below, so those
+    // messages do not have to re-verify the token: this socket already
+    // proved who it is once.
+    (client.data as { userId?: string; role?: string }).userId =
+      identity.userId;
+    (client.data as { userId?: string; role?: string }).role = identity.role;
 
-    await client.join(userRoom(userId));
-    client.emit('connection:ready', { userId });
+    await client.join(userRoom(identity.userId));
+    // An admin's dashboard needs live updates the moment a new session is
+    // escalated, not just once it has opened one specific thread.
+    if (identity.role === 'ADMIN') {
+      await client.join(SUPPORT_ADMIN_INBOX_ROOM);
+    }
+    client.emit('connection:ready', { userId: identity.userId });
   }
 
   /**
@@ -135,6 +156,49 @@ export class UserGateway {
   }
 
   /**
+   * A support session has one owner and, unlike a conversation, a whole
+   * second class of participant — any admin, not one specific pair.
+   */
+  @SubscribeMessage('support:join')
+  async joinSupport(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: JoinSupportPayload | undefined
+  ): Promise<JoinSupportResult> {
+    const sessionId = readSessionId(payload);
+    const data = client.data as { userId?: string; role?: string };
+
+    if (data.role === 'ADMIN') {
+      await client.join(supportRoom(sessionId));
+      return { sessionId, joined: true };
+    }
+
+    const session = data.userId
+      ? await this.prisma.supportChatSession.findUnique({
+          where: { id: sessionId },
+          select: { userId: true }
+        })
+      : null;
+
+    // Not-found rather than forbidden, same posture as conversation:join.
+    if (session?.userId !== data.userId) {
+      throw new WsException('Support session not found');
+    }
+
+    await client.join(supportRoom(sessionId));
+    return { sessionId, joined: true };
+  }
+
+  @SubscribeMessage('support:leave')
+  async leaveSupport(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: JoinSupportPayload | undefined
+  ): Promise<JoinSupportResult> {
+    const sessionId = readSessionId(payload);
+    await client.leave(supportRoom(sessionId));
+    return { sessionId, joined: false };
+  }
+
+  /**
    * Whoever this socket belongs to, or null.
    *
    * The account is re-read rather than trusted from the token, for the reason
@@ -143,7 +207,7 @@ export class UserGateway {
    * would otherwise keep receiving that person's notifications until its
    * token expired.
    */
-  private async identify(client: Socket): Promise<string | null> {
+  private async identify(client: Socket): Promise<Identity | null> {
     const token = readToken(client);
     if (!token) return null;
 
@@ -158,10 +222,12 @@ export class UserGateway {
 
     const user = await this.prisma.user.findUnique({
       where: { id: claims.sub },
-      select: { id: true, status: true }
+      select: { id: true, status: true, role: true }
     });
 
-    return user?.status === 'ACTIVE' ? user.id : null;
+    return user?.status === 'ACTIVE'
+      ? { userId: user.id, role: user.role }
+      : null;
   }
 
   /**
@@ -193,6 +259,10 @@ function readConversationId(
   return typeof payload?.conversationId === 'string'
     ? payload.conversationId
     : '';
+}
+
+function readSessionId(payload: JoinSupportPayload | undefined): string {
+  return typeof payload?.sessionId === 'string' ? payload.sessionId : '';
 }
 
 /**

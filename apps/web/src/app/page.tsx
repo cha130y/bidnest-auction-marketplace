@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
 
-import { HomeEndingSoonSection } from "@/components/auction/home-ending-soon-section"
+import { HomeAuctionSections } from "@/components/auction/home-auction-sections"
 import { CartProvider } from "@/components/cart/cart-provider"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { AppHeader } from "@/components/layout/app-header"
@@ -30,9 +30,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 /**
- * Two rows: the 5 auctions closing soonest, and 5 random active listings.
- * Each is read inside its own `<Suspense>`, so a slow or failing row costs
- * only itself rather than the other one.
+ * Two rows: one auction from each of AUC-008's four sections, and 5 random
+ * active listings. Each is read inside its own `<Suspense>`, so a slow or
+ * failing row costs only itself rather than the other one.
  */
 export default function Home() {
   return (
@@ -55,12 +55,12 @@ export default function Home() {
           <Suspense
             fallback={
               <HomeSectionFallback
-                title="ปิดเร็วๆ นี้"
-                description="ใกล้ถึงเวลาปิดที่สุด"
+                title="ประมูลตอนนี้"
+                description="ยอดนิยม ปิดเร็วๆ นี้ กำลังจะเริ่ม และผลล่าสุด"
               />
             }
           >
-            <HomeEndingSoonSection />
+            <HomeAuctionSections />
           </Suspense>
 
           {/* `ProductCard`'s add-to-cart button reads `useCart()`, which only

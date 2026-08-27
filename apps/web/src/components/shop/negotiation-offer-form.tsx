@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { formatTHB } from '@/lib/format';
 
 /**
  * AI-003 — AI Negotiator (Optional, owner: Dev 5)
@@ -99,7 +100,7 @@ function OfferResultCard({ offer }: { offer: OfferResult }) {
         <CardContent className="flex flex-col gap-1 text-sm text-n-700">
           <span>ระบบเสนอราคาต่อรองกลับมา:</span>
           <span className="text-lg font-semibold text-ink">
-            {offer.counterAmount?.toLocaleString()} บาท
+            {offer.counterAmount != null ? formatTHB(offer.counterAmount) : '—'}
           </span>
           <span className="text-xs text-n-400">
             ต้องการยอมรับราคานี้ ให้เสนอราคาใหม่ที่เท่ากับจำนวนนี้ (คูลดาวน์ 5 นาทีก่อนเสนอครั้งถัดไป)

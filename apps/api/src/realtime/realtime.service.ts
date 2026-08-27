@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { conversationRoom, UserGateway } from './user.gateway';
+import {
+  conversationRoom,
+  supportRoom,
+  SUPPORT_ADMIN_INBOX_ROOM,
+  UserGateway
+} from './user.gateway';
 
 /**
  * The push side of SRS 4.1, addressed at one person: notifications, and order
@@ -31,6 +36,24 @@ export class RealtimeService {
     this.userGateway.emitToRoom(
       conversationRoom(conversationId),
       'message:sent',
+      payload
+    );
+  }
+
+  /** A support session's owner and any admin viewing it, both in the same room. */
+  emitSupportMessage(sessionId: string, payload: unknown): void {
+    this.userGateway.emitToRoom(
+      supportRoom(sessionId),
+      'support:message',
+      payload
+    );
+  }
+
+  /** Every connected admin — a new escalation, or activity on someone else's thread. */
+  emitSupportInboxUpdate(payload: unknown): void {
+    this.userGateway.emitToRoom(
+      SUPPORT_ADMIN_INBOX_ROOM,
+      'support:inbox_updated',
       payload
     );
   }
