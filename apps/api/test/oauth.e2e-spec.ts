@@ -26,6 +26,8 @@ describe('OAuth sign-in (e2e)', () => {
   const googleEmail = `oauth-google-${run}@example.com`;
   const lineEmail = `oauth-line-${run}@example.com`;
   const localEmail = `oauth-local-${run}@example.com`;
+  /** A password account that Google will later vouch for the address of. */
+  const localVerifiedEmail = `oauth-local-verified-${run}@example.com`;
 
   let googleProfile: OAuthProfile;
   let lineProfile: OAuthProfile;
@@ -93,7 +95,9 @@ describe('OAuth sign-in (e2e)', () => {
 
   afterAll(async () => {
     await prisma.user.deleteMany({
-      where: { email: { in: [googleEmail, lineEmail, localEmail] } }
+      where: {
+        email: { in: [googleEmail, lineEmail, localEmail, localVerifiedEmail] }
+      }
     });
     await app.close();
   });
@@ -263,6 +267,41 @@ describe('OAuth sign-in (e2e)', () => {
   });
 
   describe('linking rules', () => {
+    it('refuses a Google address that already signs in with a password', async () => {
+      // AUTH-003 / AUTH-006 — one address, one way in. This is the case that
+      // used to link silently and sign the caller straight in: Google really
+      // has verified the address, so it was safe, but it handed a password
+      // account a second way in that its owner never set up.
+      await request(server)
+        .post('/auth/register')
+        .send({
+          email: localVerifiedEmail,
+          password: 'Str0ngPassw0rd',
+          firstName: 'Somchai',
+          displayName: `localv-${run}`
+        })
+        .expect(201);
+
+      // A Google id nobody has linked, carrying the address Google vouches
+      // for — so resolution falls through to the email, which is the path
+      // that must now refuse.
+      googleProfile = {
+        ...googleProfile,
+        providerAccountId: `google-unlinked-${run}`,
+        email: localVerifiedEmail,
+        emailVerified: true
+      };
+
+      const response = await request(server)
+        .post('/auth/google/callback')
+        .send({ idToken: 'another-google-id-token-long-enough' })
+        .expect(409);
+
+      expect((response.body as { message: string }).message).toMatch(
+        /registered with a password/i
+      );
+    });
+
     it('refuses to link on an address the provider never verified', async () => {
       await request(server)
         .post('/auth/register')

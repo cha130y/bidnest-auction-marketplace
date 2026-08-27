@@ -34,6 +34,28 @@ const envSchema = z.object({
   OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
   OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
 
+  /**
+   * Lets an ADMIN sign in on the password alone, with no emailed code.
+   *
+   * The code is mailed, so an admin who cannot reach that inbox cannot get in
+   * at all — which during a demo is a locked door with no way round it. This
+   * is the way round it.
+   *
+   * It is a setting rather than a plain `role === 'ADMIN'` branch because of
+   * what it costs: it takes the second factor off the one role that can
+   * suspend accounts and edit anyone's listing, so an admin password becomes
+   * the only thing between a stranger and the admin panel. Off unless
+   * something says otherwise, and each environment says so for itself — a
+   * convenience that reaches production by inheriting a developer's laptop
+   * settings is how this kind of thing goes wrong quietly.
+   *
+   * Absent or blank reads as false, so the safe answer is also the default.
+   */
+  ADMIN_SKIP_2FA: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim().toLowerCase() === 'true'),
+
   // AUTH-005 — single-use password reset link
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 

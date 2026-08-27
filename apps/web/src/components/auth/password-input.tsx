@@ -4,6 +4,7 @@ import * as React from "react"
 import { Eye, EyeOff } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 /**
  * A password box with a show/hide toggle.
@@ -28,7 +29,10 @@ type PasswordInputProps = Omit<React.ComponentProps<typeof Input>, "type"> & {
 export const PasswordInput = React.forwardRef<
   HTMLInputElement,
   PasswordInputProps
->(function PasswordInput({ autoComplete = "current-password", ...props }, ref) {
+>(function PasswordInput(
+  { autoComplete = "current-password", className, ...props },
+  ref
+) {
   const [visible, setVisible] = React.useState(false)
 
   return (
@@ -37,6 +41,17 @@ export const PasswordInput = React.forwardRef<
       ref={ref}
       type={visible ? "text" : "password"}
       autoComplete={autoComplete}
+      // Edge draws its own reveal control inside every password box, so the
+      // register form showed two eyes side by side — ours and the browser's.
+      // Hiding theirs rather than ours: theirs sits outside the design, has
+      // no Thai label, is not `aria-pressed`, and disappears the moment the
+      // field is empty. Chromium and Firefox do not recognise these
+      // pseudo-elements and drop the rules, which is exactly right — there
+      // is nothing to hide there.
+      className={cn(
+        "[&::-ms-reveal]:hidden [&::-ms-clear]:hidden",
+        className
+      )}
       endSlot={
         <button
           type="button"
