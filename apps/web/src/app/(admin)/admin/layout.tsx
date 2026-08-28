@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FolderTree,
   Gavel,
@@ -16,9 +17,10 @@ import {
   ShoppingBag,
   Users,
 } from 'lucide-react';
-import { fetchCurrentUser } from '@/lib/api/admin';
+import { fetchAdminSupportSessions, fetchCurrentUser } from '@/lib/api/admin';
 import { useAuthToken } from '@/lib/api/auth/use-auth-token';
 import { loginHref } from '@/lib/api/auth/login-redirect';
+import { useSupportInboxChannel } from '@/lib/use-support-inbox-channel';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -94,6 +96,7 @@ function useCurrentNavItem() {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { token, ready } = useAuthToken();
   const currentItem = useCurrentNavItem();
 
@@ -103,6 +106,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     enabled: ready && !!token,
     retry: false,
   });
+
+  const isAdmin = currentUser?.role === 'ADMIN';
+
+  // Same query key the /admin/support list uses for its default (ESCALATED)
+  // view — sharing it means the two never disagree and never double-fetch
+  // when both are mounted at once.
+  const { data: escalatedSessions } = useQuery({
+    queryKey: ['admin-support-sessions', 'ESCALATED'],
+    queryFn: () => fetchAdminSupportSessions({ status: 'ESCALATED' }),
+    enabled: ready && !!token && isAdmin,
+  });
+  const escalatedCount = escalatedSessions?.length ?? 0;
+
+  useSupportInboxChannel(
+    isAdmin ? token : null,
+    useCallback(() => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-support-sessions'] });
+    }, [queryClient]),
+  );
 
   // `ready` means "the session has been read", not "signed in" — wait for
   // both before deciding anything, same as SellerShell.
@@ -178,6 +200,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   className={cn('size-4.5 shrink-0', active ? 'text-amber-600' : 'text-n-400')}
                 />
                 <span className="flex-1">{item.label}</span>
+                {item.href === '/admin/support' && escalatedCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[11px] font-bold text-white">
+                    {escalatedCount > 99 ? '99+' : escalatedCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -247,6 +274,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       )}
                     />
                     <span className="flex-1">{item.label}</span>
+                    {item.href === '/admin/support' && escalatedCount > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[11px] font-bold text-white">
+                        {escalatedCount > 99 ? '99+' : escalatedCount}
+                      </span>
+                    )}
                   </SheetClose>
                 );
               })}

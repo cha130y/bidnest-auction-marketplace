@@ -9,18 +9,23 @@ import { ApiResponse } from '@nestjs/swagger';
 import { SanitizePromptPipe } from '../common/pipes/sanitize-prompt.pipe';
 import { SendSupportChatMessageDto } from './dto/send-message.dto';
 import { SendUserMessageDto } from './dto/send-user-message.dto';
-import { ChatMessageDto, SendMessageResponseDto } from './dto/chat-message.dto';
+import {
+  ChatMessageDto,
+  GetHistoryResponseDto,
+  SendMessageResponseDto
+} from './dto/chat-message.dto';
 
 @Controller('support/chat')
 export class SupportChatController {
   constructor(private readonly supportChatService: SupportChatService) {}
 
-  @ApiResponse({ status: 200, type: [ChatMessageDto] })
+  /** Rehydrates a persisted session — the widget calls this on reopen, not just once. */
+  @ApiResponse({ status: 200, type: GetHistoryResponseDto })
   @Get(':sessionId')
   getHistory(
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthenticatedUser
-  ): Promise<ChatMessageDto[]> {
+  ): Promise<GetHistoryResponseDto> {
     return this.supportChatService.getHistory(sessionId, user.id);
   }
 

@@ -75,6 +75,15 @@ function SessionRow({
  * next to whichever thread `[sessionId]/page.tsx` is currently rendering in
  * the layout's other pane, not a page you navigate away from.
  */
+// Select's Value looks its label up from `items` on the root rather than
+// copying the selected SelectItem's JSX (that's Radix, not Base UI) — without
+// it the trigger shows the raw value ("ESCALATED") instead of its Thai label.
+const STATUS_OPTIONS: Record<SupportSessionStatus, string> = {
+  AI_ONLY: 'คุยกับ AI',
+  ESCALATED: 'รอตอบ (ESCALATED)',
+  RESOLVED: 'ปิดแล้ว (RESOLVED)',
+};
+
 export function SupportSessionList({ activeSessionId }: { activeSessionId?: string }) {
   const [statusFilter, setStatusFilter] = useState<SupportSessionStatus>('ESCALATED');
 
@@ -87,6 +96,7 @@ export function SupportSessionList({ activeSessionId }: { activeSessionId?: stri
     <div className="flex h-full flex-col">
       <div className="border-b border-n-200 p-3">
         <Select
+          items={STATUS_OPTIONS}
           value={statusFilter}
           onValueChange={(value) => setStatusFilter(value as SupportSessionStatus)}
         >

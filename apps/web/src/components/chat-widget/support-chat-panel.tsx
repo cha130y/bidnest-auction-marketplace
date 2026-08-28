@@ -1,6 +1,6 @@
 'use client';
 
-import { KeyboardEvent, useCallback, useState } from 'react';
+import { KeyboardEvent, useState } from 'react';
 import Link from 'next/link';
 import { useMutation } from '@tanstack/react-query';
 import { Send } from 'lucide-react';
@@ -17,7 +17,6 @@ import {
   sendSupportChatMessage,
   sendSupportSessionMessage,
 } from '@/lib/api/support-chat';
-import { useSupportSessionRoom } from '@/lib/use-support-session-room';
 
 /**
  * A first-time visitor facing an empty box has no cue what BidNest can even
@@ -26,12 +25,24 @@ import { useSupportSessionRoom } from '@/lib/use-support-session-room';
  * list, not content that changes often enough to need its own screen.
  */
 const SUGGESTED_QUESTIONS = [
-  'ประมูลสินค้ายังไง',
-  'ยกเลิกคำสั่งซื้อได้ไหม',
+  'สมัครสมาชิกยังไง',
+  'วิธีเสนอราคาประมูล',
   'ชำระเงินได้ช่องทางไหนบ้าง',
-  'ต้องยืนยันอีเมลก่อนใช้งานไหม',
-  'สินค้าที่ได้รับไม่ตรงปกทำยังไง',
+  'ติดตามสถานะจัดส่งได้ที่ไหน',
+  'เพิ่มลงตะกร้ากับซื้อเลยต่างกันยังไง',
+  'ต่อรองราคากับ AI ได้ไหม',
+  'ตะกร้า รายการที่ติดตาม แจ้งเตือนอยู่ตรงไหน',
+  'ยกเลิกคำสั่งซื้อได้ไหม',
 ];
+
+interface SupportChatPanelProps {
+  sessionId: string | undefined;
+  setSessionId: (value: string | undefined) => void;
+  sessionStatus: SupportSessionStatus;
+  setSessionStatus: (value: SupportSessionStatus) => void;
+  messages: ChatMessage[];
+  setMessages: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void;
+}
 
 /**
  * AI-001 — the assistant tab's content. Works the same whether the viewer is
@@ -41,35 +52,47 @@ const SUGGESTED_QUESTIONS = [
  * `sessionId` instead — see support-chat.service.ts). One code path either
  * way, rather than branching on auth state here too.
  *
- * Once escalated, `sessionStatus` flips to 'ESCALATED' and the send button
+ * `sessionId`/`sessionStatus`/`messages` live in ChatWidget (the parent), not
+ * here — closing the popover used to unmount this panel and lose the
+ * conversation outright, and the realtime subscription needs to keep running
+ * while closed anyway (that's what makes the unread dot possible).
+ *
+ * Once escalated (or resolved and reopened by an admin), the send button
  * switches to `sendSupportSessionMessage` (no more AI calls) — the admin's
- * replies then arrive over `useSupportSessionRoom`, not as this mutation's
- * response.
+ * replies then arrive over the parent's `useSupportSessionRoom`, not as this
+ * mutation's response.
  */
-export function SupportChatPanel() {
+export function SupportChatPanel({
+  sessionId,
+  setSessionId,
+  sessionStatus,
+  setSessionStatus,
+  messages,
+  setMessages,
+}: SupportChatPanelProps) {
   const { token } = useAuthToken();
-  const [sessionId, setSessionId] = useState<string | undefined>();
-  const [sessionStatus, setSessionStatus] = useState<SupportSessionStatus>('AI_ONLY');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const [escalated, setEscalated] = useState(false);
 
-  const onAdminMessage = useCallback((raw: unknown) => {
-    const message = raw as ChatMessage;
-    setMessages((prev) => [...prev, message]);
-  }, []);
-
-  useSupportSessionRoom(
-    sessionStatus === 'ESCALATED' ? sessionId : undefined,
-    token,
-    onAdminMessage,
-  );
+  const appendOwnMessage = (text: string) => {
+    setLastFailedText(null);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `temp-${Date.now()}`,
+        sessionId: sessionId ?? null,
+        role: 'USER',
+        body: text,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+  };
 
   const aiMutation = useMutation({
     mutationFn: (text: string) =>
       sendSupportChatMessage(text, sessionId, messages),
-    onMutate: (text: string) => appendOwnMessage(text, setLastFailedText, sessionId, setMessages),
+    onMutate: appendOwnMessage,
     onSuccess: (data) => {
       setSessionId(data.sessionId ?? undefined);
       setMessages((prev) => [...prev, data.reply]);
@@ -80,7 +103,7 @@ export function SupportChatPanel() {
 
   const adminMutation = useMutation({
     mutationFn: (text: string) => sendSupportSessionMessage(sessionId!, text),
-    onMutate: (text: string) => appendOwnMessage(text, setLastFailedText, sessionId, setMessages),
+    onMutate: appendOwnMessage,
     onError: (_error, text) => setLastFailedText(text),
   });
 
@@ -89,7 +112,9 @@ export function SupportChatPanel() {
     onSuccess: (session) => setSessionStatus(session.status),
   });
 
-  const sending = sessionStatus === 'ESCALATED' ? adminMutation : aiMutation;
+  // RESOLVED still goes to the admin endpoint, not the AI: a reply there
+  // reopens the session (see AdminSupportService#reply), same conversation.
+  const sending = sessionStatus !== 'AI_ONLY' ? adminMutation : aiMutation;
 
   const errorMessage =
     sending.error instanceof ApiError ? sending.error.message : 'ส่งข้อความไม่สำเร็จ';
@@ -166,7 +191,7 @@ export function SupportChatPanel() {
         </div>
       )}
 
-      {sessionStatus === 'ESCALATED' && (
+      {sessionStatus !== 'AI_ONLY' && (
         <div className="px-4 pb-2 text-xs text-n-500">
           กำลังคุยกับแอดมิน — ข้อความจะถูกส่งตรงถึงทีมงาน
         </div>
@@ -206,23 +231,4 @@ export function SupportChatPanel() {
       </div>
     </div>
   );
-}
-
-function appendOwnMessage(
-  text: string,
-  setLastFailedText: (value: string | null) => void,
-  sessionId: string | undefined,
-  setMessages: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void,
-) {
-  setLastFailedText(null);
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: `temp-${Date.now()}`,
-      sessionId: sessionId ?? null,
-      role: 'USER',
-      body: text,
-      createdAt: new Date().toISOString(),
-    },
-  ]);
 }
