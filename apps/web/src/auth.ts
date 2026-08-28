@@ -122,6 +122,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Taken from the API's answer rather than kept, so a role changed by
           // an admin lands within the hour instead of at the next sign-in.
           token.role = result.tokens.user.role
+          // The picture on the same terms, and for a second reason: a session
+          // that was signed in before this field existed has no `picture` at
+          // all, and nothing else would ever put one there. Without this the
+          // header shows an initial until the person happens to sign out and
+          // back in — which is not something anyone would think to do, and
+          // "it only works for new accounts" is how a feature quietly looks
+          // broken. This backfills every live session at its next renewal.
+          token.picture = result.tokens.user.avatarUrl ?? undefined
           delete token.error
         } else if (result.outcome === "dead") {
           // The refresh token is spent, expired or revoked — the session is

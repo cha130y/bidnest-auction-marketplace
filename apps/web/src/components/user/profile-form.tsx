@@ -174,6 +174,25 @@ export function ProfileForm() {
   const busy = save.isPending
   const dirty = form.formState.isDirty
 
+  /**
+   * USR-001 — the picture saves itself, the moment it is chosen.
+   *
+   * Only `avatarUrl` is sent: the rest of the form may be half-typed, and
+   * choosing a picture must not commit someone's unfinished edits along with
+   * it. `keepDirtyValues` puts the saved picture into the form's baseline
+   * while leaving every field they are still working on exactly as it is —
+   * so the Save button stays lit for those, and stays dark for this.
+   *
+   * Throws on failure rather than swallowing it, because AvatarPicker awaits
+   * this and shows the reason on its own error line.
+   */
+  const saveAvatar = async (url: string) => {
+    const updated = await updateMyProfile({ avatarUrl: url === "" ? null : url })
+    queryClient.setQueryData(myProfileQueryKey, updated)
+    reset(toFormValues(updated), { keepDirtyValues: true })
+    await updateSession({ image: updated.profile.avatarUrl })
+  }
+
   return (
     <form
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
@@ -231,14 +250,12 @@ export function ProfileForm() {
         </div>
 
         <div className="mt-5">
-          {/* `shouldDirty`, or Save would stay disabled after a picture is
-              chosen: setValue does not mark the form dirty on its own, and a
-              new avatar is exactly the change someone would then try to save. */}
+          {/* Saves on its own — see `saveAvatar`. The rest of this form waits
+              for the Save button; the picture cannot, because choosing one
+              already looks like the change was made. */}
           <AvatarPicker
             value={avatarUrl}
-            onChange={(url) =>
-              form.setValue("avatarUrl", url, { shouldDirty: true })
-            }
+            onChange={saveAvatar}
             fallback={initialOf(data.profile.displayName, data.email)}
             disabled={busy}
           />
