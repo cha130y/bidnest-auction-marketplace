@@ -225,18 +225,20 @@ describe('SupportChatService', () => {
   });
 
   describe('getHistory', () => {
-    it('reads the owned session’s messages in order', async () => {
+    it('reads the owned session’s messages in order, alongside its status', async () => {
       prisma.supportChatSession.findUnique.mockResolvedValue({
         id: SESSION_ID,
-        userId: USER_ID
+        userId: USER_ID,
+        status: 'ESCALATED'
       });
 
-      await service.getHistory(SESSION_ID, USER_ID);
+      const result = await service.getHistory(SESSION_ID, USER_ID);
 
       expect(prisma.supportChatMessage.findMany).toHaveBeenCalledWith({
         where: { sessionId: SESSION_ID },
         orderBy: { createdAt: 'asc' }
       });
+      expect(result.status).toBe('ESCALATED');
     });
 
     it('refuses a session that belongs to somebody else', async () => {

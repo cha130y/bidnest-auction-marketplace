@@ -13,7 +13,11 @@ import {
 } from '../ai-tools/prompt-builder.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ChatRole, SupportSessionStatus } from '../../generated/prisma/enums';
-import { ChatMessageDto, SendMessageResponseDto } from './dto/chat-message.dto';
+import {
+  ChatMessageDto,
+  GetHistoryResponseDto,
+  SendMessageResponseDto
+} from './dto/chat-message.dto';
 
 const ESCALATION_THRESHOLD = 3;
 const FALLBACK_MARKER = 'ยังไม่มีข้อมูลเรื่องนี้';
@@ -30,13 +34,15 @@ export class SupportChatService {
   async getHistory(
     sessionId: string,
     userId: string
-  ): Promise<ChatMessageDto[]> {
-    await this.getOwnedSession(sessionId, userId);
+  ): Promise<GetHistoryResponseDto> {
+    const session = await this.getOwnedSession(sessionId, userId);
 
-    return this.prisma.supportChatMessage.findMany({
+    const messages = await this.prisma.supportChatMessage.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'asc' }
     });
+
+    return { status: session.status, messages };
   }
 
   /**

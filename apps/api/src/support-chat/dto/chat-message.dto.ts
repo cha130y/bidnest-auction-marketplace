@@ -1,4 +1,4 @@
-import { ChatRole } from '../../../generated/prisma/enums';
+import { ChatRole, SupportSessionStatus } from '../../../generated/prisma/enums';
 
 export class ChatMessageDto {
   id: string;
@@ -7,6 +7,16 @@ export class ChatMessageDto {
   role: ChatRole;
   body: string;
   createdAt: Date;
+}
+
+/**
+ * A widget rehydrating a persisted session (e.g. after closing and reopening
+ * the popover) needs `status` as much as the messages themselves — it's what
+ * decides whether the next thing typed goes to the AI or straight to an admin.
+ */
+export class GetHistoryResponseDto {
+  status: SupportSessionStatus;
+  messages: ChatMessageDto[];
 }
 
 export class SendMessageResponseDto {
