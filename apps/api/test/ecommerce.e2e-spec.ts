@@ -678,21 +678,40 @@ describe('E-commerce (e2e)', () => {
       scarce = await createProduct(sellerAId, { price: 50, stockQty: 2 });
     });
 
-    it('refuses the seller their own listing', () =>
-      addToCart(sellerAId, sellerAProduct, 1).expect(403));
+    it('refuses the seller their own listing', async () => {
+      const refusal = await addToCart(sellerAId, sellerAProduct, 1).expect(403);
+      expect(refusal.body).toMatchObject({ code: 'OWN_LISTING' });
+    });
 
     it('refuses a quantity of zero or less', async () => {
       await addToCart(buyerId, sellerAProduct, 0).expect(400);
       await addToCart(buyerId, sellerAProduct, -3).expect(400);
     });
 
-    it('refuses more than the listing has', () =>
-      addToCart(buyerId, scarce, 5).expect(400));
+    /*
+     * `available` is the whole point of the code being here: the cart screen
+     * and the two buttons on a product page all print this refusal, and
+     * without a number of their own they were reprinting the API's English
+     * sentence — `Only 2 unit(s) of "…" are in stock` — into a Thai page.
+     */
+    it('refuses more than the listing has, and says how many are left', async () => {
+      const refusal = await addToCart(buyerId, scarce, 5).expect(400);
 
-    it('refuses a listing that does not exist', () =>
-      addToCart(buyerId, '00000000-0000-4000-8000-000000000999', 1).expect(
-        404
-      ));
+      expect(refusal.body).toMatchObject({
+        code: 'INSUFFICIENT_STOCK',
+        available: 2
+      });
+    });
+
+    it('refuses a listing that does not exist', async () => {
+      const refusal = await addToCart(
+        buyerId,
+        '00000000-0000-4000-8000-000000000999',
+        1
+      ).expect(404);
+
+      expect(refusal.body).toMatchObject({ code: 'NOT_FOUND' });
+    });
 
     it('is not a public cart', () =>
       request(app.getHttpServer())
@@ -735,7 +754,15 @@ describe('E-commerce (e2e)', () => {
 
       const cart = await cartOf(buyerId);
       expect(cart.items[0].issue).toBe('PRODUCT_UNAVAILABLE');
-      await checkout(buyerId).expect(400);
+      const refusal = await checkout(buyerId).expect(400);
+
+      // The refusal names the same reason the cart line already carried. The
+      // screen shows the paused listing rather than "payment failed", which it
+      // can only do if the two agree on the word for it.
+      expect(refusal.body).toMatchObject({
+        code: 'ITEMS_UNAVAILABLE',
+        issues: [{ code: 'PRODUCT_UNAVAILABLE', productId: sellerAProduct }]
+      });
 
       await setStatus(sellerAProduct, 'ACTIVE');
     });
@@ -746,7 +773,53 @@ describe('E-commerce (e2e)', () => {
 
       const cart = await cartOf(buyerId);
       expect(cart.items[0].issue).toBe('INSUFFICIENT_STOCK');
-      await checkout(buyerId).expect(400);
+      const refusal = await checkout(buyerId).expect(400);
+
+      // `available` is what lets the screen say "เหลืออยู่ 1 ชิ้น" instead of
+      // echoing the API's English sentence into a Thai page.
+      expect(refusal.body).toMatchObject({
+        code: 'ITEMS_UNAVAILABLE',
+        issues: [
+          {
+            code: 'INSUFFICIENT_STOCK',
+            productId: sellerAProduct,
+            available: 1,
+            requested: 2
+          }
+        ]
+      });
+    });
+
+    /*
+     * The reason `issues` is a list. Reporting only the first dead line sends
+     * a buyer round the loop once per broken item, each round costing a full
+     * address form and a refusal; the cart screen has always shown all of them
+     * at once, and the refusal now agrees with it.
+     */
+    it('reports every unbuyable line at once, not just the first', async () => {
+      // Seller A's, because `setStatus` signs as seller A.
+      const second = await createProduct(sellerAId, { price: 90, stockQty: 5 });
+      await addToCart(buyerId, second, 1).expect(201);
+      await setStatus(second, 'INACTIVE');
+      // sellerAProduct is still 2-in-cart against 1-on-shelf from above.
+
+      const refusal = await checkout(buyerId).expect(400);
+      const body = refusal.body as { issues: { code: string }[] };
+
+      expect(body.issues).toHaveLength(2);
+      expect(body.issues.map((issue) => issue.code).sort()).toEqual([
+        'INSUFFICIENT_STOCK',
+        'PRODUCT_UNAVAILABLE'
+      ]);
+
+      // Put the cart back to the one line the tests below expect.
+      const line = (await cartOf(buyerId)).items.find(
+        (item) => item.product.id === second
+      )!;
+      await request(app.getHttpServer())
+        .delete(`/cart/items/${line.id}`)
+        .set('Authorization', authOf(buyerId))
+        .expect(200);
     });
 
     it('leaves the cart untouched when a checkout is refused', async () => {
@@ -970,8 +1043,19 @@ describe('E-commerce (e2e)', () => {
       await addToCart(buyerId, productId, 1).expect(201);
     });
 
-    it('rejects the checkout', () => {
-      return checkout(buyerId, 'E_WALLET').expect(400);
+    it('rejects the checkout', async () => {
+      const refusal = await checkout(buyerId, 'E_WALLET').expect(400);
+
+      // The only refusal in this route that a plain retry can get past, and
+      // the only one whose screen still offers the button.
+      const body = refusal.body as {
+        code: string;
+        checkoutSessionId: string;
+        reason: string;
+      };
+      expect(body.code).toBe('PAYMENT_DECLINED');
+      expect(typeof body.checkoutSessionId).toBe('string');
+      expect(typeof body.reason).toBe('string');
     });
 
     it('creates no order and does not touch stock', async () => {
@@ -1021,6 +1105,28 @@ describe('E-commerce (e2e)', () => {
       // Whoever wins is a race; the invariant is that only one can.
       const codes = [first.status, second.status].sort((a, b) => a - b);
       expect(codes).toEqual([201, 409]);
+
+      /*
+       * The loser is the one case in this file where the charge is already on
+       * record and no order exists to match it. It gets its own code so the
+       * screen can say that instead of the "nothing was charged" it says
+       * everywhere else, and the session id is what support reconciles the two
+       * sides with.
+       */
+      const loser = first.status === 409 ? first : second;
+      const body = loser.body as { checkoutSessionId: string };
+      expect(loser.body).toMatchObject({
+        code: 'STOCK_LOST_AFTER_CHARGE',
+        issues: [{ code: 'INSUFFICIENT_STOCK', productId, available: null }]
+      });
+      expect(typeof body.checkoutSessionId).toBe('string');
+
+      const charge = await prisma.paymentTransaction.findUniqueOrThrow({
+        where: { checkoutSessionId: body.checkoutSessionId },
+        include: { orders: true }
+      });
+      expect(charge.status).toBe('SUCCEEDED');
+      expect(charge.orders).toHaveLength(0);
 
       const product = await prisma.product.findUniqueOrThrow({
         where: { id: productId }

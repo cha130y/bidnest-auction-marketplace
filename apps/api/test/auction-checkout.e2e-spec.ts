@@ -265,7 +265,13 @@ describe('Auction checkout (e2e)', () => {
       const auctionId = await settledAuction();
 
       await pay(winnerId, { auctionId }).expect(201);
-      await pay(winnerId, { auctionId }).expect(409);
+      const refusal = await pay(winnerId, { auctionId }).expect(409);
+
+      // No charge was taken here — the check happens before any money moves —
+      // so the screen sends the winner to the order they already have rather
+      // than offering a retry that would only be refused again.
+      expect(refusal.body).toMatchObject({ code: 'AUCTION_ALREADY_PAID' });
+      expect(refusal.body).not.toHaveProperty('checkoutSessionId');
     });
 
     /**
@@ -286,6 +292,7 @@ describe('Auction checkout (e2e)', () => {
       expect(codes).toEqual([201, 409]);
 
       const loser = first.status === 409 ? first : second;
+      expect(loser.body).toMatchObject({ code: 'AUCTION_ALREADY_PAID' });
       expect(
         (loser.body as { checkoutSessionId?: string }).checkoutSessionId
       ).toEqual(expect.any(String));

@@ -45,7 +45,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     retry: false,
   })
 
-  if (!ready || (isAuthenticated && order.isLoading)) {
+  // `isPending`, not `isLoading`: the latter is false on the render where the
+  // query has only just been enabled, and this screen's next branch is "ไม่พบ
+  // คำสั่งซื้อนี้" — shown for an instant to somebody looking at their own order.
+  if (!ready || (isAuthenticated && order.isPending)) {
     return (
       <div
         className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"

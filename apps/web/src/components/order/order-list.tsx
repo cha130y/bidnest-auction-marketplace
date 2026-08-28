@@ -31,7 +31,7 @@ export function OrderList() {
   const isAuthenticated = ready && Boolean(token)
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useQuery({
+  const { data, isPending } = useQuery({
     // The page is part of the key, so going back to one is served from cache
     queryKey: [...ordersQueryKey, page],
     queryFn: () => listOrders({ page, limit: PAGE_SIZE }),
@@ -43,7 +43,10 @@ export function OrderList() {
     retry: false,
   })
 
-  if (!ready || (isAuthenticated && isLoading)) {
+  // `isPending`, not `isLoading`: the latter is false on the render where the
+  // query has only just been enabled, which let "ยังไม่มีคำสั่งซื้อ" flash at
+  // somebody whose orders were still on their way.
+  if (!ready || (isAuthenticated && isPending)) {
     return (
       <div
         className="h-64 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"

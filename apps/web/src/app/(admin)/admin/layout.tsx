@@ -97,7 +97,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { token, ready } = useAuthToken();
   const currentItem = useCurrentNavItem();
 
-  const { data: currentUser, isLoading } = useQuery({
+  const { data: currentUser, isPending } = useQuery({
     queryKey: ['current-user'],
     queryFn: fetchCurrentUser,
     enabled: ready && !!token,
@@ -106,7 +106,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // `ready` means "the session has been read", not "signed in" — wait for
   // both before deciding anything, same as SellerShell.
-  if (!ready || (token && isLoading)) {
+  //
+  // `isPending`, not `isLoading`: React Query's `isLoading` is
+  // `isPending && isFetching`, so it is false on the render where the query has
+  // only just been enabled — the token has arrived but the request has not left
+  // yet. This fell through to the branch below and told an admin signing in
+  // "คุณไม่มีสิทธิ์เข้าถึงหน้านี้" for an instant, every time.
+  if (!ready || (token && isPending)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">
         <Skeleton className="h-8 w-48" />

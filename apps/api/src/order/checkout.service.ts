@@ -11,6 +11,35 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MockPaymentProvider } from '../payment/payment.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CheckoutDto } from './dtos/checkout.dto';
+import {
+  CheckoutIssue,
+  collectCheckoutIssues,
+  missingCartLineIssue,
+  stockLostIssue
+} from './utils/checkout-issue.util';
+
+/**
+ * CART-004 — what kind of refusal this is, for a screen to act on.
+ *
+ * The `message` beside it stays the sentence it always was, so the API docs
+ * and the Postman suite still read true; this is the part a UI can branch on
+ * without matching English prose that any rewording would break.
+ *
+ * `ITEMS_UNAVAILABLE` and `STOCK_LOST_AFTER_CHARGE` are the same underlying
+ * fact — something is not on the shelf — split by the only difference the
+ * buyer cares about: whether their money moved before we found out.
+ */
+export const CheckoutErrorCode = {
+  ITEMS_UNAVAILABLE: 'ITEMS_UNAVAILABLE',
+  STOCK_LOST_AFTER_CHARGE: 'STOCK_LOST_AFTER_CHARGE',
+  CART_EMPTY: 'CART_EMPTY',
+  PAYMENT_DECLINED: 'PAYMENT_DECLINED',
+  AUCTION_UNPAYABLE: 'AUCTION_UNPAYABLE',
+  AUCTION_ALREADY_PAID: 'AUCTION_ALREADY_PAID'
+} as const;
+
+export type CheckoutErrorCode =
+  (typeof CheckoutErrorCode)[keyof typeof CheckoutErrorCode];
 
 /**
  * One thing being bought, priced by this server.
@@ -85,9 +114,11 @@ export class CheckoutService {
     });
 
     if (charge.status === 'FAILED') {
-      // No orders, and the cart is left exactly as it was.
+      // No orders, and the cart is left exactly as it was. The only refusal in
+      // this file that a plain retry can actually get past.
       throw new BadRequestException({
         message: 'Payment failed',
+        code: CheckoutErrorCode.PAYMENT_DECLINED,
         checkoutSessionId,
         reason: charge.failureReason ?? 'Unknown'
       });
@@ -167,6 +198,7 @@ export class CheckoutService {
         throw new ConflictException({
           message:
             'That auction was paid for while this payment was going through',
+          code: CheckoutErrorCode.AUCTION_ALREADY_PAID,
           checkoutSessionId
         });
       }
@@ -304,9 +336,12 @@ export class CheckoutService {
     });
 
     if (items.length === 0) {
-      throw new BadRequestException(
-        selected ? 'No selected item is in your cart' : 'Cart is empty'
-      );
+      throw new BadRequestException({
+        message: selected
+          ? 'No selected item is in your cart'
+          : 'Cart is empty',
+        code: CheckoutErrorCode.CART_EMPTY
+      });
     }
 
     // A line that was removed, or bought in another tab, between selecting and
@@ -315,30 +350,17 @@ export class CheckoutService {
     // re-reads the cart.
     if (selected && items.length !== selected.length) {
       const found = new Set(items.map((item) => item.id));
-      throw new BadRequestException(
-        `${selected.filter((id) => !found.has(id)).length} selected item(s) are no longer in your cart`
-      );
+      const missing = selected.filter((id) => !found.has(id)).length;
+      throw this.unavailable([missingCartLineIssue(missing)]);
     }
 
+    // Every unbuyable line, not the first one. A buyer told about one dead
+    // line fixes it, pays again, and is refused by the next — the cart screen
+    // shows all of them at once and this now agrees with it.
+    const issues = collectCheckoutIssues(buyerId, items);
+    if (issues.length > 0) throw this.unavailable(issues);
+
     return items.map(({ id: cartItemId, product, quantity }) => {
-      if (product.status !== 'ACTIVE') {
-        throw new BadRequestException(
-          `"${product.title}" is no longer available`
-        );
-      }
-
-      if (product.sellerId === buyerId) {
-        throw new BadRequestException(
-          `"${product.title}" is your own listing and cannot be purchased`
-        );
-      }
-
-      if (quantity > product.stockQty) {
-        throw new BadRequestException(
-          `Only ${product.stockQty} unit(s) of "${product.title}" are in stock`
-        );
-      }
-
       const line = calculateLineTotal(product.price, quantity, {
         minQty: product.quantityDiscountMinQty,
         percent: product.quantityDiscountPercent
@@ -391,11 +413,17 @@ export class CheckoutService {
     // A distinct 404 would let anyone holding an id learn whether it exists
     // and whether it sold.
     if (!auction || auction.winnerUserId !== buyerId) {
-      throw new BadRequestException('No auction of yours is awaiting payment');
+      throw new BadRequestException({
+        message: 'No auction of yours is awaiting payment',
+        code: CheckoutErrorCode.AUCTION_UNPAYABLE
+      });
     }
 
     if (auction.status !== 'SOLD' || auction.soldPrice === null) {
-      throw new BadRequestException(`"${auction.title}" did not end in a sale`);
+      throw new BadRequestException({
+        message: `"${auction.title}" did not end in a sale`,
+        code: CheckoutErrorCode.AUCTION_UNPAYABLE
+      });
     }
 
     // The unique index on `order_items.auction_id` is the real guarantee — two
@@ -403,9 +431,10 @@ export class CheckoutService {
     // readable refusal for the ordinary case of somebody opening the checkout
     // link a second time, and it happens before any money is taken.
     if (auction.orderItems.length > 0) {
-      throw new ConflictException(
-        `"${auction.title}" has already been paid for`
-      );
+      throw new ConflictException({
+        message: `"${auction.title}" has already been paid for`,
+        code: CheckoutErrorCode.AUCTION_ALREADY_PAID
+      });
     }
 
     return [
@@ -420,6 +449,22 @@ export class CheckoutService {
         subtotal: auction.soldPrice
       }
     ];
+  }
+
+  /**
+   * Nothing was charged and nothing was written — the cart is exactly as the
+   * buyer left it, and the fix is on the cart screen rather than here.
+   *
+   * `message` is the first issue's own sentence rather than a summary, so a
+   * caller that only reads `message` — the API docs, the Postman suite, an
+   * older client — sees the same string this route has always answered with.
+   */
+  private unavailable(issues: CheckoutIssue[]) {
+    return new BadRequestException({
+      message: issues[0].message,
+      code: CheckoutErrorCode.ITEMS_UNAVAILABLE,
+      issues
+    });
   }
 
   private groupBySeller(lines: PricedLine[]): Map<string, PricedLine[]> {
@@ -466,9 +511,16 @@ export class CheckoutService {
       if (count !== 1) {
         // The charge is already on record, so hand back the session id the
         // support side needs to reconcile it.
+        //
+        // Its own code, separate from the refusals above: those all happen
+        // before any money moves, and a screen that told this buyer "nothing
+        // was charged" would be telling them something false at the one moment
+        // it matters most.
         throw new ConflictException({
           message: `"${line.title}" ran out of stock while checking out`,
-          checkoutSessionId
+          code: CheckoutErrorCode.STOCK_LOST_AFTER_CHARGE,
+          checkoutSessionId,
+          issues: [stockLostIssue(line.productId, line.title, line.quantity)]
         });
       }
     }

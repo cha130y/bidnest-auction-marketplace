@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { clearCart, removeCartItem, updateCartItem } from "@/lib/api/cart"
-import { ApiError } from "@/lib/api/client"
+import { cartErrorText, issueText } from "@/lib/cart-errors"
 import { checkoutHref, totalsOf } from "@/lib/cart-selection"
 import { formatPercent, formatTHB } from "@/lib/format"
 import type { Cart, CartItem } from "@/lib/api/types"
@@ -27,11 +27,15 @@ import type { Cart, CartItem } from "@/lib/api/types"
  * that can disagree.
  */
 export function CartView() {
-  const { cart, isLoading, isAuthenticated, isAuthReady } = useCart()
+  const { cart, isPending, isError, isAuthenticated, isAuthReady } = useCart()
 
   // Nothing is claimed until localStorage has been read: showing "please sign
   // in" to somebody who is signed in is worse than showing nothing briefly.
-  if (!isAuthReady || (isAuthenticated && isLoading && !cart)) {
+  //
+  // The same goes for the cart itself — until it has arrived, "your cart is
+  // empty" is a guess, and it is the wrong one for everybody who has anything
+  // in theirs.
+  if (!isAuthReady || (isAuthenticated && isPending)) {
     return (
       <div
         className="h-64 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
@@ -54,7 +58,24 @@ export function CartView() {
     )
   }
 
-  if (!cart || cart.items.length === 0) {
+  // Read separately from "empty", because they are not the same thing and the
+  // buyer's next move differs: an empty cart wants the shop, an unreadable one
+  // wants another try.
+  if (isError || !cart) {
+    return (
+      <EmptyState
+        title="โหลดตะกร้าไม่ได้"
+        body="ตอนนี้อ่านตะกร้าของคุณไม่ได้ ลองใหม่อีกครั้ง หรือเข้าสู่ระบบใหม่ถ้ายังไม่หาย"
+        action={
+          <Button variant="primary" size="lg" onClick={() => location.reload()}>
+            ลองใหม่อีกครั้ง
+          </Button>
+        }
+      />
+    )
+  }
+
+  if (cart.items.length === 0) {
     return (
       <EmptyState
         title="ตะกร้ายังว่างอยู่"
@@ -218,18 +239,6 @@ function ClearCartButton() {
   )
 }
 
-/** What the API says is wrong with a line, said the way a buyer would say it. */
-function issueText(item: CartItem): string | null {
-  switch (item.issue) {
-    case "PRODUCT_UNAVAILABLE":
-      return "สินค้านี้ถูกปิดการขายแล้ว เอาออกจากตะกร้าก่อนจึงจะสั่งซื้อได้"
-    case "INSUFFICIENT_STOCK":
-      return `ของเหลือไม่พอ — เหลืออยู่ ${item.product.stockQty} ชิ้น`
-    default:
-      return null
-  }
-}
-
 function CartLine({
   item,
   selected,
@@ -370,7 +379,7 @@ function CartLine({
 
       {error && (
         <p role="alert" className="mt-3 text-sm font-medium text-red">
-          {error instanceof ApiError ? error.message : "ทำรายการไม่สำเร็จ"}
+          {cartErrorText(error)}
         </p>
       )}
     </li>

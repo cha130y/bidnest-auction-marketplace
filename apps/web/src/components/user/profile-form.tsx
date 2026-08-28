@@ -82,7 +82,7 @@ export function ProfileForm() {
   const queryClient = useQueryClient()
   const { update: updateSession } = useSession()
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isPending, error } = useQuery({
     queryKey: myProfileQueryKey,
     queryFn: getMyProfile,
     enabled: isAuthenticated,
@@ -136,7 +136,12 @@ export function ProfileForm() {
     }
   })
 
-  if (!ready || (isAuthenticated && isLoading)) {
+  // `isPending`, not `isLoading`. React Query's `isLoading` is
+  // `isPending && isFetching`, so it is false on the render where the query has
+  // only just been enabled — the token has arrived but the request has not left
+  // yet. This screen fell through on that render and showed the form with its
+  // empty defaults for an instant, before the saved profile replaced them.
+  if (!ready || (isAuthenticated && isPending)) {
     return (
       <div
         className="h-160 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
