@@ -21,27 +21,32 @@ import { getMyProfile } from "@/lib/api/users"
  * schedule: up to fifteen minutes of showing the wrong thing. This closes that
  * window on the next page load.
  *
- * Runs at most once per tab, and only for a session that has no picture:
+ * It reconciles rather than fills a blank. The first version only acted when
+ * the session had no picture at all, which left the worse case untouched: a
+ * session holding an *old* picture never corrected itself, because something
+ * was there and that was taken for it being right. Changing your picture in
+ * one tab and looking at another showed the previous one indefinitely.
  *
- *   - signed out, or the picture is already there → no request at all
- *   - no picture on the account either → one request, then never again, so an
- *     account that has not chosen a picture does not pay for this on every
- *     page
+ * One request per tab, whatever the answer, and then never again:
+ *
+ *   - signed out → no request at all
+ *   - session and account agree → one request, nothing written
+ *   - they differ → one request, and the session is corrected
  *
  * The flag lives in sessionStorage rather than a ref because this component
  * never unmounts but the page does reload, and a ref does not survive that.
  */
 
 /**
- * Set once this tab has a *conclusive* answer — the account has no picture.
- * Never set on failure: a flag written before the answer is known turns one
- * bad moment into a tab that can never heal, however many times it reloads.
+ * Set once this tab has reconciled the session against the account. Never set
+ * on failure: a flag written before the answer is known turns one bad moment
+ * into a tab that can never heal, however many times it reloads.
+ *
+ * The suffix retires flags written by earlier versions, which recorded a
+ * narrower question and would otherwise silence this one — nobody should have
+ * to be told to clear their web storage for a fix to reach them.
  */
-// The `2` retires the flags written by the first version of this, which set
-// them before the answer was known: a tab that failed once was left unable to
-// heal for as long as it stayed open, and telling everyone to clear their web
-// storage is not a fix anyone should have to be told.
-const CHECKED_KEY = "bidnest_avatar_synced_2"
+const CHECKED_KEY = "bidnest_avatar_synced_3"
 
 function alreadyChecked(): boolean {
   try {
@@ -68,25 +73,23 @@ export function SessionAvatarSync() {
 
   useEffect(() => {
     if (status !== "authenticated") return
-    // Already has one, or is on its way to having one.
-    if (session?.user?.image || running.current || alreadyChecked()) return
+    if (running.current || alreadyChecked()) return
 
     running.current = true
 
     void (async () => {
       try {
         const profile = await getMyProfile()
+        const onAccount = profile.profile.avatarUrl ?? null
+        const inSession = session?.user?.image ?? null
 
-        if (profile.profile.avatarUrl) {
-          await update({ image: profile.profile.avatarUrl })
-          // Nothing to remember: the session now has a picture, so the guard
-          // at the top is what stops this running again.
-          return
+        // Only when they actually differ. Writing an identical value would
+        // rewrite the session cookie on every page load for no reason.
+        if (onAccount !== inSession) {
+          await update({ image: onAccount })
         }
 
-        // A conclusive "there is no picture on this account" — the one case
-        // worth remembering, since asking again on every page load would cost
-        // a request forever for anyone who has not chosen one.
+        // Reconciled either way — that is what the flag records.
         markChecked()
       } catch {
         // Deliberately not marked. The first attempt can land while the API is
