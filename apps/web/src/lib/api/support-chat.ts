@@ -17,6 +17,11 @@ export interface SendMessageResponse {
   escalated: boolean;
 }
 
+export interface SupportChatHistory {
+  status: SupportSessionStatus;
+  messages: ChatMessage[];
+}
+
 /**
  * AI-001 — `@Public()` on the API side, so this works signed out too:
  * `apiFetch` sends no Authorization header when there is no session, and the
@@ -50,6 +55,18 @@ export function sendSupportChatMessage(
         .map(({ role, body }) => ({ role, body })),
     }),
   });
+}
+
+/**
+ * Rehydrates a persisted session — called when the widget reopens (or the
+ * page loads) with a `sessionId` already remembered from last time, so the
+ * conversation and its current status survive a closed popover instead of
+ * starting over.
+ */
+export function fetchSupportChatHistory(
+  sessionId: string,
+): Promise<SupportChatHistory> {
+  return apiFetch<SupportChatHistory>(`/support/chat/${sessionId}`);
 }
 
 /**
