@@ -19,8 +19,13 @@ const megabytes = (bytes: number) => Math.round(bytes / 1024 / 1024)
  * This field used to be a box you pasted a URL into, which asked the person
  * filling in their profile to have already put the picture somewhere on the
  * internet themselves. The value is still a URL underneath — the file goes to
- * /uploads/images and what comes back is what the form holds — so nothing
- * about saving a profile changed to accommodate this.
+ * /uploads/images and what comes back is what gets saved.
+ *
+ * Choosing a picture saves it, rather than waiting for the form's own Save
+ * button. It has to: the upload happens the moment a file is chosen and the
+ * new picture appears straight away, which reads as done — so a picture that
+ * then needed a second, separate confirmation lower down the page was one
+ * people lost without ever knowing there was something left to press.
  *
  * The size and type checks here save a pointless round trip; they are not the
  * rule. The API applies both again and its answer is the one that counts.
@@ -35,7 +40,12 @@ export function AvatarPicker({
   disabled
 }: {
   value: string
-  onChange: (url: string) => void
+  /**
+   * Saves the picture, and is awaited: "กำลังอัปโหลด…" then covers the whole
+   * thing, and anything that goes wrong — the upload or the save after it —
+   * lands on the one error line below instead of half of it failing silently.
+   */
+  onChange: (url: string) => void | Promise<void>
   fallback: string
   disabled?: boolean
 }) {
@@ -61,7 +71,7 @@ export function AvatarPicker({
     setBusy(true)
     try {
       const stored = await uploadPendingImage(file)
-      onChange(stored.url)
+      await onChange(stored.url)
     } catch (cause) {
       setError(
         cause instanceof ApiError ? cause.message : "อัปโหลดรูปไม่สำเร็จ"
@@ -120,7 +130,20 @@ export function AvatarPicker({
                 disabled={disabled || busy}
                 onClick={() => {
                   setError(null)
-                  onChange("")
+                  setBusy(true)
+                  void (async () => {
+                    try {
+                      await onChange("")
+                    } catch (cause) {
+                      setError(
+                        cause instanceof ApiError
+                          ? cause.message
+                          : "ลบรูปไม่สำเร็จ"
+                      )
+                    } finally {
+                      setBusy(false)
+                    }
+                  })()
                 }}
               >
                 <Trash2 className="size-4" />

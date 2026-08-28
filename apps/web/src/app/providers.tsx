@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider } from 'next-auth/react';
 
+import { SessionAvatarSync } from '@/components/auth/session-avatar-sync';
 import { SessionWatch } from '@/components/auth/session-watch';
 
 /**
@@ -49,6 +50,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       {/* AUTH-004 — signs out once renewal is no longer possible. */}
       <SessionWatch />
+      {/* USR-001 — gives a session signed in before this shipped its picture. */}
+      <SessionAvatarSync />
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </SessionProvider>
   );
