@@ -139,9 +139,12 @@ Table user_profiles {
   display_name varchar [not null]
   avatar_url varchar
   bio varchar
-  phone varchar
-  location varchar [note: '— ข้อความอิสระ 1 ช่อง']
-  default_shipping_address text [note: 'ใหม่ — prefill ตอน checkout, USR-001']
+  phone varchar [note: 'ที่อยู่จัดส่งเริ่มต้น — 6 ช่องเดียวกับ order_addresses']
+  recipient_name varchar
+  line1 varchar
+  line2 varchar
+  city varchar
+  postal_code varchar
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null]
 
@@ -149,7 +152,7 @@ Table user_profiles {
     (display_name)
   }
 
-  Note: 'USR-001 — user_id เป็นทั้ง PK/FK; มี default_shipping_address เพิ่มจุดเดียว'
+  Note: 'USR-001 — user_id เป็นทั้ง PK/FK. ที่อยู่จัดส่งเริ่มต้นเก็บเป็น 6 ช่องแยก ชื่อและความกว้างตรงกับ order_addresses ทุกช่อง เพื่อให้ checkout (CART-004) ดึงไป prefill ได้ตรงๆ โดยไม่ต้องมีตัวแปลงกลาง — ต่างกันแค่ที่นี่ nullable ได้ทุกช่อง ส่วนของ order บังคับ เพราะเป็น snapshot ที่พัสดุส่งไปจริง เดิมเป็น location + default_shipping_address (ข้อความอิสระก้อนเดียว) ซึ่ง prefill ไม่ได้'
 }
 
 Table auth_accounts {

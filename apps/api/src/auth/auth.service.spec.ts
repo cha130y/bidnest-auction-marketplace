@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   UnauthorizedException
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
@@ -66,6 +67,8 @@ describe('AuthService', () => {
     issue: jest.Mock;
     consume: jest.Mock;
   };
+  /** Stands in for the validated env; tests flip what they care about. */
+  let env: { ADMIN_SKIP_2FA: boolean };
   let passwordReset: { issue: jest.Mock; consume: jest.Mock };
   let trustedDevices: {
     isTrusted: jest.Mock;
@@ -123,10 +126,20 @@ describe('AuthService', () => {
       revokeAll: jest.fn().mockResolvedValue(undefined)
     };
 
+    // Off, the same as an environment that has not said otherwise — so a test
+    // that gets the code is testing the default rather than a mock's opinion.
+    env = { ADMIN_SKIP_2FA: false };
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
         HashingService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: keyof typeof env) => env[key]
+          }
+        },
         { provide: PrismaService, useValue: prisma },
         { provide: TwoFactorService, useValue: twoFactor },
         { provide: TokenService, useValue: tokens },
@@ -364,6 +377,67 @@ describe('AuthService', () => {
 
         expect(twoFactor.issue).toHaveBeenCalled();
         expect(result).toMatchObject({ status: 'PENDING_2FA' });
+      });
+    });
+
+    describe('an admin', () => {
+      it('gets a code like anyone else until an environment says otherwise', async () => {
+        // The default, and the whole point of the setting: production keeps
+        // the second factor unless it is turned off there deliberately.
+        await seedAccount({ role: 'ADMIN' });
+
+        const result = await service.login(credentials);
+
+        expect(twoFactor.issue).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({ status: 'PENDING_2FA' });
+      });
+
+      describe('where ADMIN_SKIP_2FA is on', () => {
+        beforeEach(() => {
+          env.ADMIN_SKIP_2FA = true;
+        });
+
+        it('is let in on the password alone, with no code mailed', async () => {
+          await seedAccount({ role: 'ADMIN' });
+
+          const result = await service.login(credentials);
+
+          expect(twoFactor.issue).not.toHaveBeenCalled();
+          expect(result).toMatchObject({
+            accessToken: 'access',
+            refreshToken: 'refresh'
+          });
+        });
+
+        it('still has to get the password right', async () => {
+          // The code is what goes; the password is not.
+          await seedAccount({ role: 'ADMIN' });
+
+          await expect(
+            service.login({ ...credentials, password: 'wrong-password' })
+          ).rejects.toBeInstanceOf(UnauthorizedException);
+          expect(tokens.issue).not.toHaveBeenCalled();
+        });
+
+        it('is still turned away while suspended (ADM-002)', async () => {
+          await seedAccount({ role: 'ADMIN', status: 'SUSPENDED' });
+
+          await expect(service.login(credentials)).rejects.toBeInstanceOf(
+            ForbiddenException
+          );
+          expect(tokens.issue).not.toHaveBeenCalled();
+        });
+
+        it('changes nothing for an ordinary account', async () => {
+          // The exemption is the admin's alone — this is the line that would
+          // quietly take the second factor off everyone if it ever moved.
+          await seedAccount({ role: 'USER' });
+
+          const result = await service.login(credentials);
+
+          expect(twoFactor.issue).toHaveBeenCalledTimes(1);
+          expect(result).toMatchObject({ status: 'PENDING_2FA' });
+        });
       });
     });
   });

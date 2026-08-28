@@ -27,6 +27,14 @@ export class AuthUserResponse {
   @ApiProperty({ example: 'somchai' })
   displayName: string;
 
+  /**
+   * USR-001 — the header draws this the moment someone signs in, so it travels
+   * with the sign-in rather than being fetched separately. Null for an account
+   * that has not chosen one; the caller falls back to an initial.
+   */
+  @ApiPropertyOptional({ format: 'url', nullable: true })
+  avatarUrl: string | null;
+
   @ApiProperty()
   createdAt: Date;
 }

@@ -84,12 +84,15 @@ export const profileSchema = z.object({
     z.string().trim().url("ลิงก์รูปไม่ถูกต้อง").max(2048)
   ]),
   bio: z.string().trim().max(500, "แนะนำตัวได้ไม่เกิน 500 ตัวอักษร"),
+  // The default shipping address. Every length below is checkout's own, not a
+  // number picked for this form — the whole point of these fields is that what
+  // is saved here can be sent to `POST /orders/checkout` unchanged.
   phone: z.string().trim().max(30, "เบอร์โทรยาวเกินไป"),
-  location: z.string().trim().max(200, "ที่อยู่ยาวเกินไป"),
-  defaultShippingAddress: z
-    .string()
-    .trim()
-    .max(1000, "ที่อยู่จัดส่งยาวเกินไป")
+  recipientName: z.string().trim().max(150, "ชื่อผู้รับยาวเกินไป"),
+  line1: z.string().trim().max(200, "ที่อยู่ยาวเกินไป"),
+  line2: z.string().trim().max(200, "ที่อยู่เพิ่มเติมยาวเกินไป"),
+  city: z.string().trim().max(100, "ชื่อจังหวัด / เขตยาวเกินไป"),
+  postalCode: z.string().trim().max(20, "รหัสไปรษณีย์ยาวเกินไป")
 })
 export type ProfileValues = z.infer<typeof profileSchema>
 

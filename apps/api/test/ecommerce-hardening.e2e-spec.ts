@@ -367,10 +367,11 @@ describe('E-commerce hardening (e2e)', () => {
         .expect(200);
 
       const body = detail.body as {
-        items: { product: { id: string; title: string } }[];
+        items: { listing: { kind: string; id: string; title: string } }[];
       };
-      expect(body.items[0].product.id).toBe(soldId);
-      expect(body.items[0].product.title).toBe(`${tag} sold`);
+      expect(body.items[0].listing.kind).toBe('PRODUCT');
+      expect(body.items[0].listing.id).toBe(soldId);
+      expect(body.items[0].listing.title).toBe(`${tag} sold`);
     });
 
     it('removes the one nothing points at', async () => {
@@ -431,9 +432,9 @@ describe('E-commerce hardening (e2e)', () => {
 
       const forThisProduct = (
         list.body as {
-          items: { id: string; items: { product: { id: string } }[] }[];
+          items: { id: string; items: { listing: { id: string } }[] }[];
         }
-      ).items.filter((order) => order.items[0]?.product.id === productId);
+      ).items.filter((order) => order.items[0]?.listing.id === productId);
 
       [packing, dispatched] = forThisProduct.map((order) => order.id);
 

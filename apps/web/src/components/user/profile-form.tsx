@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
@@ -14,14 +14,15 @@ import { ApiError } from "@/lib/api/client"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
 import {
   getMyProfile,
+  myProfileQueryKey,
   updateMyProfile,
   type MyProfile,
   type UpdateMyProfile
 } from "@/lib/api/users"
 import { profileSchema, type ProfileValues } from "@/lib/auth/schemas"
-import { formatDateTime } from "@/lib/format"
-
-export const myProfileQueryKey = ["users", "me"] as const
+import { AvatarPicker } from "@/components/user/avatar-picker"
+import { formatDateTime, initialOf } from "@/lib/format"
+import { cn } from "@/lib/utils"
 
 /**
  * USR-001 — your own profile, and the form to change it.
@@ -48,8 +49,11 @@ function toFormValues(profile: MyProfile): ProfileValues {
     avatarUrl: profile.profile.avatarUrl ?? "",
     bio: profile.profile.bio ?? "",
     phone: profile.profile.phone ?? "",
-    location: profile.profile.location ?? "",
-    defaultShippingAddress: profile.profile.defaultShippingAddress ?? ""
+    recipientName: profile.profile.recipientName ?? "",
+    line1: profile.profile.line1 ?? "",
+    line2: profile.profile.line2 ?? "",
+    city: profile.profile.city ?? "",
+    postalCode: profile.profile.postalCode ?? ""
   }
 }
 
@@ -64,8 +68,11 @@ function toPatch(values: ProfileValues): UpdateMyProfile {
     avatarUrl: orNull(values.avatarUrl),
     bio: orNull(values.bio),
     phone: orNull(values.phone),
-    location: orNull(values.location),
-    defaultShippingAddress: orNull(values.defaultShippingAddress)
+    recipientName: orNull(values.recipientName),
+    line1: orNull(values.line1),
+    line2: orNull(values.line2),
+    city: orNull(values.city),
+    postalCode: orNull(values.postalCode)
   }
 }
 
@@ -92,10 +99,18 @@ export function ProfileForm() {
       avatarUrl: "",
       bio: "",
       phone: "",
-      location: "",
-      defaultShippingAddress: ""
+      recipientName: "",
+      line1: "",
+      line2: "",
+      city: "",
+      postalCode: ""
     }
   })
+
+  // `useWatch` rather than `form.watch()`: watch() hands back a fresh function
+  // every render, which makes React Compiler skip memoising this whole
+  // component. The hook subscribes to one field and returns a plain value.
+  const avatarUrl = useWatch({ control: form.control, name: "avatarUrl" })
 
   const { reset } = form
   useEffect(() => {
@@ -110,9 +125,14 @@ export function ProfileForm() {
     onSuccess: async (updated) => {
       queryClient.setQueryData(myProfileQueryKey, updated)
       reset(toFormValues(updated))
-      // The header reads the name off the session, not off this query, so a
-      // rename would otherwise only show up after signing in again.
-      await updateSession({ name: updated.profile.displayName })
+      // The header reads both off the session, not off this query, so a
+      // rename or a new picture would otherwise only show up after signing in
+      // again. Taken from the API's answer rather than the form values, so
+      // what the header draws is what was actually saved.
+      await updateSession({
+        name: updated.profile.displayName,
+        image: updated.profile.avatarUrl
+      })
     }
   })
 
@@ -220,19 +240,22 @@ export function ProfileForm() {
         </div>
 
         <div className="mt-5">
-          <Field
-            label="ลิงก์รูปโปรไฟล์"
-            id="avatarUrl"
-            hint="ไม่บังคับ — วางลิงก์รูปภาพ"
-            error={form.formState.errors.avatarUrl?.message}
-          >
-            <Input
-              id="avatarUrl"
-              inputMode="url"
-              placeholder="https://…"
-              {...form.register("avatarUrl")}
-            />
-          </Field>
+          {/* `shouldDirty`, or Save would stay disabled after a picture is
+              chosen: setValue does not mark the form dirty on its own, and a
+              new avatar is exactly the change someone would then try to save. */}
+          <AvatarPicker
+            value={avatarUrl}
+            onChange={(url) =>
+              form.setValue("avatarUrl", url, { shouldDirty: true })
+            }
+            fallback={initialOf(data.profile.displayName, data.email)}
+            disabled={busy}
+          />
+          {form.formState.errors.avatarUrl && (
+            <p role="alert" className="mt-2 text-sm font-medium text-red">
+              {form.formState.errors.avatarUrl.message}
+            </p>
+          )}
         </div>
 
         <div className="mt-5">
@@ -254,39 +277,67 @@ export function ProfileForm() {
           แก้ตรงนี้จึงไม่กระทบพัสดุที่ส่งไปแล้ว
         </p>
 
+        {/* Same six fields, same labels, same order as the checkout form —
+            deliberately, because this is where that form's values come from.
+            Somebody who fills this in and then pays should recognise the
+            second screen as the first one already answered. */}
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <Field
-            label="เบอร์โทร"
+            label="ชื่อผู้รับ"
+            id="recipientName"
+            hint="ไม่บังคับ"
+            error={form.formState.errors.recipientName?.message}
+            className="sm:col-span-2"
+          >
+            <Input id="recipientName" {...form.register("recipientName")} />
+          </Field>
+
+          <Field
+            label="ที่อยู่"
+            id="line1"
+            hint="ไม่บังคับ"
+            error={form.formState.errors.line1?.message}
+            className="sm:col-span-2"
+          >
+            <Input id="line1" {...form.register("line1")} />
+          </Field>
+
+          <Field
+            label="ที่อยู่เพิ่มเติม"
+            id="line2"
+            hint="ไม่บังคับ"
+            error={form.formState.errors.line2?.message}
+            className="sm:col-span-2"
+          >
+            <Input id="line2" {...form.register("line2")} />
+          </Field>
+
+          <Field
+            label="จังหวัด / เขต"
+            id="city"
+            hint="ไม่บังคับ"
+            error={form.formState.errors.city?.message}
+          >
+            <Input id="city" {...form.register("city")} />
+          </Field>
+
+          <Field
+            label="รหัสไปรษณีย์"
+            id="postalCode"
+            hint="ไม่บังคับ"
+            error={form.formState.errors.postalCode?.message}
+          >
+            <Input id="postalCode" inputMode="numeric" {...form.register("postalCode")} />
+          </Field>
+
+          <Field
+            label="เบอร์โทรศัพท์"
             id="phone"
             hint="ไม่บังคับ"
             error={form.formState.errors.phone?.message}
+            className="sm:col-span-2"
           >
             <Input id="phone" inputMode="tel" {...form.register("phone")} />
-          </Field>
-
-          <Field
-            label="จังหวัด / พื้นที่"
-            id="location"
-            hint="ไม่บังคับ"
-            error={form.formState.errors.location?.message}
-          >
-            <Input id="location" {...form.register("location")} />
-          </Field>
-        </div>
-
-        <div className="mt-5">
-          <Field
-            label="ที่อยู่จัดส่งเริ่มต้น"
-            id="defaultShippingAddress"
-            hint="ไม่บังคับ"
-            error={form.formState.errors.defaultShippingAddress?.message}
-          >
-            <textarea
-              id="defaultShippingAddress"
-              rows={3}
-              className={TEXTAREA_CLASS}
-              {...form.register("defaultShippingAddress")}
-            />
           </Field>
         </div>
       </Card>
@@ -334,16 +385,19 @@ function Field({
   id,
   hint,
   error,
+  className,
   children
 }: {
   label: string
   id: string
   hint?: string
   error?: string
+  /** Grid placement, for the address rows that want the full width. */
+  className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="space-y-2">
+    <div className={cn("space-y-2", className)}>
       <Label htmlFor={id}>{label}</Label>
       {children}
       {error ? (

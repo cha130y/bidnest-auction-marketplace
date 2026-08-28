@@ -6,9 +6,9 @@ import { useSession } from "next-auth/react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowRight } from "lucide-react"
 
+import { OrderLineRow } from "@/components/order/order-line-row"
 import { OrderStatusBadge } from "@/components/order/order-status-badge"
 import { ShipmentPanel } from "@/components/order/shipment-panel"
-import { ProductImage } from "@/components/shop/product-image"
 import { Button } from "@/components/ui/button"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
 import { loginHref } from "@/lib/api/auth/login-redirect"
@@ -118,29 +118,7 @@ function Loaded({
 
           <ul className="mt-4 divide-y divide-n-200">
             {order.items.map((item) => (
-              <li key={item.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
-                <Link href={`/shop/${item.product.id}`} className="shrink-0">
-                  <ProductImage
-                    src={item.product.imageUrl}
-                    alt={item.product.title}
-                    className="size-20 rounded-r3 object-cover"
-                  />
-                </Link>
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <Link
-                    href={`/shop/${item.product.id}`}
-                    className="line-clamp-2 font-semibold text-ink transition-colors hover:text-amber-600"
-                  >
-                    {item.product.title}
-                  </Link>
-                  <span className="text-sm text-n-500">
-                    {formatTHB(item.unitPrice)} × {item.quantity}
-                  </span>
-                </div>
-                <span className="font-display font-bold text-ink">
-                  {formatTHB(item.lineTotal)}
-                </span>
-              </li>
+              <OrderLineRow key={item.id} item={item} />
             ))}
           </ul>
         </section>
