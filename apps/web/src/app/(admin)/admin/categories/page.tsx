@@ -123,6 +123,16 @@ export default function AdminCategoriesPage() {
 
   const roots: CategoryTree[] = data ?? [];
 
+  // Select's Value doesn't copy the selected SelectItem's JSX (that's
+  // Radix) — Base UI looks the label up from `items` on the root instead.
+  // Without it, picking a parent shows the raw category id (a UUID) in the
+  // trigger instead of its name. `''` is a real selectable value here (the
+  // explicit "เป็นหมวดหลัก" item below), so it needs an entry too.
+  const parentOptions: Record<string, string> = {
+    '': 'เป็นหมวดหลัก',
+    ...Object.fromEntries(roots.filter((r) => r.isActive).map((r) => [r.id, r.name])),
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-2xl font-bold text-ink">Categories</h1>
@@ -139,8 +149,9 @@ export default function AdminCategoriesPage() {
             wrapperClassName="w-64"
           />
           <Select
+            items={parentOptions}
             value={newParentId ?? ''}
-            onValueChange={(value) => setNewParentId(value || undefined)}
+            onValueChange={(value) => setNewParentId(value ? String(value) : undefined)}
           >
             <SelectTrigger className="w-64">
               <SelectValue placeholder="เป็นหมวดหลัก (ไม่มี parent)" />
