@@ -71,6 +71,14 @@ export function SessionAvatarSync() {
   const { data: session, status, update } = useSession()
   const running = useRef(false)
 
+  /**
+   * What the session holds right now, readable from inside the request below.
+   *
+   * That request is in flight for a moment, and saving a new picture during it
+   * finishes first — so without this, the profile fetched a moment ago (still
+   * carrying the old picture) would land afterwards and put it back. Which is
+   * the version of this bug that only happens sometimes.
+   */
   useEffect(() => {
     if (status !== "authenticated") return
     if (running.current || alreadyChecked()) return
@@ -81,11 +89,16 @@ export function SessionAvatarSync() {
       try {
         const profile = await getMyProfile()
         const onAccount = profile.profile.avatarUrl ?? null
-        const inSession = session?.user?.image ?? null
 
-        // Only when they actually differ. Writing an identical value would
+        // The account is the source of truth, so this writes what it says.
+        // A save landing at the same moment writes the same value from the
+        // same place, which is why the two cannot disagree for long — and
+        // why guarding the write against a concurrent one is not worth the
+        // ways that guard can misfire.
+        //
+        // Only when they differ, though: writing an identical value would
         // rewrite the session cookie on every page load for no reason.
-        if (onAccount !== inSession) {
+        if (onAccount !== (session?.user?.image ?? null)) {
           await update({ image: onAccount })
         }
 
