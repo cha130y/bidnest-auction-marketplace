@@ -23,7 +23,11 @@ describe('SupportChatService', () => {
       create: jest.Mock;
       update: jest.Mock;
     };
-    supportChatMessage: { findMany: jest.Mock; create: jest.Mock };
+    supportChatMessage: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      create: jest.Mock;
+    };
   };
   let geminiClient: { generateReply: jest.Mock };
   let promptBuilder: { buildSupportPrompt: jest.Mock };
@@ -50,6 +54,7 @@ describe('SupportChatService', () => {
       },
       supportChatMessage: {
         findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest
           .fn()
           .mockImplementation(({ data }) =>
@@ -140,6 +145,16 @@ describe('SupportChatService', () => {
 
       expect(result.escalated).toBe(false);
     });
+
+    it('escalates immediately when asked for a human outright, without calling the AI', async () => {
+      const result = await service.sendMessage(
+        undefined,
+        'ขอติดต่อแอดมินหน่อยครับ'
+      );
+
+      expect(geminiClient.generateReply).not.toHaveBeenCalled();
+      expect(result.escalated).toBe(true);
+    });
   });
 
   describe('a signed-in caller', () => {
@@ -182,6 +197,22 @@ describe('SupportChatService', () => {
       await expect(
         service.sendMessage(USER_ID, 'สวัสดี', SESSION_ID)
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('escalates immediately when asked for a human outright, without calling the AI', async () => {
+      const result = await service.sendMessage(
+        USER_ID,
+        'ขอคุยกับแอดมินหน่อยครับ'
+      );
+
+      expect(geminiClient.generateReply).not.toHaveBeenCalled();
+      expect(result.escalated).toBe(true);
+      const calls = prisma.supportChatMessage.create.mock.calls as [
+        { data: { role: string; body: string } }
+      ][];
+      expect(calls.map((call) => call[0].data)).toContainEqual(
+        expect.objectContaining({ role: 'ASSISTANT' })
+      );
     });
 
     it('refuses a session that belongs to somebody else', async () => {
@@ -266,6 +297,26 @@ describe('SupportChatService', () => {
         service.escalate(SESSION_ID, USER_ID)
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.supportChatSession.update).not.toHaveBeenCalled();
+    });
+
+    it('escalates when the last message asked for a human outright, even with no AI misses', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'AI_ONLY'
+      });
+      prisma.supportChatMessage.findMany.mockResolvedValue([]);
+      prisma.supportChatMessage.findFirst.mockResolvedValue({
+        role: 'USER',
+        body: 'อยากคุยกับแอดมิน'
+      });
+
+      await service.escalate(SESSION_ID, USER_ID);
+
+      expect(prisma.supportChatSession.update).toHaveBeenCalledWith({
+        where: { id: SESSION_ID },
+        data: { status: 'ESCALATED' }
+      });
     });
 
     it('escalates once the heuristic is re-checked and holds server-side', async () => {

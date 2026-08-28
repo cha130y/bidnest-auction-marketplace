@@ -22,6 +22,39 @@ import {
 const ESCALATION_THRESHOLD = 3;
 const FALLBACK_MARKER = 'ยังไม่มีข้อมูลเรื่องนี้';
 
+/**
+ * Substring match, not an LLM judgement call — a user asking for a human
+ * outright shouldn't have to fail the AI three times first to get the same
+ * "คุยกับแอดมิน" button the fallback heuristic already produces.
+ */
+const ESCALATION_PHRASES = [
+  'ติดต่อแอดมิน',
+  'คุยกับแอดมิน',
+  'ขอคุยกับแอดมิน',
+  'อยากคุยกับแอดมิน',
+  'ติดต่อเจ้าหน้าที่',
+  'คุยกับเจ้าหน้าที่',
+  'ขอคุยกับเจ้าหน้าที่',
+  'ขอคุยกับคนจริง',
+  'อยากคุยกับคนจริง',
+  'ต้องการเจ้าหน้าที่',
+  'ขอสายแอดมิน',
+  'contact admin',
+  'talk to admin',
+  'talk to a human',
+  'human agent'
+];
+
+const CONTACT_ADMIN_REPLY =
+  'ได้เลยครับ กดปุ่ม "คุยกับแอดมิน" ด้านล่างเพื่อติดต่อทีมงานได้เลยครับ';
+
+function isExplicitEscalationRequest(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return ESCALATION_PHRASES.some((phrase) =>
+    normalized.includes(phrase.toLowerCase())
+  );
+}
+
 @Injectable()
 export class SupportChatService {
   constructor(
@@ -76,6 +109,18 @@ export class SupportChatService {
     await this.prisma.supportChatMessage.create({
       data: { sessionId: session.id, role: ChatRole.USER, body: message }
     });
+
+    if (isExplicitEscalationRequest(message)) {
+      const replyMessage = await this.prisma.supportChatMessage.create({
+        data: {
+          sessionId: session.id,
+          role: ChatRole.ASSISTANT,
+          body: CONTACT_ADMIN_REPLY
+        }
+      });
+
+      return { sessionId: session.id, reply: replyMessage, escalated: true };
+    }
 
     const history = await this.prisma.supportChatMessage.findMany({
       where: { sessionId: session.id },
@@ -155,6 +200,20 @@ export class SupportChatService {
     message: string,
     guestHistory: ChatHistoryItem[]
   ): Promise<SendMessageResponseDto> {
+    if (isExplicitEscalationRequest(message)) {
+      return {
+        sessionId: null,
+        reply: {
+          id: randomUUID(),
+          sessionId: null,
+          role: ChatRole.ASSISTANT,
+          body: CONTACT_ADMIN_REPLY,
+          createdAt: new Date()
+        },
+        escalated: true
+      };
+    }
+
     const prompt = this.promptBuilder.buildSupportPrompt(guestHistory, message);
     const replyText = await this.geminiClient.generateReply(prompt);
 
@@ -191,6 +250,12 @@ export class SupportChatService {
     return session;
   }
 
+  /**
+   * True on either path to "คุยกับแอดมิน": the 3-miss heuristic below, or
+   * the caller having just asked for a human outright — checked here too
+   * (not just in sendMessage) since escalate() re-validates server-side
+   * rather than trusting the client's own flag from that earlier response.
+   */
   private async isSessionEscalated(sessionId: string): Promise<boolean> {
     const recentAssistantMessages =
       await this.prisma.supportChatMessage.findMany({
@@ -199,7 +264,18 @@ export class SupportChatService {
         take: ESCALATION_THRESHOLD
       });
 
-    return this.isEscalated(recentAssistantMessages.map((item) => item.body));
+    if (this.isEscalated(recentAssistantMessages.map((item) => item.body))) {
+      return true;
+    }
+
+    const lastUserMessage = await this.prisma.supportChatMessage.findFirst({
+      where: { sessionId, role: ChatRole.USER },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return (
+      !!lastUserMessage && isExplicitEscalationRequest(lastUserMessage.body)
+    );
   }
 
   /**

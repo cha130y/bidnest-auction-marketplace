@@ -1,4 +1,7 @@
-import { ChatRole, SupportSessionStatus } from '../../../generated/prisma/enums';
+import {
+  ChatRole,
+  SupportSessionStatus
+} from '../../../generated/prisma/enums';
 
 export class ChatMessageDto {
   id: string;
