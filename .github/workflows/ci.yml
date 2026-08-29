@@ -131,5 +131,12 @@ jobs:
       # empty, and bearerFor then throws for every one of them in beforeAll.
       # A developer never notices, because a machine that has run the app once
       # has a seeded database already.
-      - run: pnpm --filter api exec prisma db seed
+      #
+      # Compiled and run directly rather than through `prisma db seed`, which
+      # prints "The seed command has been executed" and writes nothing at all.
+      # Measured against a database created seconds earlier: these two steps
+      # leave 7 users behind, that command leaves none. It is also how the
+      # deployed container seeds itself, so the two agree.
+      - run: pnpm --dir apps/api exec nest build
+      - run: node apps/api/dist/prisma/seed.js
       - run: pnpm --dir apps/api test:e2e
