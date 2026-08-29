@@ -41,31 +41,69 @@ function StatusPill({ status }: { status: AdminProductRow['status'] }) {
   );
 }
 
-export default function AdminProductsPage() {
+// เหตุผลเก็บเป็น state ของแถวตัวเอง ไม่ยกขึ้นไปไว้ที่หน้า: ถ้ายกขึ้นไป
+// columns จะต้อง dep กับ state นั้น แล้วถูกสร้างใหม่ทุกตัวอักษรที่พิมพ์
+// ทำให้ cell remount และ input หลุด focus
+function ProductActionsCell({ product }: { product: AdminProductRow }) {
   const queryClient = useQueryClient();
+  const [reason, setReason] = useState('');
+
+  const onSuccess = () => {
+    setReason('');
+    return queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+  };
+
+  const deactivateMutation = useMutation({
+    mutationFn: () => deactivateAdminProduct(product.id, reason),
+    onSuccess,
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: () => reactivateAdminProduct(product.id, reason),
+    onSuccess,
+  });
+
+  const busy = deactivateMutation.isPending || reactivateMutation.isPending;
+  const disabled = !reason.trim() || busy;
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder="เหตุผล"
+        className="h-9 w-32 rounded-r2 border border-n-300 px-2 text-xs outline-none focus:border-amber-500"
+      />
+      {product.status === 'SUSPENDED' ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={disabled}
+          onClick={() => reactivateMutation.mutate()}
+        >
+          เปิดขาย
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="danger"
+          disabled={disabled}
+          onClick={() => deactivateMutation.mutate()}
+        >
+          ปิดขาย
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export default function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState<AdminProductRow['status'] | undefined>();
-  const [reason, setReason] = useState<Record<string, string>>({});
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-products', statusFilter],
     queryFn: () => fetchAdminProducts({ status: statusFilter }),
   });
-
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-
-  const deactivateMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      deactivateAdminProduct(id, reason),
-    onSuccess: invalidate,
-  });
-
-  const reactivateMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      reactivateAdminProduct(id, reason),
-    onSuccess: invalidate,
-  });
-
-  const busy = deactivateMutation.isPending || reactivateMutation.isPending;
 
   const columns = useMemo(
     () => [
@@ -82,48 +120,10 @@ export default function AdminProductsPage() {
       columnHelper.display({
         id: 'actions',
         header: '',
-        cell: ({ row }) => {
-          const product = row.original;
-          const productReason = reason[product.id] ?? '';
-          return (
-            <div className="flex items-center gap-2">
-              <input
-                value={productReason}
-                onChange={(event) =>
-                  setReason((prev) => ({ ...prev, [product.id]: event.target.value }))
-                }
-                placeholder="เหตุผล"
-                className="h-9 w-32 rounded-r2 border border-n-300 px-2 text-xs outline-none focus:border-amber-500"
-              />
-              {product.status === 'SUSPENDED' ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={!productReason.trim() || busy}
-                  onClick={() =>
-                    reactivateMutation.mutate({ id: product.id, reason: productReason })
-                  }
-                >
-                  เปิดขาย
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="danger"
-                  disabled={!productReason.trim() || busy}
-                  onClick={() =>
-                    deactivateMutation.mutate({ id: product.id, reason: productReason })
-                  }
-                >
-                  ปิดขาย
-                </Button>
-              )}
-            </div>
-          );
-        },
+        cell: ({ row }) => <ProductActionsCell product={row.original} />,
       }),
     ],
-    [reason, busy, deactivateMutation, reactivateMutation],
+    [],
   );
 
   return (
