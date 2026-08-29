@@ -30,3 +30,25 @@ jobs:
       # No env needed: the build reads nothing out of .env.local, which is
       # gitignored and absent here anyway.
       - run: pnpm --dir apps/web build
+
+  # The API is deployed as a container, so the Dockerfile is production code and
+  # breaks the same way any other file does — a dependency that needs a system
+  # package, a path that moved, a lockfile the image can no longer install from.
+  # None of it shows up in lint or test, which run on the runner's own Node and
+  # never open the Dockerfile at all. Without this the first time anyone learns
+  # the image no longer builds is when a deploy fails.
+  #
+  # Build only, never pushed: this asks whether the image can be produced, and
+  # publishing it is the deploy platform's job. The layer cache is shared
+  # between runs, so an unchanged dependency layer is not reinstalled every PR.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
