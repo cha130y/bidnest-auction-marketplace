@@ -1,0 +1,1452 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BidNest Blueprints</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}svg{display:block}</style>
+</head>
+<body>
+
+<style>
+  :root {
+    --ground: #F1F5F4;
+    --surface: #FFFFFF;
+    --surface-sunk: #E7EEED;
+    --ink: #0F2429;
+    --ink-soft: #375156;
+    --muted: #62797E;
+    --line: #CBD9D8;
+    --line-soft: #DEE8E7;
+    --accent: #0E5F6B;
+    --accent-soft: #DCEDEE;
+    --signal: #A85F16;
+    --signal-soft: #F7E9D8;
+    --good: #2C6A4C;
+    --good-soft: #DCEBE2;
+    --stop: #9A3B33;
+    --stop-soft: #F5E1DF;
+
+    --f-body: "IBM Plex Sans Thai", system-ui, -apple-system, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "Courier New", monospace;
+
+    --wrap: 1080px;
+    --read: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0B1618;
+      --surface: #122327;
+      --surface-sunk: #0E1D20;
+      --ink: #E3EDEC;
+      --ink-soft: #B6C9C9;
+      --muted: #8AA2A5;
+      --line: #24403F;
+      --line-soft: #1B3234;
+      --accent: #5BBECD;
+      --accent-soft: #14343A;
+      --signal: #E0A25C;
+      --signal-soft: #33261A;
+      --good: #6FBF93;
+      --good-soft: #16301F;
+      --stop: #DE8A80;
+      --stop-soft: #331C1B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0B1618;
+    --surface: #122327;
+    --surface-sunk: #0E1D20;
+    --ink: #E3EDEC;
+    --ink-soft: #B6C9C9;
+    --muted: #8AA2A5;
+    --line: #24403F;
+    --line-soft: #1B3234;
+    --accent: #5BBECD;
+    --accent-soft: #14343A;
+    --signal: #E0A25C;
+    --signal-soft: #33261A;
+    --good: #6FBF93;
+    --good-soft: #16301F;
+    --stop: #DE8A80;
+    --stop-soft: #331C1B;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: var(--wrap); margin: 0 auto; padding: 0 24px 96px; }
+
+  .masthead {
+    display: flex; flex-direction: column; gap: 18px;
+    padding: 60px 0 32px; border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--f-mono); font-size: 12px; font-weight: 500;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    font-weight: 700; font-size: clamp(34px, 6vw, 58px); line-height: 1.06;
+    letter-spacing: -.035em; margin: 0; text-wrap: balance;
+  }
+  h1 span { color: var(--accent); }
+  .standfirst { max-width: var(--read); font-size: 17px; color: var(--ink-soft); margin: 0; }
+
+  /* legend */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 22px;
+    padding: 16px 20px; margin-top: 4px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink-soft); }
+  .legend-item svg { flex: none; }
+
+  /* toc */
+  .toc {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 2px 20px; padding: 28px 0 8px;
+  }
+  .toc a {
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 5px 0; font-size: 14.5px; color: var(--ink-soft);
+    text-decoration: none; border-bottom: 1px solid transparent;
+  }
+  .toc a:hover { color: var(--accent); border-bottom-color: var(--line); }
+  .toc a .num {
+    font-family: var(--f-mono); font-size: 11.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* sections */
+  .dgm { padding: 52px 0 8px; border-bottom: 1px solid var(--line-soft); scroll-margin-top: 16px; }
+  .dgm:last-of-type { border-bottom: 0; }
+  .dgm-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .dgm-head .kicker {
+    font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .dgm-head h2 {
+    font-weight: 700; font-size: clamp(21px, 2.6vw, 27px); line-height: 1.42;
+    letter-spacing: 0; margin: 0; text-wrap: balance;
+  }
+  .dgm-head p { max-width: var(--read); margin: 0; color: var(--ink-soft); font-size: 15.5px; }
+
+  figure {
+    margin: 0; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 22px 18px 14px; overflow-x: auto;
+  }
+  figcaption {
+    margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line-soft);
+    font-size: 13.5px; color: var(--muted); max-width: var(--read);
+  }
+  .paths {
+    display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px;
+    font-family: var(--f-mono); font-size: 12.5px; color: var(--muted);
+  }
+  .paths span { overflow-wrap: anywhere; }
+
+  /* svg diagram language */
+  .dg { display: block; width: 100%; height: auto; color: var(--ink); }
+  .dg .b { fill: var(--surface); stroke: currentColor; stroke-width: 1.5; }
+  .dg .b.hot { stroke: var(--signal); stroke-width: 2.2; }
+  .dg .b.dash { stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .dg .b.sunk { fill: var(--surface-sunk); stroke-width: 1.2; }
+  .dg .e { fill: none; stroke: currentColor; stroke-width: 1.4; marker-end: url(#a); }
+  .dg .e.hot { stroke: var(--signal); stroke-width: 1.6; }
+  .dg .e.dash { stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .dg .e.plain { marker-end: none; }
+  .dg .lane { fill: none; stroke: currentColor; stroke-width: 1; opacity: .2; }
+  .dg text { fill: currentColor; }
+  .dg .t { font-family: var(--f-body); font-size: 12.5px; }
+  .dg .t.b6 { font-weight: 600; font-size: 13px; }
+  .dg .t.s { font-size: 11px; }
+  .dg .m { font-family: var(--f-mono); font-size: 11px; }
+  .dg .dim { opacity: .68; }
+  .dg .hot-t { fill: var(--signal); }
+  .dg .good-t { fill: var(--good); }
+  .dg .stop-t { fill: var(--stop); }
+  .dg .b.good { stroke: var(--good); }
+  .dg .b.stop { stroke: var(--stop); }
+  #markers path { fill: context-stroke; }
+
+  /* cards */
+  .cards {
+    display: grid; gap: 16px; margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+  }
+  .cards.tight { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 18px 0 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .card h3 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .card-label {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-family: var(--f-mono); font-size: 12px; padding: 4px 10px;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+
+  /* tables */
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); font-weight: 500;
+    border-bottom: 1px solid var(--line);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody td:first-child { white-space: nowrap; }
+  td .pill { margin: 2px 2px 2px 0; }
+  .mono { font-family: var(--f-mono); font-size: .86em; }
+
+  /* state pills */
+  .pill {
+    font-family: var(--f-mono); font-size: 11.5px; font-weight: 500;
+    padding: 2px 8px; border-radius: 2px; white-space: nowrap;
+    border: 1px solid transparent; display: inline-block;
+  }
+  .pill-idle { background: var(--surface-sunk); color: var(--ink-soft); border-color: var(--line); }
+  .pill-live { background: var(--signal-soft); color: var(--signal); border-color: var(--signal); }
+  .pill-good { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+  .pill-stop { background: var(--stop-soft); color: var(--stop); border-color: var(--stop); }
+  .pill-key  { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  .note {
+    background: var(--accent-soft); border-left: 3px solid var(--accent);
+    padding: 14px 18px; border-radius: 0 3px 3px 0; margin-top: 18px;
+  }
+  .note p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .note b { color: var(--ink); }
+
+  code {
+    font-family: var(--f-mono); font-size: .86em;
+    background: var(--surface-sunk); border: 1px solid var(--line-soft);
+    border-radius: 2px; padding: 1px 5px; overflow-wrap: anywhere;
+  }
+
+  footer {
+    margin-top: 56px; padding-top: 22px; border-top: 2px solid var(--ink);
+    display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: space-between;
+    font-family: var(--f-mono); font-size: 12px; color: var(--muted);
+  }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  @media (max-width: 640px) {
+    .page { padding: 0 16px 72px; }
+    .masthead { padding: 40px 0 28px; }
+  }
+</style>
+
+<svg id="markers" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+    </marker>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">System overview &amp; workflows · SRS v7 · 5 devs / 14 days</div>
+    <h1>BidNest <span>Blueprints</span></h1>
+    <p class="standfirst">
+      แพลตฟอร์มเดียวที่ทำสองอย่าง — <strong>ประมูลแบบเรียลไทม์</strong> กับ <strong>ร้านค้าซื้อทันที</strong>
+      โดยใช้บัญชีผู้ใช้ ตะกร้า การชำระเงิน และการจัดส่งชุดเดียวกัน
+      หน้านี้รวมทั้งภาพรวมระบบและผังการทำงานรายฟีเจอร์ไว้ที่เดียว
+      ทุกผังวาดจากโค้ดจริงใน <code>apps/api</code> และ <code>apps/web</code> ไม่ใช่จากเอกสารอย่างเดียว
+    </p>
+
+    <div class="chips">
+      <span class="chip">Next.js 16 · App Router</span>
+      <span class="chip">NestJS 11</span>
+      <span class="chip">Prisma 7 + PostgreSQL 17</span>
+      <span class="chip">Socket.IO</span>
+      <span class="chip">Gemini</span>
+      <span class="chip">pnpm monorepo</span>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item">
+        <svg width="38" height="16" viewBox="0 0 38 16" class="dg" aria-hidden="true" style="width:38px">
+          <rect x="1" y="2" width="36" height="12" rx="2" class="b"></rect>
+        </svg>
+        ขั้นตอน / สถานะ
+      </span>
+      <span class="legend-item">
+        <svg width="38" height="16" viewBox="0 0 38 16" class="dg" aria-hidden="true" style="width:38px">
+          <rect x="1" y="2" width="36" height="12" rx="2" class="b hot"></rect>
+        </svg>
+        ระบบทำเอง / เรียลไทม์
+      </span>
+      <span class="legend-item">
+        <svg width="38" height="16" viewBox="0 0 38 16" class="dg" aria-hidden="true" style="width:38px">
+          <rect x="1" y="2" width="36" height="12" rx="2" class="b dash"></rect>
+        </svg>
+        ทางเลือก / กรณีปฏิเสธ
+      </span>
+      <span class="legend-item">
+        <svg width="42" height="16" viewBox="0 0 42 16" class="dg" aria-hidden="true" style="width:42px">
+          <line x1="2" y1="8" x2="36" y2="8" class="e"></line>
+        </svg>
+        ลำดับการทำงาน
+      </span>
+    </div>
+
+    <nav class="toc" aria-label="สารบัญผัง">
+      <a href="#stack"><span class="num">··</span> ชิ้นส่วนของระบบ</a>
+      <a href="#overall"><span class="num">00</span> ภาพรวมทั้งระบบ</a>
+      <a href="#auth"><span class="num">01</span> สมัคร / เข้าสู่ระบบ</a>
+      <a href="#auction"><span class="num">02</span> วงจรชีวิตประมูล</a>
+      <a href="#bid"><span class="num">03</span> การส่งบิด</a>
+      <a href="#live"><span class="num">04</span> ห้องประมูลสด</a>
+      <a href="#watch"><span class="num">05</span> ติดตาม + แจ้งเตือน</a>
+      <a href="#product"><span class="num">06</span> สถานะสินค้า</a>
+      <a href="#checkout"><span class="num">07</span> ตะกร้า → ชำระเงิน</a>
+      <a href="#ship"><span class="num">08</span> การจัดส่ง</a>
+      <a href="#estimate"><span class="num">09</span> AI ประเมินราคา</a>
+      <a href="#offer"><span class="num">10</span> AI ต่อรองราคา</a>
+      <a href="#support"><span class="num">11</span> แชทช่วยเหลือ</a>
+      <a href="#chat"><span class="num">12</span> แชทผู้ซื้อ–ผู้ขาย</a>
+      <a href="#admin"><span class="num">13</span> คำสั่งแอดมิน</a>
+      <a href="#states"><span class="num">··</span> ตารางสถานะอ้างอิง</a>
+      <a href="#owners"><span class="num">··</span> ใครดูแลส่วนไหน</a>
+    </nav>
+  </header>
+
+  <!-- ===================== CONTEXT / STACK ===================== -->
+  <section class="dgm" id="stack">
+    <div class="dgm-head">
+      <div class="kicker">ก่อนดูผัง — บริบท</div>
+      <h2>ระบบนี้ทำอะไร และประกอบด้วยอะไรบ้าง</h2>
+      <p>
+        ผู้ใช้คนหนึ่งเป็นได้ทั้งผู้ซื้อและผู้ขายในบัญชีเดียว ความต่างของสองโหมดอยู่แค่ว่า "ราคา" ถูกตัดสินอย่างไร
+      </p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Track A — Auction</div>
+        <h3>ราคาตัดสินด้วยการแข่งบิด</h3>
+        <p>
+          ผู้ขายตั้งประมูล ระบบเปิด–ปิดตามเวลาเอง ผู้ซื้อแข่งบิดในห้องเรียลไทม์ มีระบบกันยิงท้ายต่อเวลาให้อัตโนมัติ
+          พอหมดเวลา ผู้บิดสูงสุดคือผู้ชนะ
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-label">Track B — Marketplace</div>
+        <h3>ราคาตั้งไว้ ซื้อได้เลย</h3>
+        <p>
+          ผู้ขายลงสินค้าพร้อมสต็อกและราคา ผู้ซื้อหยิบใส่ตะกร้าได้หลายร้าน ต่อรองราคากับ AI ได้ถ้าผู้ขายเปิดไว้
+          แล้วกดชำระเงินทีเดียว
+        </p>
+      </div>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 430" class="dg" role="img" aria-label="แผนผังระบบ BidNest: เบราว์เซอร์คุยกับ Next.js ซึ่งเรียก NestJS API ผ่าน REST และ WebSocket, API อ่านเขียน PostgreSQL ผ่าน Prisma และเรียกบริการภายนอกสามตัวคือ Gemini, Cloudinary และ SMTP">
+        <rect x="20" y="150" width="150" height="86" rx="3" class="b"></rect>
+        <text x="95" y="184" text-anchor="middle" class="t b6">เบราว์เซอร์</text>
+        <text x="95" y="205" text-anchor="middle" class="m dim">ผู้ซื้อ / ผู้ขาย / แอดมิน</text>
+
+        <rect x="240" y="120" width="180" height="146" rx="3" class="b"></rect>
+        <text x="330" y="150" text-anchor="middle" class="t b6">apps/web</text>
+        <text x="330" y="170" text-anchor="middle" class="m dim">Next.js 16 · :3000</text>
+        <line x1="256" y1="184" x2="404" y2="184" class="lane"></line>
+        <text x="330" y="204" text-anchor="middle" class="m">NextAuth session</text>
+        <text x="330" y="222" text-anchor="middle" class="m">React Query</text>
+        <text x="330" y="240" text-anchor="middle" class="m">socket.io-client</text>
+
+        <rect x="500" y="100" width="190" height="186" rx="3" class="b" stroke-width="2"></rect>
+        <text x="595" y="130" text-anchor="middle" class="t b6">apps/api</text>
+        <text x="595" y="150" text-anchor="middle" class="m dim">NestJS 11 · :4000</text>
+        <line x1="516" y1="164" x2="674" y2="164" class="lane"></line>
+        <text x="595" y="184" text-anchor="middle" class="m">JWT guard + throttler</text>
+        <text x="595" y="202" text-anchor="middle" class="m">24 modules</text>
+        <text x="595" y="220" text-anchor="middle" class="m hot-t">lifecycle ทุก 10 วิ</text>
+        <text x="595" y="238" text-anchor="middle" class="m">ws /auctions · /user</text>
+        <text x="595" y="262" text-anchor="middle" class="t s dim">กติกาทั้งหมดอยู่ที่นี่</text>
+
+        <rect x="770" y="150" width="150" height="86" rx="3" class="b"></rect>
+        <text x="845" y="180" text-anchor="middle" class="t b6">PostgreSQL 17</text>
+        <text x="845" y="201" text-anchor="middle" class="m dim">Prisma · 33 models</text>
+
+        <rect x="500" y="330" width="190" height="72" rx="3" class="b dash"></rect>
+        <text x="595" y="356" text-anchor="middle" class="t b6">บริการภายนอก</text>
+        <text x="595" y="378" text-anchor="middle" class="m dim">Gemini · Cloudinary</text>
+        <text x="595" y="394" text-anchor="middle" class="m dim">SMTP (maildev ตอน dev)</text>
+
+        <line x1="172" y1="180" x2="236" y2="180" class="e"></line>
+        <text x="204" y="172" text-anchor="middle" class="m dim">HTTP</text>
+
+        <line x1="422" y1="160" x2="496" y2="160" class="e"></line>
+        <text x="459" y="152" text-anchor="middle" class="m dim">REST + JWT</text>
+
+        <line x1="422" y1="232" x2="496" y2="232" class="e hot" marker-start="url(#a)"></line>
+        <text x="459" y="252" text-anchor="middle" class="m hot-t">WebSocket</text>
+
+        <line x1="692" y1="186" x2="766" y2="186" class="e" marker-start="url(#a)"></line>
+        <text x="729" y="178" text-anchor="middle" class="m dim">SQL</text>
+
+        <line x1="595" y1="290" x2="595" y2="326" class="e"></line>
+      </svg>
+      <figcaption>
+        เบราว์เซอร์ไม่เคยคุยกับฐานข้อมูลหรือบริการภายนอกโดยตรง — ทุกอย่างผ่าน API ชั้นเดียว
+        เส้นสีส้มคือช่องทางเรียลไทม์ที่ส่งราคาบิดใหม่กลับมาโดยไม่ต้องรีเฟรชหน้า
+      </figcaption>
+    </figure>
+
+    <div class="cards tight">
+      <div class="card">
+        <div class="card-label">รันวันทำงาน</div>
+        <p><code>pnpm dev</code> ยกทั้ง web (:3000) และ api (:4000) พร้อมกัน</p>
+      </div>
+      <div class="card">
+        <div class="card-label">พึ่ง Docker</div>
+        <p><code>infra/docker/compose.dev.yml</code> — postgres 17 + maildev สำหรับอ่าน OTP</p>
+      </div>
+      <div class="card">
+        <div class="card-label">ก่อนส่งงาน</div>
+        <p><code>pnpm check</code> = typecheck ทั้งสองแอป + test + lint ในคำสั่งเดียว</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 00 OVERALL ===================== -->
+  <section class="dgm" id="overall">
+    <div class="dgm-head">
+      <div class="kicker">00 — Overall</div>
+      <h2>ภาพรวมทั้งระบบ: สองเส้นทางหาราคา แล้วบรรจบที่จุดจ่ายเงินเดียว</h2>
+      <p>
+        ครึ่งบนคือการประมูล ครึ่งกลางคือร้านค้าซื้อทันที ทั้งสองต่างกันแค่วิธีได้ราคา
+        พอได้ราคาแล้วเดินเข้าเส้นทางเดียวกันทั้งหมด
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 470" class="dg" role="img" aria-label="ภาพรวม BidNest: เส้นทางประมูลสี่ขั้น ผู้ขายสร้างประมูล ระบบเปิดตามเวลา ผู้ซื้อแข่งบิด ระบบปิดและเลือกผู้ชนะ; เส้นทางร้านค้าสามขั้น ผู้ขายลงสินค้า ผู้ซื้อค้นหาและต่อรอง หยิบใส่ตะกร้า; ทั้งสองเส้นทางไหลเข้าจุดชำระเงินเดียวกัน แล้วต่อไปที่ออเดอร์แยกตามผู้ขาย และการจัดส่งจนผู้ซื้อรับของ">
+        <text x="10" y="28" class="m hot-t">TRACK A · ประมูล</text>
+        <rect x="10" y="42" width="196" height="62" rx="3" class="b"></rect>
+        <text x="108" y="68" text-anchor="middle" class="t b6">ผู้ขายสร้างประมูล</text>
+        <text x="108" y="88" text-anchor="middle" class="t s dim">ร่าง → ตรวจ → เผยแพร่</text>
+
+        <rect x="252" y="42" width="196" height="62" rx="3" class="b hot"></rect>
+        <text x="350" y="68" text-anchor="middle" class="t b6 hot-t">ระบบเปิดตามเวลา</text>
+        <text x="350" y="88" text-anchor="middle" class="t s dim">งานเบื้องหลังทุก 10 วิ</text>
+
+        <rect x="494" y="42" width="196" height="62" rx="3" class="b"></rect>
+        <text x="592" y="68" text-anchor="middle" class="t b6">ผู้ซื้อแข่งบิด</text>
+        <text x="592" y="88" text-anchor="middle" class="t s dim">ห้องสด + ต่อเวลาอัตโนมัติ</text>
+
+        <rect x="736" y="42" width="196" height="62" rx="3" class="b hot"></rect>
+        <text x="834" y="68" text-anchor="middle" class="t b6 hot-t">ระบบปิด เลือกผู้ชนะ</text>
+        <text x="834" y="88" text-anchor="middle" class="t s dim">SOLD / UNSOLD</text>
+
+        <line x1="208" y1="73" x2="248" y2="73" class="e"></line>
+        <line x1="450" y1="73" x2="490" y2="73" class="e"></line>
+        <line x1="692" y1="73" x2="732" y2="73" class="e"></line>
+
+        <text x="10" y="152" class="m dim">TRACK B · ร้านค้า</text>
+        <rect x="10" y="166" width="196" height="62" rx="3" class="b"></rect>
+        <text x="108" y="192" text-anchor="middle" class="t b6">ผู้ขายลงสินค้า</text>
+        <text x="108" y="212" text-anchor="middle" class="t s dim">ราคา + สต็อก + หมวดหมู่</text>
+
+        <rect x="252" y="166" width="196" height="62" rx="3" class="b"></rect>
+        <text x="350" y="192" text-anchor="middle" class="t b6">ผู้ซื้อค้นหา / ต่อรอง</text>
+        <text x="350" y="212" text-anchor="middle" class="t s dim">กรอง · เสนอราคากับ AI</text>
+
+        <rect x="494" y="166" width="196" height="62" rx="3" class="b"></rect>
+        <text x="592" y="192" text-anchor="middle" class="t b6">หยิบใส่ตะกร้า</text>
+        <text x="592" y="212" text-anchor="middle" class="t s dim">หลายร้านในตะกร้าเดียว</text>
+
+        <line x1="208" y1="197" x2="248" y2="197" class="e"></line>
+        <line x1="450" y1="197" x2="490" y2="197" class="e"></line>
+
+        <path d="M 834 108 L 834 288 L 300 288 L 300 322" class="e"></path>
+        <path d="M 592 232 L 592 288" class="e plain"></path>
+        <text x="620" y="280" class="t s dim">ชนะประมูล → ไปจ่ายเงิน</text>
+
+        <rect x="180" y="326" width="240" height="70" rx="3" class="b hot"></rect>
+        <text x="300" y="352" text-anchor="middle" class="t b6 hot-t">ชำระเงิน (จำลอง)</text>
+        <text x="300" y="372" text-anchor="middle" class="t s dim">ตัดเงิน 1 ครั้ง · แช่ที่อยู่</text>
+        <text x="300" y="388" text-anchor="middle" class="m dim">POST /orders/checkout</text>
+
+        <rect x="466" y="326" width="212" height="70" rx="3" class="b"></rect>
+        <text x="572" y="352" text-anchor="middle" class="t b6">ออเดอร์แยกตามผู้ขาย</text>
+        <text x="572" y="372" text-anchor="middle" class="t s dim">ตัดสต็อก · แจ้งเตือนผู้ขาย</text>
+
+        <rect x="724" y="326" width="208" height="70" rx="3" class="b"></rect>
+        <text x="828" y="352" text-anchor="middle" class="t b6">จัดส่ง → รับของ</text>
+        <text x="828" y="372" text-anchor="middle" class="t s dim">ผู้ขายอัปเดต timeline</text>
+
+        <line x1="422" y1="361" x2="462" y2="361" class="e"></line>
+        <line x1="680" y1="361" x2="720" y2="361" class="e"></line>
+
+        <rect x="466" y="424" width="466" height="34" rx="3" class="b sunk"></rect>
+        <text x="699" y="446" text-anchor="middle" class="t s dim">ขอบเขต V1 จบตรงนี้ — ไม่มีคืนเงินหรือยกเลิกหลังจ่ายแล้ว</text>
+      </svg>
+      <figcaption>
+        กล่องสีส้มคือขั้นที่ไม่มีคนกด — ระบบทำเองตามเวลาหรือตามผลการคำนวณ
+        สังเกตว่าเส้นทางทั้งสองมาบรรจบกันก่อนถึงกล่องชำระเงิน ไม่ใช่หลังจากนั้น
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 01 AUTH ===================== -->
+  <section class="dgm" id="auth">
+    <div class="dgm-head">
+      <div class="kicker">01 — Identity</div>
+      <h2>สมัคร / เข้าสู่ระบบ: สองจังหวะเสมอ</h2>
+      <p>
+        ผ่านรหัสผ่านหรือผ่าน Google/LINE ก็ตาม จังหวะแรกได้แค่ "ยืนยันตัวตนผ่าน" จังหวะสองที่ยืนยัน OTP แล้วจึงได้ token
+        ยกเว้นเครื่องที่เคยกดจำไว้
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 320" class="dg" role="img" aria-label="ผังการเข้าสู่ระบบ: เข้าทางอีเมลรหัสผ่านหรือ Google LINE เข้าสู่การตรวจตัวตน ถ้าเป็นเครื่องที่เคยจำไว้จะออก token ทันที ถ้าไม่ใช่จะส่ง OTP ทางอีเมลแล้วรอยืนยันก่อนออก token จากนั้นเข้าสู่การใช้งานที่มีต่ออายุ token และออกจากระบบ">
+        <rect x="10" y="34" width="180" height="54" rx="3" class="b"></rect>
+        <text x="100" y="58" text-anchor="middle" class="t b6">อีเมล + รหัสผ่าน</text>
+        <text x="100" y="76" text-anchor="middle" class="m dim">/auth/login</text>
+
+        <rect x="10" y="128" width="180" height="54" rx="3" class="b"></rect>
+        <text x="100" y="152" text-anchor="middle" class="t b6">Google / LINE</text>
+        <text x="100" y="170" text-anchor="middle" class="m dim">/auth/*/callback</text>
+
+        <rect x="10" y="222" width="180" height="54" rx="3" class="b dash"></rect>
+        <text x="100" y="246" text-anchor="middle" class="t b6">ลืมรหัสผ่าน</text>
+        <text x="100" y="264" text-anchor="middle" class="m dim">/auth/forgot-password</text>
+
+        <rect x="248" y="82" width="176" height="54" rx="3" class="b"></rect>
+        <text x="336" y="106" text-anchor="middle" class="t b6">ตรวจตัวตน</text>
+        <text x="336" y="124" text-anchor="middle" class="t s dim">bcrypt / ผู้ให้บริการ</text>
+
+        <line x1="192" y1="61" x2="244" y2="97" class="e"></line>
+        <line x1="192" y1="155" x2="244" y2="122" class="e"></line>
+
+        <path d="M 190 249 L 620 249 L 620 200" class="e dash"></path>
+        <text x="400" y="242" class="t s dim">ตั้งรหัสใหม่ผ่านลิงก์ที่มีอายุ แล้วกลับมาล็อกอิน</text>
+
+        <rect x="470" y="34" width="176" height="50" rx="3" class="b sunk"></rect>
+        <text x="558" y="55" text-anchor="middle" class="t s">เครื่องนี้เคยกดจำไว้?</text>
+        <text x="558" y="73" text-anchor="middle" class="m dim">trusted device</text>
+
+        <line x1="426" y1="100" x2="466" y2="70" class="e"></line>
+
+        <rect x="470" y="112" width="176" height="54" rx="3" class="b hot"></rect>
+        <text x="558" y="136" text-anchor="middle" class="t b6 hot-t">ส่ง OTP เข้าอีเมล</text>
+        <text x="558" y="154" text-anchor="middle" class="t s dim">รอ 2FA · ยังไม่มี token</text>
+
+        <line x1="426" y1="115" x2="466" y2="132" class="e"></line>
+        <text x="452" y="182" text-anchor="middle" class="t s dim">ไม่เคย</text>
+
+        <rect x="698" y="112" width="176" height="54" rx="3" class="b"></rect>
+        <text x="786" y="136" text-anchor="middle" class="t b6">ยืนยัน OTP</text>
+        <text x="786" y="154" text-anchor="middle" class="m dim">/auth/2fa/verify</text>
+
+        <line x1="648" y1="139" x2="694" y2="139" class="e"></line>
+
+        <rect x="698" y="34" width="176" height="54" rx="3" class="b good"></rect>
+        <text x="786" y="58" text-anchor="middle" class="t b6 good-t">ออก token</text>
+        <text x="786" y="76" text-anchor="middle" class="t s dim">access + refresh</text>
+
+        <line x1="648" y1="59" x2="694" y2="59" class="e"></line>
+        <text x="670" y="50" text-anchor="middle" class="t s dim">เคย</text>
+        <path d="M 786 108 L 786 92" class="e"></path>
+
+        <rect x="698" y="214" width="176" height="62" rx="3" class="b"></rect>
+        <text x="786" y="238" text-anchor="middle" class="t b6">ใช้งานระบบ</text>
+        <text x="786" y="256" text-anchor="middle" class="t s dim">refresh / logout</text>
+        <text x="786" y="270" text-anchor="middle" class="m dim">JWT guard ทุก request</text>
+
+        <path d="M 874 88 L 900 88 L 900 245 L 878 245" class="e"></path>
+      </svg>
+      <figcaption>
+        เส้นทางลืมรหัสผ่าน (เส้นประ) ไม่ได้ออก token เอง — ตั้งรหัสใหม่แล้วต้องเดินเข้าล็อกอินตามปกติ
+        ผ่าน OTP อีกครั้ง
+      </figcaption>
+      <div class="paths">
+        <span>POST /auth/register</span><span>/auth/login</span><span>/auth/2fa/verify</span>
+        <span>/auth/2fa/resend</span><span>/auth/refresh</span><span>/auth/logout</span>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ===================== 02 AUCTION ===================== -->
+  <section class="dgm" id="auction">
+    <div class="dgm-head">
+      <div class="kicker">02 — Auction lifecycle</div>
+      <h2>วงจรชีวิตประมูล: ผู้ขายกดแค่ 2 ปุ่ม ที่เหลือระบบทำให้ตามเวลา</h2>
+      <p>
+        ปุ่มที่ผู้ขายกดเองมีแค่ "เผยแพร่" กับ "ยกเลิก" ส่วนการเปิดประมูลเมื่อถึงเวลาเริ่ม
+        และการปิดพร้อมเลือกผู้ชนะเมื่อหมดเวลา เป็นงานเบื้องหลังที่วนตรวจทุก 10 วินาที
+        ระหว่างที่ยัง <code>ACTIVE</code> เวลาจบยังขยับออกได้อีกจากการบิดช่วงท้าย
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 336" class="dg" role="img" aria-label="ผังสถานะประมูล DRAFT ไป SCHEDULED เมื่อเผยแพร่ผ่านการตรวจ, SCHEDULED ไป ACTIVE เมื่อถึงเวลาเริ่ม, ACTIVE วนต่อเวลาตัวเองได้เมื่อมีบิดในสองนาทีสุดท้าย, แล้วจบเป็น SOLD ถ้ามีบิด หรือ UNSOLD ถ้าไม่มี, ส่วน CANCELLED มาจากผู้ขายหรือแอดมินตราบที่ยังไม่ปิด">
+        <path d="M 500 116 C 490 66, 606 66, 596 116" class="e hot"></path>
+        <text x="548" y="54" text-anchor="middle" class="t hot-t" style="font-weight:600">บิดใน 2 นาทีสุดท้าย → ต่อเวลาอีก 2 นาที</text>
+        <text x="548" y="36" text-anchor="middle" class="m hot-t dim">สูงสุด 5 ครั้ง · บันทึกทุกครั้ง</text>
+
+        <rect x="16" y="126" width="150" height="58" rx="3" class="b"></rect>
+        <text x="91" y="152" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">DRAFT</text>
+        <text x="91" y="170" text-anchor="middle" class="t s dim">แก้ได้ทุกอย่าง</text>
+
+        <rect x="236" y="126" width="154" height="58" rx="3" class="b"></rect>
+        <text x="313" y="152" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">SCHEDULED</text>
+        <text x="313" y="170" text-anchor="middle" class="t s dim">ตั้งเวลาไว้ ยังไม่เปิด</text>
+
+        <rect x="466" y="118" width="164" height="74" rx="3" class="b hot"></rect>
+        <text x="548" y="144" text-anchor="middle" class="m hot-t" style="font-weight:600;font-size:13px">ACTIVE</text>
+        <text x="548" y="162" text-anchor="middle" class="t s dim">รับบิด · ห้องสดเปิด</text>
+        <text x="548" y="178" text-anchor="middle" class="t s dim">เวลาจบขยับได้</text>
+
+        <rect x="742" y="66" width="182" height="54" rx="3" class="b good"></rect>
+        <text x="833" y="90" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">SOLD</text>
+        <text x="833" y="108" text-anchor="middle" class="t s dim">มีผู้ชนะ → ไปจ่ายเงิน</text>
+
+        <rect x="742" y="140" width="182" height="54" rx="3" class="b"></rect>
+        <text x="833" y="164" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">UNSOLD</text>
+        <text x="833" y="182" text-anchor="middle" class="t s dim">ไม่มีใครบิด</text>
+
+        <rect x="742" y="240" width="182" height="54" rx="3" class="b stop dash"></rect>
+        <text x="833" y="264" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">CANCELLED</text>
+        <text x="833" y="282" text-anchor="middle" class="t s dim">ผู้ขาย / แอดมิน + เหตุผล</text>
+
+        <line x1="168" y1="155" x2="232" y2="155" class="e"></line>
+        <text x="200" y="146" text-anchor="middle" class="t s">เผยแพร่</text>
+        <text x="200" y="130" text-anchor="middle" class="m dim">ผ่าน validation</text>
+
+        <line x1="392" y1="155" x2="462" y2="155" class="e hot"></line>
+        <text x="427" y="146" text-anchor="middle" class="t s hot-t">ถึงเวลาเริ่ม</text>
+        <text x="427" y="130" text-anchor="middle" class="m hot-t dim">งานเบื้องหลัง</text>
+
+        <line x1="632" y1="136" x2="738" y2="100" class="e hot"></line>
+        <text x="686" y="106" text-anchor="middle" class="t s hot-t">หมดเวลา · มีบิด</text>
+
+        <line x1="632" y1="170" x2="738" y2="170" class="e hot"></line>
+        <text x="686" y="162" text-anchor="middle" class="t s hot-t">หมดเวลา · ไม่มีบิด</text>
+
+        <path d="M 313 188 L 313 266 L 738 266" class="e dash"></path>
+        <path d="M 548 196 L 548 266" class="e dash plain"></path>
+        <text x="470" y="286" text-anchor="middle" class="t s dim">ยกเลิกได้ตราบที่ยังไม่ปิด · แจ้งเตือนผู้ที่บิดไว้ทุกคน</text>
+      </svg>
+      <figcaption>
+        SOLD / UNSOLD / CANCELLED เป็นปลายทาง ไม่ย้อนกลับ — ประมูลที่จบแล้วจะไม่กลับมาเปิดใหม่
+        ต้องสร้างรายการใหม่เท่านั้น
+      </figcaption>
+      <div class="paths">
+        <span>POST /auctions/drafts</span><span>GET drafts/:id/validation</span>
+        <span>POST drafts/:id/publish</span><span>POST /auctions/:id/cancel</span>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ===================== 03 BID ===================== -->
+  <section class="dgm" id="bid">
+    <div class="dgm-head">
+      <div class="kicker">03 — Place a bid</div>
+      <h2>การส่งบิด: ตรวจให้ครบ เขียนครั้งเดียว แล้วค่อยประกาศ</h2>
+      <p>
+        ทุกด่านตรวจและการเขียนอยู่ในทรานแซกชันเดียว การประกาศออกห้องเกิดหลัง commit เสมอ
+        เพราะราคาที่ประกาศแล้วถอนคืนไม่ได้
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 340" class="dg" role="img" aria-label="ผังการส่งบิด: ผู้ซื้อกดบิด ผ่านด่านตรวจว่าประมูลยังเปิด ราคาถึงขั้นต่ำ และไม่ใช่บิดซ้ำ ถ้าไม่ผ่านจะถูกปฏิเสธหรือคืนผลเดิม ถ้าผ่านจะเขียนบิดพร้อมคำนวณการต่อเวลาในทรานแซกชันเดียว แล้วหลัง commit จึงกระจายราคาใหม่เข้าห้องและแจ้งเตือนคนที่เสียตำแหน่งผู้นำ">
+        <rect x="10" y="126" width="150" height="58" rx="3" class="b"></rect>
+        <text x="85" y="152" text-anchor="middle" class="t b6">ผู้ซื้อกดบิด</text>
+        <text x="85" y="170" text-anchor="middle" class="m dim">POST …/bids</text>
+
+        <rect x="204" y="118" width="196" height="74" rx="3" class="b"></rect>
+        <text x="302" y="142" text-anchor="middle" class="t b6">ด่านตรวจ</text>
+        <text x="302" y="160" text-anchor="middle" class="t s dim">ประมูลยังเปิด?</text>
+        <text x="302" y="176" text-anchor="middle" class="t s dim">ราคาถึงขั้นต่ำ?</text>
+
+        <line x1="162" y1="155" x2="200" y2="155" class="e"></line>
+
+        <rect x="204" y="240" width="196" height="58" rx="3" class="b dash stop"></rect>
+        <text x="302" y="264" text-anchor="middle" class="t b6 stop-t">ปฏิเสธ พร้อมเหตุผล</text>
+        <text x="302" y="282" text-anchor="middle" class="t s dim">ปิดแล้ว / ราคาต่ำไป</text>
+        <path d="M 302 196 L 302 236" class="e dash"></path>
+
+        <rect x="444" y="118" width="200" height="74" rx="3" class="b"></rect>
+        <text x="544" y="142" text-anchor="middle" class="t b6">เขียนใน transaction</text>
+        <text x="544" y="160" text-anchor="middle" class="t s dim">บันทึกบิด + ราคาปัจจุบัน</text>
+        <text x="544" y="176" text-anchor="middle" class="t s dim">คำนวณการต่อเวลาไปพร้อมกัน</text>
+
+        <line x1="402" y1="155" x2="440" y2="155" class="e"></line>
+
+        <rect x="444" y="30" width="200" height="56" rx="3" class="b sunk"></rect>
+        <text x="544" y="53" text-anchor="middle" class="t s">เป็นบิดซ้ำจากการกดย้ำ?</text>
+        <text x="544" y="72" text-anchor="middle" class="t s dim">→ คืนผลเดิม ไม่เขียนซ้ำ</text>
+        <path d="M 544 114 L 544 90" class="e"></path>
+
+        <rect x="688" y="86" width="240" height="58" rx="3" class="b hot"></rect>
+        <text x="808" y="110" text-anchor="middle" class="t b6 hot-t">กระจายเข้าห้อง</text>
+        <text x="808" y="128" text-anchor="middle" class="m dim">ws /auctions · ราคา + การต่อเวลา</text>
+
+        <rect x="688" y="166" width="240" height="58" rx="3" class="b hot"></rect>
+        <text x="808" y="190" text-anchor="middle" class="t b6 hot-t">แจ้งคนที่เสียตำแหน่งผู้นำ</text>
+        <text x="808" y="208" text-anchor="middle" class="m dim">ws /user · OUTBID</text>
+
+        <path d="M 646 145 L 668 145 L 668 115 L 684 115" class="e"></path>
+        <path d="M 668 145 L 668 195 L 684 195" class="e"></path>
+        <text x="666" y="252" text-anchor="middle" class="t s dim">ทั้งสองเส้นเกิดหลัง commit เท่านั้น</text>
+      </svg>
+      <figcaption>
+        การกดบิดซ้ำจากเน็ตหลุดไม่ทำให้เกิดสองบิด — ระบบคืนผลของบิดเดิมกลับไป
+        ส่วนการต่อเวลาถูกตัดสินก่อนเขียน เพื่อให้เวลาจบใหม่ออกไปกับการประกาศรอบเดียวกัน
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 04 LIVE ===================== -->
+  <section class="dgm" id="live">
+    <div class="dgm-head">
+      <div class="kicker">04 — Live arena</div>
+      <h2>ห้องประมูลสด: ล็อบบี้ → สนาม → ช่วงตัดสิน → ผลลัพธ์</h2>
+      <p>
+        ทุกอย่างที่หน้าจอแสดง — ผู้นำ เวลาที่เหลือ สถานะเร่งด่วน — คำนวณจากฝั่งเซิร์ฟเวอร์
+        ด้วยกฎชุดเดียวกับที่ใช้ตัดสินผู้ชนะจริง
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 300" class="dg" role="img" aria-label="ผังห้องประมูลสด: ล็อบบี้แสดงคนที่รออยู่ กด join เข้าสนามที่มีราคาปัจจุบัน ผู้นำ และนับถอยหลัง เมื่อเข้าสองนาทีสุดท้ายจะเข้าโหมดช่วงตัดสินที่บิดยืดเวลาได้ เมื่อหมดเวลาระบบปิดและแสดงหน้าผลประมูล">
+        <rect x="10" y="110" width="190" height="66" rx="3" class="b"></rect>
+        <text x="105" y="136" text-anchor="middle" class="t b6">ล็อบบี้</text>
+        <text x="105" y="154" text-anchor="middle" class="t s dim">ใครรออยู่ · เวลาเริ่ม</text>
+        <text x="105" y="169" text-anchor="middle" class="m dim">GET …/lobby</text>
+
+        <rect x="256" y="110" width="200" height="66" rx="3" class="b"></rect>
+        <text x="356" y="136" text-anchor="middle" class="t b6">สนามประมูล</text>
+        <text x="356" y="154" text-anchor="middle" class="t s dim">ราคา · ผู้นำ · บิดล่าสุด</text>
+        <text x="356" y="169" text-anchor="middle" class="m dim">GET …/arena</text>
+
+        <line x1="202" y1="143" x2="252" y2="143" class="e"></line>
+        <text x="227" y="134" text-anchor="middle" class="t s dim">join</text>
+
+        <rect x="512" y="102" width="200" height="82" rx="3" class="b hot"></rect>
+        <text x="612" y="128" text-anchor="middle" class="t b6 hot-t">ช่วงตัดสิน</text>
+        <text x="612" y="146" text-anchor="middle" class="t s dim">เหลือ ≤ 2 นาที</text>
+        <text x="612" y="162" text-anchor="middle" class="t s dim">บิดหนึ่งครั้ง = ยืดเวลา</text>
+        <text x="612" y="177" text-anchor="middle" class="m dim">เหลือกี่ครั้งบอกบนจอ</text>
+
+        <line x1="458" y1="143" x2="508" y2="143" class="e hot"></line>
+
+        <rect x="768" y="110" width="164" height="66" rx="3" class="b good"></rect>
+        <text x="850" y="136" text-anchor="middle" class="t b6 good-t">หน้าผลประมูล</text>
+        <text x="850" y="154" text-anchor="middle" class="t s dim">ผู้ชนะ + ราคาปิด</text>
+        <text x="850" y="169" text-anchor="middle" class="m dim">/auctions/[id]/result</text>
+
+        <line x1="714" y1="143" x2="764" y2="143" class="e hot"></line>
+        <text x="739" y="134" text-anchor="middle" class="t s hot-t">หมดเวลา</text>
+
+        <path d="M 612 90 C 600 46, 700 46, 690 90" class="e hot"></path>
+        <text x="660" y="36" text-anchor="middle" class="t s hot-t">ทุกบิดในช่วงนี้ดันเวลาออกไปอีก</text>
+
+        <rect x="256" y="216" width="456" height="46" rx="3" class="b sunk"></rect>
+        <text x="484" y="236" text-anchor="middle" class="t s">ผู้นำบนจอ = คนที่จะชนะจริงถ้าหมดเวลาตอนนี้</text>
+        <text x="484" y="253" text-anchor="middle" class="t s dim">ราคาสูงสุดก่อน เสมอกันใช้คนที่บิดก่อน — เกณฑ์เดียวกับตอนปิดประมูล</text>
+        <path d="M 356 180 L 356 212" class="e dash"></path>
+        <path d="M 612 188 L 612 212" class="e dash"></path>
+      </svg>
+      <figcaption>
+        "ช่วงตัดสิน" ไม่ใช่หน้าจอใหม่ แต่เป็นสถานะของสนามเดิมที่เซิร์ฟเวอร์เป็นคนบอกว่าเข้าแล้วหรือยัง
+        หน้าเว็บจึงไม่ต้องนับเวลาเอง
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 05 WATCH + NOTIFY ===================== -->
+  <section class="dgm" id="watch">
+    <div class="dgm-head">
+      <div class="kicker">05 — Watchlist &amp; notifications</div>
+      <h2>ติดตามและแจ้งเตือน: เหตุการณ์เดียว สองปลายทาง</h2>
+      <p>
+        ทุกแจ้งเตือนถูกเขียนลงฐานข้อมูลก่อน แล้วค่อยยิงผ่าน WebSocket — คนที่ปิดเว็บอยู่จึงยังเห็นย้อนหลังได้
+        ไม่ใช่ข้อความที่หายไปกับการเชื่อมต่อ
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 320" class="dg" role="img" aria-label="ผังการแจ้งเตือน: เหตุการณ์แปดชนิดจากฝั่งประมูล คำสั่งซื้อ และแชท ถูกเขียนเป็นแถวแจ้งเตือนในฐานข้อมูล แล้วส่งต่อสองทาง คือยิงสดผ่าน WebSocket ห้องส่วนตัวของผู้ใช้ และค้างไว้ให้เปิดอ่านย้อนหลังที่หน้าแจ้งเตือน ส่วนรายการติดตามเป็นตัวช่วยให้ผู้ใช้ไม่พลาดประมูลที่สนใจ">
+        <rect x="10" y="34" width="228" height="106" rx="3" class="b"></rect>
+        <text x="124" y="58" text-anchor="middle" class="t b6">เหตุการณ์ฝั่งประมูล</text>
+        <text x="124" y="79" text-anchor="middle" class="m dim">OUTBID · AUCTION_WON</text>
+        <text x="124" y="97" text-anchor="middle" class="m dim">AUCTION_ENDED</text>
+        <text x="124" y="115" text-anchor="middle" class="m dim">AUCTION_CANCELLED</text>
+        <text x="124" y="132" text-anchor="middle" class="t s dim">Dev 4</text>
+
+        <rect x="10" y="158" width="228" height="106" rx="3" class="b"></rect>
+        <text x="124" y="182" text-anchor="middle" class="t b6">เหตุการณ์ฝั่งซื้อขาย</text>
+        <text x="124" y="203" text-anchor="middle" class="m dim">ORDER_PLACED</text>
+        <text x="124" y="221" text-anchor="middle" class="m dim">SHIPMENT_UPDATE · DELIVERED</text>
+        <text x="124" y="239" text-anchor="middle" class="m dim">NEW_MESSAGE</text>
+        <text x="124" y="256" text-anchor="middle" class="t s dim">Dev 3</text>
+
+        <rect x="322" y="112" width="220" height="76" rx="3" class="b"></rect>
+        <text x="432" y="138" text-anchor="middle" class="t b6">เขียนแถวแจ้งเตือน</text>
+        <text x="432" y="156" text-anchor="middle" class="t s dim">ผูกกับผู้รับ + ลิงก์ปลายทาง</text>
+        <text x="432" y="174" text-anchor="middle" class="m dim">table notifications</text>
+
+        <line x1="240" y1="98" x2="318" y2="135" class="e"></line>
+        <line x1="240" y1="200" x2="318" y2="166" class="e"></line>
+
+        <rect x="646" y="70" width="284" height="62" rx="3" class="b hot"></rect>
+        <text x="788" y="94" text-anchor="middle" class="t b6 hot-t">ยิงสดเข้าห้องส่วนตัว</text>
+        <text x="788" y="112" text-anchor="middle" class="m dim">ws /user · กระดิ่งเด้งทันที</text>
+
+        <rect x="646" y="168" width="284" height="62" rx="3" class="b"></rect>
+        <text x="788" y="192" text-anchor="middle" class="t b6">ค้างไว้ให้อ่านย้อนหลัง</text>
+        <text x="788" y="210" text-anchor="middle" class="m dim">GET /notifications · ทำเครื่องหมายอ่านแล้ว</text>
+
+        <path d="M 544 140 L 600 140 L 600 100 L 642 100" class="e hot"></path>
+        <path d="M 600 140 L 600 198 L 642 198" class="e"></path>
+
+        <rect x="322" y="234" width="220" height="62" rx="3" class="b sunk"></rect>
+        <text x="432" y="258" text-anchor="middle" class="t b6">รายการติดตาม</text>
+        <text x="432" y="276" text-anchor="middle" class="t s dim">กดหัวใจไว้ = ไม่พลาดตอนใกล้ปิด</text>
+        <path d="M 432 192 L 432 230" class="e dash"></path>
+      </svg>
+      <figcaption>
+        แจ้งเตือนแบบยิงสดกับแบบอ่านย้อนหลังคือแถวข้อมูลเดียวกัน — ไม่มีทางที่กระดิ่งเด้งแล้วเปิดหน้ารวมไม่เจอ
+      </figcaption>
+      <div class="paths">
+        <span>POST /auctions/:id/watchlist</span><span>GET /watchlist</span>
+        <span>POST /products/:id/watchlist</span><span>GET /notifications</span>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ===================== 06 PRODUCT ===================== -->
+  <section class="dgm" id="product">
+    <div class="dgm-head">
+      <div class="kicker">06 — Product status</div>
+      <h2>สถานะสินค้า: ผู้ขายปิดขายเอง กับ แอดมินสั่งปิด อยู่คนละสถานะ</h2>
+      <p>
+        ผู้ขายพักขายเองได้ตามใจ และสต็อกหมดระบบก็พลิกสถานะให้อัตโนมัติ
+        แต่สินค้าที่แอดมินสั่งระงับจะไปอยู่อีกสถานะหนึ่งที่ผู้ขายเปิดกลับเองไม่ได้
+        และจะเลี่ยงด้วยการกดลบทิ้งแล้วลงใหม่ก็ไม่ได้เช่นกัน (ADR-0002)
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 340" class="dg" role="img" aria-label="ผังสถานะสินค้า: ลงขายแล้วเป็น ACTIVE, ผู้ขายสลับกับ INACTIVE ได้, สต็อกหมดพลิกเป็น OUT_OF_STOCK อัตโนมัติและกลับมาเมื่อเติมสต็อก, ผู้ขายลบเป็น REMOVED ได้จาก ACTIVE หรือ INACTIVE, แอดมินสั่ง SUSPENDED ได้จากทุกสถานะที่ยังขายอยู่ และมีแต่แอดมินที่ปลดออกได้">
+        <rect x="14" y="140" width="150" height="52" rx="3" class="b sunk"></rect>
+        <text x="89" y="163" text-anchor="middle" class="t b6">ลงขาย</text>
+        <text x="89" y="181" text-anchor="middle" class="m dim">POST /products</text>
+
+        <rect x="240" y="140" width="164" height="52" rx="3" class="b good"></rect>
+        <text x="322" y="163" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">ACTIVE</text>
+        <text x="322" y="181" text-anchor="middle" class="t s dim">ซื้อได้</text>
+
+        <line x1="166" y1="166" x2="236" y2="166" class="e"></line>
+
+        <rect x="240" y="36" width="164" height="52" rx="3" class="b"></rect>
+        <text x="322" y="59" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">INACTIVE</text>
+        <text x="322" y="77" text-anchor="middle" class="t s dim">ผู้ขายพักขายเอง</text>
+
+        <path d="M 302 136 L 302 92" class="e"></path>
+        <path d="M 342 92 L 342 136" class="e"></path>
+        <text x="416" y="116" text-anchor="middle" class="t s dim">ผู้ขายสลับได้สองทาง</text>
+
+        <rect x="240" y="244" width="164" height="52" rx="3" class="b hot"></rect>
+        <text x="322" y="267" text-anchor="middle" class="m hot-t" style="font-weight:600;font-size:13px">OUT_OF_STOCK</text>
+        <text x="322" y="285" text-anchor="middle" class="t s dim">สต็อก = 0</text>
+
+        <path d="M 302 196 L 302 240" class="e hot"></path>
+        <path d="M 342 240 L 342 196" class="e hot"></path>
+        <text x="428" y="228" text-anchor="middle" class="t s hot-t">ระบบพลิกเองตามสต็อก</text>
+
+        <rect x="580" y="36" width="164" height="52" rx="3" class="b dash"></rect>
+        <text x="662" y="59" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">REMOVED</text>
+        <text x="662" y="77" text-anchor="middle" class="t s dim">ลบแบบเก็บประวัติ</text>
+
+        <line x1="406" y1="58" x2="576" y2="58" class="e"></line>
+        <line x1="406" y1="158" x2="576" y2="74" class="e"></line>
+
+        <rect x="580" y="196" width="164" height="52" rx="3" class="b stop"></rect>
+        <text x="662" y="219" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">SUSPENDED</text>
+        <text x="662" y="237" text-anchor="middle" class="t s dim">แอดมินสั่งระงับ</text>
+
+        <line x1="406" y1="176" x2="576" y2="210" class="e"></line>
+        <line x1="406" y1="270" x2="576" y2="236" class="e"></line>
+        <text x="492" y="196" text-anchor="middle" class="t s stop-t">แอดมิน + เหตุผล</text>
+
+        <path d="M 662 192 L 662 120 L 322 120 L 322 136" class="e dash"></path>
+        <text x="500" y="112" text-anchor="middle" class="t s dim">ปลดได้โดยแอดมินเท่านั้น</text>
+
+        <rect x="580" y="272" width="344" height="46" rx="3" class="b sunk"></rect>
+        <text x="752" y="292" text-anchor="middle" class="t s">ระหว่างถูกระงับ ผู้ขายแตะอะไรไม่ได้เลย</text>
+        <text x="752" y="309" text-anchor="middle" class="t s dim">รวมถึงกดลบ — ไม่งั้นจะเดินอ้อมกลับมาเปิดขายใหม่ได้</text>
+      </svg>
+      <figcaption>
+        การปิดการขายไม่ยกเลิกออเดอร์ที่จ่ายเงินแล้ว — มันแค่กั้นคำสั่งซื้อใหม่
+        ส่วน <code>REMOVED</code> เป็นการลบแบบเก็บประวัติไว้ให้ออเดอร์เก่ายังอ้างถึงได้
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 07 CHECKOUT ===================== -->
+  <section class="dgm" id="checkout">
+    <div class="dgm-head">
+      <div class="kicker">07 — Cart &amp; checkout</div>
+      <h2>ตะกร้า → ชำระเงิน: จ่ายครั้งเดียว ออเดอร์แยกตามผู้ขาย</h2>
+      <p>
+        ราคาถูกคิดใหม่ตอนกดจ่าย ไม่ยึดตัวเลขที่ค้างอยู่ในตะกร้า และรายการชำระเงินถูกบันทึกแยกจากออเดอร์
+        เพื่อให้เงินที่ถูกตัดไปแล้วมีร่องรอยเสมอ
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 360" class="dg" role="img" aria-label="ผังการชำระเงิน: ตะกร้าจากสองร้านและการชนะประมูลเข้าสู่ checkout เดียวกัน คิดราคาใหม่ ตัดเงินจำลอง บันทึกรายการชำระเงินก่อน แล้วเปิดทรานแซกชันเขียนออเดอร์แยกตามผู้ขาย ตัดสต็อก แช่ที่อยู่จัดส่ง และล้างเฉพาะรายการที่จ่ายจริง จบด้วยการแจ้งเตือนผู้ขายหลัง commit">
+        <rect x="10" y="40" width="176" height="72" rx="3" class="b"></rect>
+        <text x="98" y="66" text-anchor="middle" class="t b6">ตะกร้า</text>
+        <text x="98" y="86" text-anchor="middle" class="m dim">ร้าน A × 2</text>
+        <text x="98" y="103" text-anchor="middle" class="m dim">ร้าน B × 1</text>
+
+        <rect x="10" y="164" width="176" height="62" rx="3" class="b"></rect>
+        <text x="98" y="190" text-anchor="middle" class="t b6">ชนะประมูล</text>
+        <text x="98" y="209" text-anchor="middle" class="m dim">1 รายการ · ร้าน C</text>
+
+        <rect x="248" y="72" width="192" height="122" rx="3" class="b hot"></rect>
+        <text x="344" y="98" text-anchor="middle" class="t b6 hot-t">checkout</text>
+        <text x="344" y="120" text-anchor="middle" class="t s dim">1 · คิดราคาใหม่จากของจริง</text>
+        <text x="344" y="140" text-anchor="middle" class="t s dim">2 · ตัดเงินจำลอง 1 ครั้ง</text>
+        <text x="344" y="160" text-anchor="middle" class="t s dim">3 · บันทึกรายการชำระเงิน</text>
+        <text x="344" y="180" text-anchor="middle" class="m dim">POST /orders/checkout</text>
+
+        <line x1="188" y1="80" x2="244" y2="108" class="e"></line>
+        <line x1="188" y1="192" x2="244" y2="160" class="e"></line>
+
+        <rect x="248" y="238" width="192" height="58" rx="3" class="b dash stop"></rect>
+        <text x="344" y="262" text-anchor="middle" class="t b6 stop-t">ตัดเงินไม่ผ่าน</text>
+        <text x="344" y="280" text-anchor="middle" class="t s dim">ไม่มีออเดอร์ · ตะกร้าคงเดิม</text>
+        <path d="M 344 198 L 344 234" class="e dash"></path>
+
+        <rect x="500" y="52" width="212" height="142" rx="3" class="b"></rect>
+        <text x="606" y="78" text-anchor="middle" class="t b6">ทรานแซกชันเดียว</text>
+        <text x="606" y="100" text-anchor="middle" class="t s dim">เขียนออเดอร์แยกตามผู้ขาย</text>
+        <text x="606" y="120" text-anchor="middle" class="t s dim">ตัดสต็อกสินค้า</text>
+        <text x="606" y="140" text-anchor="middle" class="t s dim">แช่ที่อยู่จัดส่งไว้ในออเดอร์</text>
+        <text x="606" y="160" text-anchor="middle" class="t s dim">ล้างเฉพาะรายการที่จ่ายจริง</text>
+        <text x="606" y="181" text-anchor="middle" class="m dim">ล้มทั้งชุดถ้ามีขั้นไหนพลาด</text>
+
+        <line x1="442" y1="126" x2="496" y2="126" class="e"></line>
+
+        <rect x="772" y="52" width="158" height="52" rx="3" class="b good"></rect>
+        <text x="851" y="75" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:12.5px">Order · ร้าน A</text>
+        <text x="851" y="93" text-anchor="middle" class="m dim">PAID</text>
+
+        <rect x="772" y="116" width="158" height="52" rx="3" class="b good"></rect>
+        <text x="851" y="139" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:12.5px">Order · ร้าน B</text>
+        <text x="851" y="157" text-anchor="middle" class="m dim">PAID</text>
+
+        <rect x="772" y="180" width="158" height="52" rx="3" class="b good"></rect>
+        <text x="851" y="203" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:12.5px">Order · ร้าน C</text>
+        <text x="851" y="221" text-anchor="middle" class="m dim">PAID</text>
+
+        <line x1="714" y1="100" x2="768" y2="78" class="e"></line>
+        <line x1="714" y1="126" x2="768" y2="142" class="e"></line>
+        <line x1="714" y1="152" x2="768" y2="200" class="e"></line>
+
+        <rect x="500" y="272" width="430" height="52" rx="3" class="b hot"></rect>
+        <text x="715" y="295" text-anchor="middle" class="t b6 hot-t">แจ้งเตือนผู้ขายหลัง commit</text>
+        <text x="715" y="313" text-anchor="middle" class="t s dim">ORDER_PLACED · และข้อความตอบรับอัตโนมัติถ้าผู้ขายเปิดไว้</text>
+        <path d="M 606 200 L 606 268" class="e hot"></path>
+      </svg>
+      <figcaption>
+        รายการชำระเงินถูกบันทึก <em>ก่อน</em> ออเดอร์เสมอ เพราะถ้าเงินถูกตัดไปแล้วแต่ออเดอร์ล้ม
+        ยังต้องมีหลักฐานให้ตามกลับได้ ส่วนแจ้งเตือนออกหลัง commit จึงไม่มีการแจ้งออเดอร์ที่ไม่มีอยู่จริง
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 08 SHIPMENT ===================== -->
+  <section class="dgm" id="ship">
+    <div class="dgm-head">
+      <div class="kicker">08 — Shipment</div>
+      <h2>การจัดส่ง: เดินหน้าอย่างเดียว ยกเลิกได้ก่อนออกจากร้านเท่านั้น</h2>
+      <p>
+        ผู้ขายเลื่อนสถานะทีละขั้น ข้ามขั้นไม่ได้และถอยกลับไม่ได้ ทุกขั้นที่ขยับเขียนเป็นเหตุการณ์ใน timeline
+        ที่ผู้ซื้อเห็นพร้อมแจ้งเตือน
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="ผังสถานะการจัดส่ง: PROCESSING ไป SHIPPED ไป IN_TRANSIT ไป DELIVERED เดินหน้าอย่างเดียว และจาก PROCESSING เท่านั้นที่ไป CANCELLED ได้ ส่วน DELIVERED กับ CANCELLED เป็นปลายทาง">
+        <rect x="16" y="80" width="176" height="58" rx="3" class="b"></rect>
+        <text x="104" y="106" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">PROCESSING</text>
+        <text x="104" y="124" text-anchor="middle" class="t s dim">รับออเดอร์ กำลังเตรียม</text>
+
+        <rect x="252" y="80" width="176" height="58" rx="3" class="b"></rect>
+        <text x="340" y="106" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">SHIPPED</text>
+        <text x="340" y="124" text-anchor="middle" class="t s dim">ออกจากร้านแล้ว</text>
+
+        <rect x="488" y="80" width="176" height="58" rx="3" class="b"></rect>
+        <text x="576" y="106" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">IN_TRANSIT</text>
+        <text x="576" y="124" text-anchor="middle" class="t s dim">ระหว่างขนส่ง</text>
+
+        <rect x="724" y="80" width="200" height="58" rx="3" class="b good"></rect>
+        <text x="824" y="106" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">DELIVERED</text>
+        <text x="824" y="124" text-anchor="middle" class="t s dim">ปลายทาง · จบเรื่อง</text>
+
+        <line x1="194" y1="109" x2="248" y2="109" class="e"></line>
+        <line x1="430" y1="109" x2="484" y2="109" class="e"></line>
+        <line x1="666" y1="109" x2="720" y2="109" class="e"></line>
+
+        <rect x="16" y="190" width="176" height="54" rx="3" class="b stop dash"></rect>
+        <text x="104" y="214" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">CANCELLED</text>
+        <text x="104" y="232" text-anchor="middle" class="t s dim">ปลายทางเช่นกัน</text>
+        <path d="M 104 142 L 104 186" class="e dash"></path>
+        <text x="230" y="170" text-anchor="middle" class="t s dim">ยกเลิกได้เฉพาะตอนยังไม่ส่งออก</text>
+
+        <rect x="488" y="184" width="436" height="60" rx="3" class="b sunk"></rect>
+        <text x="706" y="206" text-anchor="middle" class="t s">ทุกครั้งที่ขยับ = เขียนเหตุการณ์ลง timeline + แจ้งเตือนผู้ซื้อ</text>
+        <text x="706" y="226" text-anchor="middle" class="m dim">SHIPMENT_UPDATE · DELIVERED</text>
+        <text x="706" y="240" text-anchor="middle" class="m dim">PATCH /orders/:id/shipment</text>
+        <path d="M 576 142 L 576 180" class="e dash"></path>
+      </svg>
+      <figcaption>
+        โค้ดเก็บตารางการเปลี่ยนสถานะไว้ที่เดียว หน้าจอผู้ขายจึงแสดงเฉพาะปุ่มที่กดได้จริงจากสถานะปัจจุบัน
+        ไม่ใช่ปุ่มทุกปุ่มแล้วค่อยไปโดนปฏิเสธ
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 09 AI ESTIMATE ===================== -->
+  <section class="dgm" id="estimate">
+    <div class="dgm-head">
+      <div class="kicker">09 — AI price estimate</div>
+      <h2>AI ประเมินราคา: คำแนะนำ ไม่ใช่การตั้งราคาแทน</h2>
+      <p>
+        ใช้ได้เฉพาะกับร่างประมูลของตัวเอง ผลที่ได้เป็นตัวเลขเสนอให้พิจารณา — ผู้ขายยังเป็นคนกรอกราคาเริ่มต้นเอง
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 250" class="dg" role="img" aria-label="ผัง AI ประเมินราคา: ผู้ขายกดขอประเมินจากร่างประมูล ระบบรวมชื่อ รายละเอียด สภาพ หมวดหมู่ และรูปเป็นคำสั่ง ส่งไปยัง Gemini พร้อม timeout และการลองใหม่ ได้ช่วงราคาแนะนำกลับมาให้ผู้ขายตัดสินใจ ถ้าเรียกไม่สำเร็จจะตอบว่าใช้ไม่ได้ชั่วคราวโดยร่างยังอยู่ครบ">
+        <rect x="10" y="82" width="176" height="62" rx="3" class="b"></rect>
+        <text x="98" y="108" text-anchor="middle" class="t b6">ร่างประมูล</text>
+        <text x="98" y="127" text-anchor="middle" class="t s dim">ของผู้ขายคนนั้นเท่านั้น</text>
+
+        <rect x="242" y="82" width="192" height="62" rx="3" class="b"></rect>
+        <text x="338" y="106" text-anchor="middle" class="t b6">ประกอบคำสั่ง</text>
+        <text x="338" y="125" text-anchor="middle" class="t s dim">ชื่อ · สภาพ · หมวดหมู่ · รูป</text>
+
+        <line x1="188" y1="113" x2="238" y2="113" class="e"></line>
+
+        <rect x="490" y="74" width="184" height="78" rx="3" class="b hot"></rect>
+        <text x="582" y="100" text-anchor="middle" class="t b6 hot-t">Gemini</text>
+        <text x="582" y="119" text-anchor="middle" class="t s dim">มี timeout ของตัวเอง</text>
+        <text x="582" y="136" text-anchor="middle" class="t s dim">ลองใหม่ได้จำกัดครั้ง</text>
+
+        <line x1="436" y1="113" x2="486" y2="113" class="e"></line>
+
+        <rect x="730" y="42" width="200" height="62" rx="3" class="b good"></rect>
+        <text x="830" y="68" text-anchor="middle" class="t b6 good-t">ช่วงราคาแนะนำ</text>
+        <text x="830" y="87" text-anchor="middle" class="t s dim">ผู้ขายเป็นคนตัดสินใจต่อ</text>
+
+        <rect x="730" y="132" width="200" height="62" rx="3" class="b dash stop"></rect>
+        <text x="830" y="158" text-anchor="middle" class="t b6 stop-t">ใช้ไม่ได้ชั่วคราว</text>
+        <text x="830" y="177" text-anchor="middle" class="t s dim">ร่างยังอยู่ครบ กรอกเองต่อได้</text>
+
+        <path d="M 676 100 L 700 100 L 700 73 L 726 73" class="e"></path>
+        <path d="M 700 126 L 700 163 L 726 163" class="e dash"></path>
+        <text x="700" y="216" text-anchor="middle" class="t s dim">ไม่ได้ตั้งคีย์ / เรียกไม่สำเร็จ → ตอบชัดว่าใช้ไม่ได้ ไม่เดาราคาให้</text>
+
+        <text x="98" y="176" text-anchor="middle" class="m dim">POST /auctions/drafts/:id/price-estimate</text>
+      </svg>
+      <figcaption>
+        ทุกคำขอถูกบันทึกไว้ในตารางคำขอ AI — ใช้ตรวจย้อนหลังได้ว่าเคยเสนอราคาอะไรไป
+        และเป็นเพดานควบคุมการเรียกใช้ในตัว
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 10 AI OFFER ===================== -->
+  <section class="dgm" id="offer">
+    <div class="dgm-head">
+      <div class="kicker">10 — AI negotiation</div>
+      <h2>AI ต่อรองราคา: ตัดสินเทียบกับพื้นราคาที่ผู้ขายตั้งไว้</h2>
+      <p>
+        ผู้ขายกำหนดราคาต่ำสุดที่ยอมรับได้ไว้ในสินค้า AI ไม่มีสิทธิ์ลงต่ำกว่านั้น ผลลัพธ์จึงมีได้แค่สามแบบ
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="ผัง AI ต่อรองราคา: ผู้ซื้อเสนอราคา ระบบเทียบกับพื้นราคาที่ผู้ขายตั้งไว้ ถ้าถึงพื้นราคาจะตอบรับ ถ้าต่ำกว่าเล็กน้อยจะเสนอราคากลับ ถ้าต่ำเกินไปหรือสินค้าไม่เปิดต่อรองจะปฏิเสธ ทุกผลลัพธ์ถูกบันทึกไว้">
+        <rect x="10" y="98" width="180" height="62" rx="3" class="b"></rect>
+        <text x="100" y="124" text-anchor="middle" class="t b6">ผู้ซื้อเสนอราคา</text>
+        <text x="100" y="143" text-anchor="middle" class="m dim">POST /products/:id/offers</text>
+
+        <rect x="252" y="90" width="204" height="78" rx="3" class="b hot"></rect>
+        <text x="354" y="116" text-anchor="middle" class="t b6 hot-t">เทียบกับพื้นราคา</text>
+        <text x="354" y="135" text-anchor="middle" class="t s dim">ราคาต่ำสุดที่ผู้ขายยอมรับ</text>
+        <text x="354" y="152" text-anchor="middle" class="t s dim">ตั้งไว้ตอนลงสินค้า</text>
+
+        <line x1="192" y1="129" x2="248" y2="129" class="e"></line>
+
+        <rect x="530" y="18" width="230" height="56" rx="3" class="b good"></rect>
+        <text x="645" y="41" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">ACCEPTED</text>
+        <text x="645" y="60" text-anchor="middle" class="t s dim">ถึงพื้นราคา → ตกลงตามที่เสนอ</text>
+
+        <rect x="530" y="100" width="230" height="56" rx="3" class="b"></rect>
+        <text x="645" y="123" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">COUNTERED</text>
+        <text x="645" y="142" text-anchor="middle" class="t s dim">ต่ำกว่าเล็กน้อย → เสนอกลับ</text>
+
+        <rect x="530" y="182" width="230" height="56" rx="3" class="b stop"></rect>
+        <text x="645" y="205" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">REJECTED</text>
+        <text x="645" y="224" text-anchor="middle" class="t s dim">ต่ำเกินไป / ไม่เปิดต่อรอง</text>
+
+        <line x1="458" y1="112" x2="526" y2="52" class="e"></line>
+        <line x1="458" y1="129" x2="526" y2="129" class="e"></line>
+        <line x1="458" y1="148" x2="526" y2="204" class="e"></line>
+
+        <rect x="800" y="100" width="130" height="56" rx="3" class="b sunk"></rect>
+        <text x="865" y="123" text-anchor="middle" class="t s">บันทึกทุกครั้ง</text>
+        <text x="865" y="141" text-anchor="middle" class="t s dim">ตรวจย้อนหลังได้</text>
+        <path d="M 764 46 L 786 46 L 786 122 L 796 122" class="e"></path>
+        <path d="M 764 128 L 796 128" class="e"></path>
+        <path d="M 764 210 L 786 210 L 786 134 L 796 134" class="e"></path>
+      </svg>
+      <figcaption>
+        ราคาที่ AI ตอบกลับไม่เคยต่ำกว่าพื้นราคาที่ผู้ขายตั้งไว้ — กติกานี้ตัดสินในโค้ด ไม่ได้ฝากไว้กับคำสั่งที่ส่งให้โมเดล
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 11 SUPPORT ===================== -->
+  <section class="dgm" id="support">
+    <div class="dgm-head">
+      <div class="kicker">11 — Support chat</div>
+      <h2>แชทช่วยเหลือ: AI ตอบก่อน แล้วส่งต่อให้คนเมื่อจำเป็น</h2>
+      <p>
+        ส่งต่อได้สองทาง — ผู้ใช้ขอเอง หรือระบบเห็นว่า AI ตอบไม่ได้ติดกันสามครั้ง
+        พอส่งต่อแล้ว AI หยุดตอบทันที ห้องนั้นเป็นของแอดมิน
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 280" class="dg" role="img" aria-label="ผังแชทช่วยเหลือ: เริ่มที่สถานะ AI ตอบอย่างเดียว ถ้าผู้ใช้ขอคุยกับคนหรือ AI ตอบไม่ได้สามครั้งติดจะเปลี่ยนเป็นสถานะส่งต่อ แอดมินเข้ามาตอบในห้องเดิม แล้วปิดเป็นสถานะแก้ไขแล้ว">
+        <rect x="16" y="106" width="212" height="70" rx="3" class="b"></rect>
+        <text x="122" y="132" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">AI_ONLY</text>
+        <text x="122" y="151" text-anchor="middle" class="t s dim">ตอบจากคลังคำถามพบบ่อย</text>
+        <text x="122" y="167" text-anchor="middle" class="m dim">POST /support/chat</text>
+
+        <rect x="330" y="30" width="256" height="50" rx="3" class="b sunk"></rect>
+        <text x="458" y="52" text-anchor="middle" class="t s">ผู้ใช้กดขอคุยกับเจ้าหน้าที่</text>
+        <text x="458" y="70" text-anchor="middle" class="m dim">POST …/escalate</text>
+
+        <rect x="330" y="200" width="256" height="52" rx="3" class="b sunk"></rect>
+        <text x="458" y="222" text-anchor="middle" class="t s">AI ตอบไม่ได้ 3 ครั้งติด</text>
+        <text x="458" y="240" text-anchor="middle" class="t s dim">ระบบส่งต่อให้เอง ไม่ต้องรอผู้ใช้กด</text>
+
+        <path d="M 230 128 L 280 128 L 280 55 L 326 55" class="e"></path>
+        <path d="M 280 155 L 280 226 L 326 226" class="e"></path>
+
+        <rect x="656" y="106" width="268" height="70" rx="3" class="b hot"></rect>
+        <text x="790" y="132" text-anchor="middle" class="m hot-t" style="font-weight:600;font-size:13px">ESCALATED</text>
+        <text x="790" y="151" text-anchor="middle" class="t s dim">AI หยุดตอบทันที</text>
+        <text x="790" y="167" text-anchor="middle" class="m dim">/admin/support/sessions</text>
+
+        <path d="M 590 55 L 630 55 L 630 128 L 652 128" class="e"></path>
+        <path d="M 590 226 L 630 226 L 630 155 L 652 155" class="e"></path>
+
+        <rect x="656" y="212" width="268" height="52" rx="3" class="b good"></rect>
+        <text x="790" y="234" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">RESOLVED</text>
+        <text x="790" y="252" text-anchor="middle" class="t s dim">แอดมินปิดเรื่องเมื่อจบ</text>
+        <path d="M 790 180 L 790 208" class="e"></path>
+      </svg>
+      <figcaption>
+        ห้องเดิมไม่ถูกสร้างใหม่ตอนส่งต่อ — ประวัติที่คุยกับ AI ไว้ยังอยู่ครบ แอดมินจึงอ่านบริบทได้ทันที
+        โดยผู้ใช้ไม่ต้องเล่าซ้ำ
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 12 CHAT ===================== -->
+  <section class="dgm" id="chat">
+    <div class="dgm-head">
+      <div class="kicker">12 — Buyer &amp; seller chat</div>
+      <h2>แชทผู้ซื้อ–ผู้ขาย: ทุกห้องแชทผูกกับสินค้าหรือประมูลหนึ่งชิ้นเสมอ</h2>
+      <p>
+        เปิดแชทลอย ๆ ไม่ได้ ต้องกดจากหน้าประมูลหรือหน้าสินค้าเท่านั้น
+        ทั้งสองฝ่ายจึงรู้ตลอดว่ากำลังคุยเรื่องชิ้นไหนอยู่ โดยไม่ต้องถามกันใหม่ทุกครั้ง
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="ผังแชทผู้ซื้อผู้ขาย: เปิดห้องได้จากหน้าประมูลหรือหน้าสินค้า เข้าสู่ห้องสนทนาที่ผูกกับรายการนั้น ส่งข้อความแล้วอีกฝ่ายเห็นสดผ่าน WebSocket พร้อมแจ้งเตือนข้อความใหม่ ผู้ขายตั้งข้อความตอบรับอัตโนมัติได้">
+        <rect x="10" y="46" width="190" height="56" rx="3" class="b"></rect>
+        <text x="105" y="70" text-anchor="middle" class="t b6">จากหน้าประมูล</text>
+        <text x="105" y="88" text-anchor="middle" class="m dim">POST /auctions/:id/conversations</text>
+
+        <rect x="10" y="136" width="190" height="56" rx="3" class="b"></rect>
+        <text x="105" y="160" text-anchor="middle" class="t b6">จากหน้าสินค้า</text>
+        <text x="105" y="178" text-anchor="middle" class="m dim">POST /products/:id/conversations</text>
+
+        <rect x="272" y="88" width="196" height="62" rx="3" class="b"></rect>
+        <text x="370" y="114" text-anchor="middle" class="t b6">ห้องสนทนา</text>
+        <text x="370" y="133" text-anchor="middle" class="t s dim">ผูกกับรายการที่คุยถึง</text>
+
+        <line x1="202" y1="82" x2="268" y2="108" class="e"></line>
+        <line x1="202" y1="156" x2="268" y2="130" class="e"></line>
+
+        <rect x="540" y="88" width="180" height="62" rx="3" class="b hot"></rect>
+        <text x="630" y="114" text-anchor="middle" class="t b6 hot-t">ส่งข้อความ</text>
+        <text x="630" y="133" text-anchor="middle" class="m dim">ws /user · conversation:join</text>
+
+        <line x1="470" y1="119" x2="536" y2="119" class="e"></line>
+
+        <rect x="778" y="46" width="152" height="56" rx="3" class="b"></rect>
+        <text x="854" y="70" text-anchor="middle" class="t b6">อีกฝ่ายเห็นสด</text>
+        <text x="854" y="88" text-anchor="middle" class="m dim">NEW_MESSAGE</text>
+
+        <rect x="778" y="136" width="152" height="56" rx="3" class="b dash"></rect>
+        <text x="854" y="160" text-anchor="middle" class="t b6">ตอบรับอัตโนมัติ</text>
+        <text x="854" y="178" text-anchor="middle" class="t s dim">ผู้ขายเปิด/ปิดเองได้</text>
+
+        <path d="M 722 106 L 750 106 L 750 74 L 774 74" class="e"></path>
+        <path d="M 750 132 L 750 164 L 774 164" class="e dash"></path>
+
+        <rect x="272" y="190" width="448" height="46" rx="3" class="b sunk"></rect>
+        <text x="496" y="210" text-anchor="middle" class="t s">ซื้อของแล้วผู้ขายมีข้อความตอบรับตั้งไว้ → ระบบเปิดห้องให้อัตโนมัติ</text>
+        <text x="496" y="227" text-anchor="middle" class="t s dim">เฉพาะการซื้อสินค้า — ประมูลมีห้องของตัวเองตั้งแต่ตอนบิดแล้ว</text>
+        <path d="M 370 156 L 370 186" class="e dash"></path>
+      </svg>
+      <figcaption>
+        ข้อความตอบรับอัตโนมัติของผู้ขายถูกส่งหลังออเดอร์ commit เท่านั้น
+        จึงไม่มีกรณีที่ผู้ซื้อได้ข้อความขอบคุณสำหรับออเดอร์ที่สุดท้ายไม่เกิดขึ้น
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 13 ADMIN ===================== -->
+  <section class="dgm" id="admin">
+    <div class="dgm-head">
+      <div class="kicker">13 — Admin action</div>
+      <h2>คำสั่งแอดมิน: ทุกคำสั่งต้องกรอกเหตุผล และถูกบันทึกไว้เสมอ</h2>
+      <p>
+        ไม่ว่าจะระงับผู้ใช้ ยกเลิกประมูล หรือปิดการขายสินค้า ทุกคำสั่งเดินเส้นทางเดียวกัน
+        การเปลี่ยนสถานะกับการเขียนบันทึกเกิดขึ้นพร้อมกันในทรานแซกชันเดียว ถ้าฝั่งใดฝั่งหนึ่งล้ม ล้มทั้งคู่
+        — จึงไม่มีทางที่สถานะจะเปลี่ยนโดยไม่มีร่องรอยว่าใครสั่งและเพราะอะไร
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 300" class="dg" role="img" aria-label="ผังคำสั่งแอดมิน: แอดมินสั่งงานพร้อมกรอกเหตุผล ผ่านการตรวจสิทธิ์แอดมิน แล้วเข้าทรานแซกชันเดียวที่เปลี่ยนสถานะและเขียนบันทึกการกระทำพร้อมกัน จากนั้นแจ้งเตือนผู้ที่เกี่ยวข้อง และปรากฏในหน้าบันทึกการกระทำ">
+        <rect x="10" y="34" width="196" height="52" rx="3" class="b"></rect>
+        <text x="108" y="57" text-anchor="middle" class="t b6">ระงับ / คืนสิทธิ์ผู้ใช้</text>
+        <text x="108" y="75" text-anchor="middle" class="m dim">/admin/users</text>
+
+        <rect x="10" y="106" width="196" height="52" rx="3" class="b"></rect>
+        <text x="108" y="129" text-anchor="middle" class="t b6">ยกเลิกประมูล</text>
+        <text x="108" y="147" text-anchor="middle" class="m dim">/admin/auctions</text>
+
+        <rect x="10" y="178" width="196" height="52" rx="3" class="b"></rect>
+        <text x="108" y="201" text-anchor="middle" class="t b6">ปิด / เปิดการขายสินค้า</text>
+        <text x="108" y="219" text-anchor="middle" class="m dim">/admin/products</text>
+
+        <rect x="266" y="102" width="176" height="60" rx="3" class="b"></rect>
+        <text x="354" y="127" text-anchor="middle" class="t b6">ตรวจสิทธิ์ + เหตุผล</text>
+        <text x="354" y="146" text-anchor="middle" class="t s dim">ต้องเป็น ADMIN · ห้ามเว้นว่าง</text>
+
+        <line x1="208" y1="66" x2="262" y2="114" class="e"></line>
+        <line x1="208" y1="132" x2="262" y2="132" class="e"></line>
+        <line x1="208" y1="198" x2="262" y2="150" class="e"></line>
+
+        <rect x="502" y="94" width="212" height="76" rx="3" class="b hot"></rect>
+        <text x="608" y="120" text-anchor="middle" class="t b6 hot-t">ทรานแซกชันเดียว</text>
+        <text x="608" y="139" text-anchor="middle" class="t s dim">เปลี่ยนสถานะ</text>
+        <text x="608" y="156" text-anchor="middle" class="t s dim">+ เขียนบันทึกการกระทำ</text>
+
+        <line x1="444" y1="132" x2="498" y2="132" class="e"></line>
+
+        <rect x="774" y="46" width="156" height="60" rx="3" class="b"></rect>
+        <text x="852" y="71" text-anchor="middle" class="t b6">แจ้งผู้เกี่ยวข้อง</text>
+        <text x="852" y="90" text-anchor="middle" class="t s dim">เช่น คนที่บิดค้างไว้</text>
+
+        <rect x="774" y="158" width="156" height="60" rx="3" class="b"></rect>
+        <text x="852" y="183" text-anchor="middle" class="t b6">หน้า audit log</text>
+        <text x="852" y="202" text-anchor="middle" class="m dim">/admin/actions</text>
+
+        <path d="M 716 118 L 746 118 L 746 76 L 770 76" class="e"></path>
+        <path d="M 746 146 L 746 188 L 770 188" class="e"></path>
+
+        <rect x="266" y="228" width="448" height="52" rx="3" class="b sunk"></rect>
+        <text x="490" y="250" text-anchor="middle" class="t s">ปิดการขายกั้นเฉพาะคำสั่งซื้อใหม่</text>
+        <text x="490" y="268" text-anchor="middle" class="t s dim">ออเดอร์ที่จ่ายเงินไปแล้วไม่ถูกยกเลิกย้อนหลัง</text>
+        <path d="M 608 176 L 608 224" class="e dash"></path>
+      </svg>
+      <figcaption>
+        เหตุผลที่แอดมินกรอกเดินทางไปสองที่พร้อมกัน — เก็บในบันทึกการกระทำ และแนบไปกับแจ้งเตือนที่ส่งถึงผู้ได้รับผลกระทบ
+      </figcaption>
+    </figure>
+
+  </section>
+
+  <!-- ===================== STATE REFERENCE ===================== -->
+  <section class="dgm" id="states">
+    <div class="dgm-head">
+      <div class="kicker">อ้างอิง — สถานะ</div>
+      <h2>ตารางสถานะที่ต้องจำ</h2>
+      <p>ชื่อสถานะเหล่านี้ใช้ตรงกันทั้ง schema, API และหน้าจอ — เวลาคุยกันในทีมให้อ้างชื่อนี้</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ของอะไร</th>
+            <th>สถานะ</th>
+            <th>ใครทำให้เปลี่ยน</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>ประมูล</b></td>
+            <td>
+              <span class="pill pill-idle">DRAFT</span>
+              <span class="pill pill-idle">SCHEDULED</span>
+              <span class="pill pill-live">ACTIVE</span>
+              <span class="pill pill-good">SOLD</span>
+              <span class="pill pill-idle">UNSOLD</span>
+              <span class="pill pill-stop">CANCELLED</span>
+            </td>
+            <td>ผู้ขายเผยแพร่/ยกเลิก · แอดมินยกเลิก · ที่เหลืองานเบื้องหลังตามเวลา</td>
+          </tr>
+          <tr>
+            <td><b>สินค้า</b></td>
+            <td>
+              <span class="pill pill-good">ACTIVE</span>
+              <span class="pill pill-idle">INACTIVE</span>
+              <span class="pill pill-idle">OUT_OF_STOCK</span>
+              <span class="pill pill-idle">REMOVED</span>
+              <span class="pill pill-stop">SUSPENDED</span>
+            </td>
+            <td>ผู้ขายจัดการเอง ยกเว้น SUSPENDED ที่แอดมินสั่งเท่านั้น และผู้ขายปลดเองไม่ได้</td>
+          </tr>
+          <tr>
+            <td><b>คำสั่งซื้อ</b></td>
+            <td>
+              <span class="pill pill-idle">PENDING</span>
+              <span class="pill pill-good">PAID</span>
+              <span class="pill pill-stop">CANCELLED</span>
+            </td>
+            <td>เกิดจากผลการตัดเงินตอน checkout</td>
+          </tr>
+          <tr>
+            <td><b>การจัดส่ง</b></td>
+            <td>
+              <span class="pill pill-idle">PROCESSING</span>
+              <span class="pill pill-live">SHIPPED</span>
+              <span class="pill pill-live">IN_TRANSIT</span>
+              <span class="pill pill-good">DELIVERED</span>
+              <span class="pill pill-stop">CANCELLED</span>
+            </td>
+            <td>ผู้ขายเลื่อนทีละขั้น ผู้ซื้อเห็นเป็น timeline</td>
+          </tr>
+          <tr>
+            <td><b>แชทช่วยเหลือ</b></td>
+            <td>
+              <span class="pill pill-key">AI_ONLY</span>
+              <span class="pill pill-live">ESCALATED</span>
+              <span class="pill pill-good">RESOLVED</span>
+            </td>
+            <td>ผู้ใช้ขอคุยกับคน หรือ AI ตอบไม่ได้ครบ 3 ครั้ง → แอดมินรับช่วง</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== OWNERSHIP ===================== -->
+  <section class="dgm" id="owners">
+    <div class="dgm-head">
+      <div class="kicker">อ้างอิง — เจ้าของโค้ด</div>
+      <h2>ใครดูแลส่วนไหน</h2>
+      <p>เวลาจะแก้ข้ามโมดูล ให้คุยกับเจ้าของส่วนนั้นก่อน โดยเฉพาะ <code>schema.prisma</code> ที่มีเจ้าของคนเดียว</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Dev</th>
+            <th>ขอบเขต</th>
+            <th>โค้ดหลัก</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Dev 1</b></td>
+            <td>Frontend &amp; UI</td>
+            <td class="mono">apps/web/src/components · design-system</td>
+          </tr>
+          <tr>
+            <td><b>Dev 2</b></td>
+            <td>Backend core &amp; security — เจ้าของ schema และ migration</td>
+            <td class="mono">api/src/auth · users · common (guards)</td>
+          </tr>
+          <tr>
+            <td><b>Dev 3</b></td>
+            <td>E-commerce — สินค้า ตะกร้า ออเดอร์ จัดส่ง แชทผู้ซื้อ-ผู้ขาย</td>
+            <td class="mono">api/src/product · cart · order · shipment · chat</td>
+          </tr>
+          <tr>
+            <td><b>Dev 4</b></td>
+            <td>Auction &amp; real-time — ประมูล บิด ห้องสด รายการติดตาม</td>
+            <td class="mono">api/src/auction · bid · live · realtime · watchlist</td>
+          </tr>
+          <tr>
+            <td><b>Dev 5</b></td>
+            <td>AI — ประเมินราคา ต่อรอง แชทช่วยเหลือ</td>
+            <td class="mono">api/src/ai-tools · support-chat</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <p>
+        <b>ขอบเขต V1:</b> เรื่องราวจบที่ประมูลปิดและของถูกส่ง — ยังไม่มีการคืนเงินหรือยกเลิกหลังจบ
+        <span class="pill pill-good">SOLD</span> และ <span class="pill pill-idle">UNSOLD</span> เป็นปลายทางจริง ๆ
+        ส่วนการชำระเงินเป็นการจำลอง ยังไม่ได้ต่อ payment gateway จริง
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>BidNest · Auction &amp; Marketplace</span>
+    <span>วาดจากโค้ดจริง · SRS v7 · ADR-0001 / ADR-0002</span>
+  </footer>
+
+</div>
+</body>
+</html>

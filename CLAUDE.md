@@ -47,10 +47,11 @@ Do NOT add "Co-Authored-By: Claude" or "Claude-Session:" trailer to commit messa
 
 ## เอกสารประกอบ
 
-- SRS: `docs\requirements\BidNest-Auction and Marketplace-v6.pdf`
+- SRS: `docs\requirements\BidNest-Auction and Marketplace-v7.pdf`
 - ER Diagram: `docs\architecture\erd\bidnest-erd-v1.dbml` หรือ link: https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff
 - Database schema: `apps\api\prisma\schema.prisma`
 - ADR (บันทึกการตัดสินใจเชิงสถาปัตยกรรม): `docs\architecture\adr\`
+- ผัง Workflow (ภาพรวมระบบ + ผังรายฟีเจอร์ วาดจากโค้ดจริง): `docs\architecture\workflows\`
 - Kickoff Guide: `docs\KICKOFF_GUIDE.md` (ชื่อ branch แต่ละคน, ขั้นตอน setup, CI/CD)
 - Figma: https://www.figma.com/design/XjSmZZgT0IBPc8do84WaRa/Bidnest?node-id=57-6305&t=7Q2cpzBvbxZK0oHj-1
 
