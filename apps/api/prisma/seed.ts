@@ -33,7 +33,9 @@ const SELLER_B_ID = '00000000-0000-4000-8000-000000000003';
 const BUYER_ID = '00000000-0000-4000-8000-000000000004';
 
 /**
- * One admin each, so the team is not queueing behind a single login.
+ * One admin each, so the team is not queueing behind a single login. Five of
+ * them, one per developer: `admin@` for dev1 and `admin2@` through `admin5@`
+ * for the rest, matching the numbers the branch names already use.
  *
  * Sharing `admin@bidnest.test` meant that whatever one person did to the admin
  * screens, everyone else was looking at — and an audit trail with one name on
@@ -46,6 +48,7 @@ const BUYER_ID = '00000000-0000-4000-8000-000000000004';
 const ADMIN_2_ID = '00000000-0000-4000-8000-000000000005';
 const ADMIN_3_ID = '00000000-0000-4000-8000-000000000006';
 const ADMIN_4_ID = '00000000-0000-4000-8000-000000000007';
+const ADMIN_5_ID = '00000000-0000-4000-8000-000000000008';
 
 const CATEGORY_ELECTRONICS_ID = '00000000-0000-4000-8000-000000000101';
 const CATEGORY_FASHION_ID = '00000000-0000-4000-8000-000000000102';
@@ -119,6 +122,13 @@ async function seedUsers() {
       role: 'ADMIN' as const,
       firstName: 'Admin',
       displayName: 'BidNest Admin 4'
+    },
+    {
+      id: ADMIN_5_ID,
+      email: 'admin5@bidnest.test',
+      role: 'ADMIN' as const,
+      firstName: 'Admin',
+      displayName: 'BidNest Admin 5'
     },
     {
       id: SELLER_A_ID,
@@ -1058,7 +1068,7 @@ async function main() {
 
   console.log(
     `Seeded accounts all share the password "${SEED_PASSWORD}".\n` +
-      '  admin@bidnest.test, admin2@, admin3@, admin4@ — one each, and with\n' +
+      '  admin@bidnest.test and admin2@ to admin5@ — one each, and with\n' +
       '  ADMIN_SKIP_2FA=true they sign in on the password alone. These\n' +
       '  addresses receive no mail, so without that setting they cannot.\n' +
       '  Everyone else reads their code from Maildev (http://localhost:1080).'
