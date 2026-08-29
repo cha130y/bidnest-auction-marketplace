@@ -1,6 +1,6 @@
 # Dev 2 — Backend Core & Security Checklist
 
-> **อ้างอิง:** SRS v6 (`docs/requirements/BidNest-Auction and Marketplace-v6.pdf`) และ Team Role Distribution v2
+> **อ้างอิง:** SRS v7 (`docs/requirements/BidNest-Auction and Marketplace-v7.pdf`) และ Team Role Distribution v2
 > **Requirement ที่รับผิดชอบ:** `AUTH-001..008`, `USR-001`, `ADM-003`, `§6 (Security & Quality)`
 > **Branch:** `feat/auth-dev2` → PR เข้า `dev` เท่านั้น
 > **ขอบเขตงาน:** NestJS setup, Prisma schema หลัก + migration ให้ทั้งทีม, ระบบยืนยันตัวตนทั้งหมด, หมวดหมู่ร่วม, ความปลอดภัยโดยรวม
