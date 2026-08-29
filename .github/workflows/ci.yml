@@ -2,6 +2,15 @@ name: CI
 on:
   pull_request:
     branches: [main, dev]
+  # A pull request is checked as it would land against the base at that moment.
+  # Let a second one merge in between and the commit that actually reaches main
+  # was never tested in the shape it arrived in — and main deploys itself the
+  # instant it changes. Admins can also push straight past the pull request.
+  #
+  # This only stops a bad deploy once Railway's "Wait for CI" is on for the
+  # service; until then it is a second run of checks nobody is waiting for.
+  push:
+    branches: [main]
 
 jobs:
   lint-and-test:
