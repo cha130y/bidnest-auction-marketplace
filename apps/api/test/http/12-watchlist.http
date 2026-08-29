@@ -1,0 +1,233 @@
+###############################################################################
+# WATCHLIST — ติดตามประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: WAT-001 เพิ่ม/นำออกครั้งละ 1 รายการ
+#                    WAT-002 รายการที่ติดตาม พร้อมสถานะ เวลานับถอยหลัง
+# ราคาปัจจุบัน และผลลัพธ์
+#
+# 💡 "ครั้งละ 1 รายการ" ตามเกณฑ์ SRS = ไม่มี endpoint ที่รับ array เลย
+#    client จึงไม่มีทางเจอสถานะ "เพิ่ม 5 อัน สำเร็จ 3 อัน" แล้วต้องมานั่งไล่ว่า
+#    อันไหนเข้าไม่เข้า
+#
+# 💡 ต่างจากการ "เข้าร่วม" (participants ของ LIV-001) ตรงที่ประมูลที่จบแล้ว
+#    ยัง watch ได้ — คนอยากเก็บผลไว้ดู ส่วนการเข้าร่วมประมูลที่จบแล้วไม่มี
+#    ความหมายเพราะไม่เหลืออะไรให้ร่วม
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# AUTH-008 — วาง token จาก `pnpm --filter api exec prisma db seed`
+@adminToken   =
+@sellerAToken =
+@buyerToken   =
+
+#=============================================================================
+# 1. เตรียมประมูลไว้สองรายการ
+#=============================================================================
+
+### ประมูลที่ยังไม่เริ่ม
+# @name scheduledDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบ watchlist (ยังไม่เริ่ม)",
+  "description": "รอเวลาเริ่ม",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-12-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Scheduled"]
+}
+
+@scheduledId = {{scheduledDraft.response.body.$.id}}
+
+### publish. expect 200 + status SCHEDULED
+POST {{baseUrl}}/auctions/drafts/{{scheduledId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### ประมูลที่วิ่งอยู่
+# @name liveDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบ watchlist (วิ่งอยู่)",
+  "description": "เริ่มไปแล้ว",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Live"]
+}
+
+@liveId = {{liveDraft.response.body.$.id}}
+
+### publish. expect 200 + status ACTIVE
+POST {{baseUrl}}/auctions/drafts/{{liveId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### draft ที่ยังไม่ publish ไว้ทดสอบเคสปฏิเสธ
+# @name privateDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "draft ที่ยังไม่เผยแพร่",
+  "description": "ยังไม่มีใครควรเห็น",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 1000,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-12-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Draft"]
+}
+
+@draftId = {{privateDraft.response.body.$.id}}
+
+#=============================================================================
+# 2. เพิ่ม / นำออก (WAT-001)
+#=============================================================================
+
+### เพิ่มประมูลที่ยังไม่เริ่ม. expect 200 + watching true + watchedAt มีค่า
+# ตอบ 200 ไม่ใช่ 201 เพราะยิงซ้ำแล้วไม่ได้สร้างอะไรเพิ่ม การตอบ 201 = โกหก
+POST {{baseUrl}}/auctions/{{scheduledId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### ยิงซ้ำ = idempotent. expect 200 + watchedAt ตัวเดิมเป๊ะ
+# watchedAt ไม่ขยับ ลำดับในรายการจึงไม่กระโดดเวลากดซ้ำ
+POST {{baseUrl}}/auctions/{{scheduledId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### เพิ่มประมูลที่วิ่งอยู่. expect 200
+POST {{baseUrl}}/auctions/{{liveId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### นำออก. expect 200 + watching false + removed true
+DELETE {{baseUrl}}/auctions/{{scheduledId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### นำออกซ้ำทั้งที่ไม่ได้ติดตามแล้ว. expect 200 + removed false
+# ไม่ใช่ error — คนยิงอยากให้มันหายไป และมันหายไปแล้ว
+DELETE {{baseUrl}}/auctions/{{scheduledId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### เพิ่มกลับเข้ามาใหม่ เพื่อให้รายการมี 2 อันไว้ดูหัวข้อถัดไป. expect 200
+POST {{baseUrl}}/auctions/{{scheduledId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 3. รายการที่ติดตาม (WAT-002)
+#=============================================================================
+
+### รายการของตัวเอง. expect 200
+# ตรวจแต่ละ item:
+#   auction.status        — SCHEDULED / ACTIVE / SOLD / UNSOLD
+#   auction.currentPrice  — ราคาปัจจุบัน
+#   countdown             — startsAt / endsAt / msUntilStart / msUntilEnd
+#   result                — null ตราบใดที่ยังไม่จบ
+#   watchedAt             — ตอนที่กดติดตาม
+#
+# เรียงอันที่เพิ่งติดตามล่าสุดขึ้นก่อน (scheduledId จะอยู่บนสุดเพราะเพิ่งเพิ่มกลับ)
+# ⚠️ ต้องไม่มี reservePrice (4500) โผล่เลย เพราะ buyer ไม่ใช่เจ้าของ (AUC-003)
+GET {{baseUrl}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### countdown ทุกแถวในหน้าเดียวกันใช้ serverTime ตัวเดียวกัน
+# ยิงซ้ำแล้วเทียบ: items[0].countdown.serverTime ต้องเท่ากับ items[1] เป๊ะ
+# ไม่งั้นนาฬิกาสองอันบนจอเดียวจะเดินคนละเวลา
+GET {{baseUrl}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### แบ่งหน้า. expect 200 + items 1 อัน + meta.total 2
+GET {{baseUrl}}/watchlist?page=2&limit=1
+Authorization: Bearer {{buyerToken}}
+
+### ผู้ขายติดตามประมูลตัวเองได้ และเห็น reservePrice ของตัวเอง. expect 200
+POST {{baseUrl}}/auctions/{{liveId}}/watchlist
+Authorization: Bearer {{sellerAToken}}
+
+### ตรวจว่าเห็น reserve ของตัวเอง. expect 200 + reservePrice "4500"
+# ใช้ mapper ตัวเดียวกับ GET /auctions/:id สิทธิ์จึงตรงกันทุกที่
+GET {{baseUrl}}/watchlist
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 4. เคสที่ต้องถูกปฏิเสธ
+#=============================================================================
+
+### draft ที่ยังไม่ publish. expect 404
+# ตอบ 404 ไม่ใช่ 403 เพราะ 403 = ยอมรับว่ามี draft นี้อยู่จริง
+POST {{baseUrl}}/auctions/{{draftId}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### id ที่ไม่มีอยู่จริง. expect 404
+POST {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000009ff/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### id ที่ไม่ใช่ UUID. expect 400 จาก ParseUUIDPipe
+POST {{baseUrl}}/auctions/not-a-uuid/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### ไม่ได้ login. expect 401
+POST {{baseUrl}}/auctions/{{liveId}}/watchlist
+
+### ไม่ได้ login ดูรายการ. expect 401
+GET {{baseUrl}}/watchlist
+
+### admin ติดตามไม่ได้ (SRS ข้อ 2 — admin คุมตลาด ไม่ลงเล่นในตลาด). expect 403
+POST {{baseUrl}}/auctions/{{liveId}}/watchlist
+Authorization: Bearer {{adminToken}}
+
+### admin ดูรายการไม่ได้. expect 403
+GET {{baseUrl}}/watchlist
+Authorization: Bearer {{adminToken}}
+
+#=============================================================================
+# 5. ผลลัพธ์ในรายการ เมื่อประมูลจบ
+#=============================================================================
+#
+# ทำให้ {{liveId}} หมดเวลา แล้วให้ read repair ปิดให้ (AUC-007):
+#
+#   docker exec docker-postgres-1 psql -U bidnest -d bidnest_db -c \
+#     "update auctions set current_end_at = now() - interval '1 second' \
+#      where id = '<liveId>';"
+#
+# แล้วยิง GET /auctions/<liveId> หนึ่งครั้งเพื่อ trigger
+#=============================================================================
+
+### หลังประมูลจบ. expect 200
+# ตรวจ: result ของแถวนั้นไม่เป็น null อีกต่อไป
+#   ถ้าบิดถึง 4500 -> outcome SOLD, soldPrice มีค่า
+#   ถ้าไม่ถึง      -> outcome UNSOLD, soldPrice null แต่ finalPrice ยังบอกว่า
+#                     บิดไปถึงเท่าไหร่ ("ราคาสุดท้าย" ตามเกณฑ์)
+#   ไม่มีใครบิดเลย -> outcome UNSOLD, finalPrice null (ไม่ใช่ "0")
+GET {{baseUrl}}/watchlist
+Authorization: Bearer {{buyerToken}}
+
+### ประมูลที่ถูกยกเลิกจะหลุดจากรายการไปเอง
+# CANCELLED ไม่อยู่ใน PUBLIC_AUCTION_STATUSES แถวจึงหายไปแทนที่จะค้างเป็น
+# รายการที่กดเข้าไปดูไม่ได้ — ลองยกเลิก {{scheduledId}} แล้วยิงซ้ำ
+POST {{baseUrl}}/auctions/{{scheduledId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{ "reason": "ไม่ขายแล้ว" }
+
+### ตรวจว่าหลุดจริง. expect 200 + ไม่มี scheduledId ในรายการ
+GET {{baseUrl}}/watchlist
+Authorization: Bearer {{buyerToken}}

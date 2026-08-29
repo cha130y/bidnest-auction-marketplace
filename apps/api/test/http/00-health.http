@@ -1,0 +1,4 @@
+@baseUrl = http://localhost:4000
+
+### health — public route, no auth header needed. expect 200 { "status": "ok" }
+GET {{baseUrl}}/health

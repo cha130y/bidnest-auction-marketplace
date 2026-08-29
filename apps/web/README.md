@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# apps/web — BidNest storefront (Next.js)
 
-## Getting Started
+Run everything with **pnpm**. The root `package.json` declares pnpm under
+`devEngines.packageManager`, so `npm run …` fails with `EBADDEVENGINES` —
+an error that reads like a broken project and is only the wrong package
+manager.
 
-First, run the development server:
+## Running it
+
+From the repo root:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm dev          # web + api together
+pnpm dev:web      # this app alone, on http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+It needs `apps/api` on port 4000 and the Docker services up:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker compose -f infra/docker/compose.dev.yml up -d
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## First time
 
-## Learn More
+Copy `.env.example` to `.env.local` and fill it in — `AUTH_SECRET` is
+required, the app will not start without it. Then check the whole setup:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm check:setup
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+That reports what is missing across both apps, whether the login code is
+being delivered to Maildev or a real relay, and which services are up.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Checks
 
-## Deploy on Vercel
+```bash
+pnpm --dir apps/web typecheck
+pnpm --dir apps/web lint
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Where things are
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pages live under `src/app`, not `app`. Shared UI is in `src/components`,
+and everything that talks to the API goes through `src/lib/api/client.ts`.
+
+Project rules are in the root `CLAUDE.md`; setup and CI are in
+`docs/KICKOFF_GUIDE.md`.

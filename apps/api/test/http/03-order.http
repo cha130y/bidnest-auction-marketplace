@@ -1,0 +1,86 @@
+###############################################################################
+# ORDER / CHECKOUT — ตะกร้า -> จ่ายเงิน (จำลอง) -> ออเดอร์แยกตามผู้ขาย
+#
+# ไฟล์นี้ยิงเองได้ครบ: request แรกเติมของลงตะกร้าให้ก่อน
+# ของ 2 ผู้ขายในตะกร้าเดียว -> checkout ครั้งเดียวต้องได้ orders 2 ใบ (CART-003)
+# เงินไม่ขยับจริง ทุกอย่างเป็น MockPaymentProvider (SRS 1.2)
+###############################################################################
+
+@baseUrl = http://localhost:4000
+
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
+# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+@buyerToken =
+@sellerAToken =
+
+@productA2 = 00000000-0000-4000-8000-000000000202
+@productB1 = 00000000-0000-4000-8000-000000000203
+
+### setup — ใส่ของผู้ขาย A ลงตะกร้า
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "productId": "{{productA2}}", "quantity": 1 }
+
+### setup — ใส่ของผู้ขาย B ลงตะกร้า (ทำให้ sellerCount = 2)
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "productId": "{{productB1}}", "quantity": 1 }
+
+### CART-004/005 checkout — expect 201, paymentStatus SUCCEEDED, orders 2 ใบ
+# ดู log ฝั่ง server ต้องขึ้น "[simulated] charge ... -> SUCCEEDED"
+# และ "[stub] notification:created -> user:..."
+# @name checkout
+POST {{baseUrl}}/orders/checkout
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "shippingAddress": {
+    "recipientName": "Anan B.",
+    "line1": "123 Sukhumvit Rd",
+    "line2": "ห้อง 15A",
+    "city": "Bangkok",
+    "postalCode": "10110",
+    "phone": "0812345678"
+  }
+}
+
+@orderId = {{checkout.response.body.$.orders[0].id}}
+
+### ตรวจว่าตะกร้าถูกล้างหลังจ่ายเงินสำเร็จ — items ต้องว่าง
+GET {{baseUrl}}/cart
+Authorization: Bearer {{buyerToken}}
+
+### ORD-001 รายการที่ฉันซื้อ (มุมมอง buyer). expect 200
+GET {{baseUrl}}/orders
+Authorization: Bearer {{buyerToken}}
+
+### ORD-001 กรองตามสถานะ + แบ่งหน้า
+GET {{baseUrl}}/orders?status=PAID&page=1&limit=5
+Authorization: Bearer {{buyerToken}}
+
+### ORD-002 รายการที่ฉันขาย (มุมมอง seller A). expect 200
+# ใบแรกที่ได้จากตรงนี้เป็นของ seller A แน่นอน จึงเอา id ไปใช้ต่อข้างล่างได้
+# โดยไม่ต้องเดาว่า orders[0] ของ checkout เป็นของ A หรือ B
+# @name sellingA
+GET {{baseUrl}}/orders/selling
+Authorization: Bearer {{sellerAToken}}
+
+@sellerOrderId = {{sellingA.response.body.$.items[0].id}}
+
+### ORD-003 รายละเอียดออเดอร์ — buyer ดูได้. expect 200
+GET {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{buyerToken}}
+
+### ORD-003 รายละเอียดออเดอร์ — ผู้ขายในออเดอร์นั้นก็ดูได้. expect 200
+GET {{baseUrl}}/orders/{{sellerOrderId}}
+Authorization: Bearer {{sellerAToken}}
+
+### PROD-005 ตรวจว่าสต๊อกถูกตัดจริงหลัง checkout
+GET {{baseUrl}}/products/{{productA2}}

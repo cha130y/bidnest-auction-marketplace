@@ -1,0 +1,373 @@
+###############################################################################
+# BID — การประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: BID-001 การประมูลที่ถูกต้อง, BID-002 atomicity + retry,
+# BID-003 broadcast realtime, BID-004 anti-sniping, BID-005 ประวัติการประมูล
+# ครบทั้งกลุ่ม BID แล้ว
+#
+# ⚠️ clientRequestId ต้องเป็น UUID และเป็น "ตัวระบุความพยายามครั้งนั้น"
+#    - ยิงซ้ำด้วย id เดิม + ค่าเดิม = retry -> ได้บิดเดิมกลับมา ไม่ใช่ error
+#    - ยิงซ้ำด้วย id เดิม + ค่าต่าง = ใช้ id ผิด -> 409
+#    ถ้าต้องการบิดใหม่จริงๆ ให้เปลี่ยนตัวเลขท้าย หรือ gen UUID ใหม่
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# AUTH-008 — วาง token จาก `pnpm --filter api exec prisma db seed`
+@adminToken   =
+@sellerAToken =
+@buyerToken   =
+
+#=============================================================================
+# 1. เตรียมประมูลที่กำลังวิ่งอยู่
+#=============================================================================
+
+### สร้าง draft ที่เริ่มไปแล้วและยังไม่จบ
+# @name liveDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบการบิด",
+  "description": "เริ่มไปแล้ว ยังไม่จบ",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Bidding"]
+}
+
+@liveId = {{liveDraft.response.body.$.id}}
+
+### publish ให้เป็น ACTIVE. expect 200 + status ACTIVE + biddingOpen true
+POST {{baseUrl}}/auctions/drafts/{{liveId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 2. บิดที่ผ่าน (BID-001)
+#=============================================================================
+
+### BID-001 — บิดแรกที่ราคาเริ่มต้นพอดี. expect 201 + sequenceNo 1
+# ยังไม่มีบิด currentPrice ใน DB เป็น 0 แต่ขั้นต่ำคือ "ราคาเริ่มต้น" ไม่ใช่ 0+increment
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
+}
+
+### BID-001 — เช็คว่าราคากับจำนวนบิดขยับ. expect currentPrice 3000, bidCount 1
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### BID-001 — บิดถัดไปที่ +increment พอดี. expect 201 + sequenceNo 2
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3100,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000002"
+}
+
+#=============================================================================
+# 3. เคสที่ต้องพัง (ห้ามมี 500)
+#=============================================================================
+
+### จำนวนเงิน — ต่ำกว่าขั้นต่ำ. expect 400 + บอกขั้นต่ำที่ต้องใช้
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3150,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000003"
+}
+
+### จำนวนเงิน — ศูนย์. expect 400
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 0,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000004"
+}
+
+### สิทธิ์ — ผู้ขายบิดประมูลตัวเอง. expect 403
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "amount": 9000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000005"
+}
+
+### สิทธิ์ — แอดมินบิด. expect 403
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": 9000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000006"
+}
+
+### สิทธิ์ — ไม่ได้ login. expect 401
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Content-Type: application/json
+
+{
+  "amount": 9000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000007"
+}
+
+### BID-002 — retry: clientRequestId เดิม + amount เดิม. expect 201 + บิดเดิมเป๊ะ
+# ต้องได้ id/sequenceNo/placedAt ชุดเดิมกลับมา ไม่ใช่ error
+# เหตุผล: client ที่ retry เพราะเน็ตหลุด แยกไม่ออกว่า 409 แปลว่า
+# "ซ้ำเพราะสำเร็จไปแล้ว" หรือ "บิดไม่ผ่าน" — การคืนผลเดิมตอบได้ชัดกว่า
+# ยิงกี่ครั้งก็ได้ ราคากับ bidCount ต้องไม่ขยับ
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
+}
+
+### BID-002 — เช็คว่าราคายังเท่าเดิม. expect currentPrice 3100, bidCount 2
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### BID-002 — clientRequestId เดิมแต่ amount ต่าง. expect 409
+# ไม่ใช่ retry แต่เป็นการใช้ id ซ้ำผิดวัตถุประสงค์ — ถ้าคืนบิดเดิมไปเงียบๆ
+# client จะเข้าใจว่า 8000 ถูกรับแล้ว ทั้งที่ไม่เคยถูกรับ
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 8000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
+}
+
+### BID-002 — clientRequestId เดิมแต่ยิงไปประมูลอื่น. expect 409
+# ใช้ {{startsNowId}} จาก 08-auction.http (ประมูลคนละตัวที่ ACTIVE อยู่)
+POST {{baseUrl}}/auctions/{{startsNowId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3000,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000001"
+}
+
+### validation — clientRequestId ไม่ใช่ UUID. expect 400
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "not-a-uuid"
+}
+
+### validation — auction id ไม่ใช่ UUID. expect 400
+POST {{baseUrl}}/auctions/not-a-uuid/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000008"
+}
+
+### ประมูล — id ที่ไม่มีอยู่จริง. expect 404
+POST {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000099ff/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-000000000009"
+}
+
+### ประมูล — ที่ยังไม่เริ่ม (SCHEDULED). expect 409
+# ใช้ {{draftId}} จาก 08-auction.http ที่ publish เป็น SCHEDULED ไว้
+# หรือสร้าง draft ใหม่ที่ scheduledStartAt เป็นอนาคตแล้ว publish
+POST {{baseUrl}}/auctions/{{draftId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "aaaaaaaa-0000-4000-8000-00000000000a"
+}
+
+#=============================================================================
+# 4. กฎที่เพิ่งพิสูจน์ได้เมื่อมีบิดจริง
+#=============================================================================
+
+### AUC-006 — ผู้ขายแก้ประมูลที่มีบิดแล้ว. expect 400
+PATCH {{baseUrl}}/auctions/{{liveId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "มีคนบิดแล้วแก้ไม่ได้"
+}
+
+### AUC-006 — ผู้ขายยกเลิกประมูลที่มีบิดแล้ว. expect 400
+POST {{baseUrl}}/auctions/{{liveId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "reason": "มีบิดแล้วยกเลิกเองไม่ได้"
+}
+
+### AUC-008 — ประมูลที่มีบิดต้องขึ้นก่อนใน hot list
+GET {{baseUrl}}/auctions
+
+#=============================================================================
+# 5. Realtime broadcast (BID-003)
+#=============================================================================
+# ไฟล์ .http ยิง WebSocket ไม่ได้ — ส่วนนี้เป็นวิธีเทสมือ
+#
+# 1) เปิด browser console ที่หน้าไหนก็ได้ของ apps/web (หรือใช้ node)
+#    แล้ววาง:
+#
+#      const s = io('http://localhost:4000/auctions', { transports: ['websocket'] });
+#      s.on('connect', async () => {
+#        console.log('joined', await s.emitWithAck('auction:join', { auctionId: '<liveId>' }));
+#      });
+#      s.on('auction:bid', (e) => console.log('auction:bid', e));
+#
+# 2) ยิงบล็อก "บิดที่ผ่าน" ข้างบนอีกครั้ง (เปลี่ยน clientRequestId)
+#
+# 3) ต้องเห็น event เด้งใน console ทันที หน้าตาแบบนี้:
+#
+#      {
+#        auctionId, currency, currentPrice, reserveMet, bidCount,
+#        currentEndAt, extensionCount,
+#        bid: { id, amount, sequenceNo, placedAt, bidder: "ส***ย" }
+#      }
+#
+# สิ่งที่ต้องตรวจ:
+#   - ห้ามมี reservePrice ใน payload เด็ดขาด มีแค่ reserveMet (AUC-003)
+#   - bidder ต้องเป็นชื่อปิดบังเท่านั้น ห้ามมี bidderId และห้ามมีชื่อเต็ม
+#   - label ที่ได้ต้องตรงกับที่ GET /auctions/:id/bids ให้มา (ใช้ mask ตัวเดียวกัน)
+#   - join ห้องของ draft (ยังไม่ publish) ต้องได้ error "Auction not found"
+#   - บิดที่ถูกปฏิเสธ (400/403/409) ต้องไม่มี event เด้งเลย
+#   - retry ด้วย clientRequestId เดิม ต้องไม่ยิง event ซ้ำ
+
+#=============================================================================
+# 6. Anti-sniping (BID-004)
+#=============================================================================
+# บิดที่เข้ามาตอนเหลือ ≤ 2 นาที จะดันเวลาจบออกไปอีก 2 นาที สูงสุด 5 ครั้ง
+# และบันทึกทุกครั้งลง auction_extensions
+#
+# ⚠️ ต้องมีประมูลที่ "ใกล้จบ" ซึ่ง publish ตรงๆ ไม่ได้ (AUC-004 ไม่ให้ publish
+#    ของที่หมดเวลาแล้ว) วิธีเทสมือ: publish ปกติก่อน แล้วเปิด prisma studio
+#    ตั้ง current_end_at = now() + 1 minute จากนั้นค่อยยิงบิด
+#
+# สิ่งที่ต้องเห็นหลังบิด:
+#   - current_end_at ขยับไป +2 นาทีจากค่าเดิม (ไม่ใช่ +2 นาทีจากตอนบิด)
+#   - extension_count เพิ่มเป็น 1
+#   - auction_extensions มีแถวใหม่ ชี้ไปที่ bid ที่เพิ่งลง
+#   - auction_events มี EXTENDED ต่อจาก BID_PLACED
+#   - ถ้าเปิด socket ค้างไว้ (ดูบล็อกที่ 5) จะได้ auction:extension ตามหลัง
+#     auction:bid โดยมี extensionsRemaining บอกว่าเหลือกี่ครั้ง
+
+### BID-004 — บิดตอนใกล้จบ (ตั้ง current_end_at ให้ใกล้ก่อน). expect 201
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3200,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000001"
+}
+
+### BID-004 — เช็คว่าเวลาจบขยับ. ดู currentEndAt กับ extensionCount
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### BID-004 — บิดซ้ำทันที. expect 201 แต่ extensionCount ต้องไม่ขยับ
+# บิดแรกดันเวลาไป 2 นาที ทำให้บิดนี้อยู่นอกหน้าต่างแล้ว — กัน burst ของบิด
+# ไม่ให้ไล่ต่อเวลากันเป็นทอดๆ
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3300,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000002"
+}
+
+### BID-004 — เพดาน 5 ครั้ง
+# ตั้ง extension_count = 5 และ current_end_at = now() + 1 minute ใน prisma studio
+# แล้วยิงบล็อกนี้: บิดต้องผ่าน (201) แต่เวลาจบต้องไม่ขยับ และไม่มีแถวใน
+# auction_extensions เพิ่ม — เพดานจำกัดการต่อเวลา ไม่ได้จำกัดการบิด
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "amount": 3400,
+  "clientRequestId": "bbbbbbbb-0000-4000-8000-000000000003"
+}
+
+#=============================================================================
+# 7. ประวัติการประมูล (BID-005)
+#=============================================================================
+# สาธารณะเหมือนตัวประมูล — ไม่ต้อง login ก็อ่านได้
+# ส่ง token มาด้วยจะได้ isYours บอกว่าแถวไหนเป็นบิดของตัวเอง
+#
+# สิ่งที่ต้องตรวจทุกครั้ง:
+#   - ห้ามมี bidderId ในผลลัพธ์เด็ดขาด มีแค่ bidder ที่ปิดบังแล้ว (ก***ย)
+#   - ผู้ขายเจ้าของประมูลก็เห็นชื่อแบบปิดบังเหมือนคนนอก ไม่มีสิทธิ์พิเศษ
+#   - คนเดิมบิดหลายครั้ง ต้องได้ label เดียวกันทุกแถว (ตามบิดได้ว่าใครไล่ราคาใคร)
+#   - เรียงจากเก่าไปใหม่ตาม sequenceNo
+
+### BID-005 — คนไม่ได้ login อ่านประวัติ. expect 200 + items เรียงตาม sequenceNo
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+
+### BID-005 — ผู้บิดอ่านเอง. expect 200 + isYours: true เฉพาะบิดของตัวเอง
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+
+### BID-005 — ผู้ขายอ่าน. expect 200 + ชื่อยังปิดบังเหมือนเดิม
+# เจ้าของประมูลไม่มีสิทธิ์เห็นว่าใครบิด
+GET {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{sellerAToken}}
+
+### BID-005 — ขอทีละ 2 แถว. expect 200 + items ไม่เกิน 2 + meta.total ครบ
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=1&limit=2
+
+### BID-005 — หน้าที่ 2. expect 200 + ไม่ซ้ำกับหน้าแรก
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=2&limit=2
+
+### BID-005 — ประมูลที่ยังเป็น draft. expect 404
+# แม้เจ้าของยิงเอง — ประวัติต้องไม่กลายเป็นช่องอ่าน draft
+GET {{baseUrl}}/auctions/{{incompleteId}}/bids
+Authorization: Bearer {{sellerAToken}}
+
+### BID-005 — ประมูลที่ไม่มีอยู่จริง. expect 404
+GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000099ff/bids
+
+### BID-005 — limit เกินเพดาน. expect 400
+GET {{baseUrl}}/auctions/{{liveId}}/bids?limit=500
+
+### BID-005 — page เป็น 0. expect 400
+GET {{baseUrl}}/auctions/{{liveId}}/bids?page=0

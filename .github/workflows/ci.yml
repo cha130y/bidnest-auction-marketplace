@@ -16,5 +16,39 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # apps/api/generated/prisma is gitignored, so a fresh checkout has no
+      # client. Without it the type-aware eslint rules resolve every Prisma
+      # call to `error` and lint fails.
+      - run: pnpm --filter api exec prisma generate
       - run: pnpm lint
       - run: pnpm test
+      # Prerendering is the only check that catches a Server Component
+      # mistake — a `useSearchParams()` with nothing to suspend on, a client
+      # hook reached during export. None of it shows up in dev, where every
+      # page is rendered on demand, so without this the first time anyone
+      # learns the app cannot be built is when they try to deploy it.
+      # No env needed: the build reads nothing out of .env.local, which is
+      # gitignored and absent here anyway.
+      - run: pnpm --dir apps/web build
+
+  # The API is deployed as a container, so the Dockerfile is production code and
+  # breaks the same way any other file does — a dependency that needs a system
+  # package, a path that moved, a lockfile the image can no longer install from.
+  # None of it shows up in lint or test, which run on the runner's own Node and
+  # never open the Dockerfile at all. Without this the first time anyone learns
+  # the image no longer builds is when a deploy fails.
+  #
+  # Build only, never pushed: this asks whether the image can be produced, and
+  # publishing it is the deploy platform's job. The layer cache is shared
+  # between runs, so an unchanged dependency layer is not reinstalled every PR.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
