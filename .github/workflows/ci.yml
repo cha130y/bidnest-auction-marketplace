@@ -2,6 +2,15 @@ name: CI
 on:
   pull_request:
     branches: [main, dev]
+  # A pull request is checked as it would land against the base at that moment.
+  # Let a second one merge in between and the commit that actually reaches main
+  # was never tested in the shape it arrived in — and main deploys itself the
+  # instant it changes. Admins can also push straight past the pull request.
+  #
+  # This only stops a bad deploy once Railway's "Wait for CI" is on for the
+  # service; until then it is a second run of checks nobody is waiting for.
+  push:
+    branches: [main]
 
 jobs:
   lint-and-test:
@@ -52,3 +61,78 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # The only job that runs the API against a real database. The unit suite
+  # mocks Prisma, so a migration that will not apply, a unique index two writes
+  # race on, or a guard wired in the wrong order all pass lint and test and
+  # surface for the first time in a deployed environment — which, now that a
+  # merge to main deploys itself, means in front of users.
+  #
+  # It runs alongside the other two rather than after them, and the suite takes
+  # about 75 seconds, so it costs a pull request close to nothing: docker-build
+  # already sets the pace at around three minutes.
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      # The same image infra/docker/compose.dev.yml uses, on the same port, so
+      # there is nothing for CI and a developer's machine to disagree about.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: bidnest_db
+          POSTGRES_USER: bidnest
+          POSTGRES_PASSWORD: dev_password
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U bidnest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # test/force-maildev.ts points the mail transport here, and the specs read
+      # their one-time codes back out of it, so the suite cannot run without it.
+      maildev:
+        image: maildev/maildev
+        ports:
+          - 1025:1025
+          - 1080:1080
+
+    # ConfigModule.forRoot() names no envFilePath, so it reads a .env from the
+    # working directory — and a fresh checkout has none. Everything the schema
+    # refuses to start without has to be here; the rest carry defaults, and
+    # test/force-maildev.ts overrides the mail settings before Nest loads.
+    #
+    # Throwaway values. They exist to clear the schema's 32 character minimum
+    # and to be different from each other, and they authenticate nothing.
+    env:
+      DATABASE_URL: postgresql://bidnest:dev_password@localhost:5433/bidnest_db?schema=public
+      PORT: 4000
+      JWT_ACCESS_SECRET: ci-only-access-secret-not-used-anywhere-else
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-not-used-anywhere-else
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter api exec prisma generate
+      # The database the service container starts is empty. This is also the
+      # first thing the deployed container does, so a migration that cannot
+      # apply fails here rather than at boot in production.
+      - run: pnpm --filter api exec prisma migrate deploy
+      # Six of the suites look their actors up by the fixed UUIDs seed.ts
+      # writes, rather than creating them — migrate deploy leaves the tables
+      # empty, and bearerFor then throws for every one of them in beforeAll.
+      # A developer never notices, because a machine that has run the app once
+      # has a seeded database already.
+      #
+      # The same command the setup docs hand a developer, on purpose: run
+      # anything else here and the documented path can rot without CI noticing.
+      - run: pnpm --filter api exec prisma db seed
+      - run: pnpm --dir apps/api test:e2e

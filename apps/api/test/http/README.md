@@ -23,8 +23,7 @@ cp apps/api/.env.example apps/api/.env
 pnpm --dir apps/api exec prisma migrate dev
 
 # 4) ใส่ข้อมูลตั้งต้น (users / categories / products)
-#    ⚠️ ใช้คำสั่งนี้ ไม่ใช่ `prisma db seed` — ดูเหตุผลข้างล่าง
-pnpm --dir apps/api exec nest build && node apps/api/dist/prisma/seed.js
+pnpm --dir apps/api exec prisma db seed
 
 # 5) รัน API
 pnpm dev:api          # -> http://localhost:4000
@@ -33,10 +32,7 @@ pnpm dev:api          # -> http://localhost:4000
 > **seed จะพิมพ์บรรทัด `@xToken = ...` ออกมาท้ายสุด — copy ไปวางในหัวไฟล์ `.http`**
 > token หมดอายุตาม `JWT_ACCESS_TTL` (ค่าเริ่มต้น 15 นาที) พอเริ่มได้ 401 ให้ seed ใหม่
 > แล้ววางทับ ไม่ต้อง login จริงเพราะขั้นตอน login ต้องรอ OTP ทางอีเมลก่อน (AUTH-007)
->
-> ⚠️ **`prisma db seed` ใช้ไม่ได้กับขั้นตอนนี้** มันรัน seed จริงและใส่ข้อมูลให้ครบ
-> แต่**กลืน stdout ของ process ลูกทิ้ง** เลยไม่เห็นบรรทัด token ที่ต้องเอาไปใช้ต่อ
-> ถ้าแค่อยากได้ข้อมูลลง DB เฉยๆ ไม่ต้องการ token ใช้ `prisma db seed` ได้ตามปกติ
+
 
 ## 2. ผู้ใช้ตั้งต้น
 

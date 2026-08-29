@@ -23,11 +23,9 @@
 #
 #   Authorization: Bearer {{sellerAToken}}
 #
-# The seed prints a ready @xToken line per actor — paste them below. Run it
-# directly rather than through `prisma db seed`, which swallows the child
-# process output and so hides the very lines you need:
+# The seed prints a ready @xToken line per actor — paste them below:
 #
-#   pnpm --dir apps/api exec nest build && node apps/api/dist/prisma/seed.js
+#   pnpm --dir apps/api exec prisma db seed
 #
 # They expire on JWT_ACCESS_TTL (15m by default), so re-run when a request
 # starts answering 401.
