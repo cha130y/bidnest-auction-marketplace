@@ -1,0 +1,39 @@
+# The Docker build context is the repository root (see Dockerfile). Everything
+# the API image has no use for is kept out of it: a smaller context uploads to
+# the builder faster, and nothing excluded here can be baked into an image by
+# accident.
+
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.tsbuildinfo
+output/
+.git
+.github
+.husky
+.vscode
+.claude
+docs
+infra
+scripts
+README.md
+CLAUDE.md
+
+# Secrets, and beyond that a file baked in here would shadow the variables the
+# platform sets — a container quietly running against someone's laptop database.
+**/.env
+**/.env.*
+
+# Regenerated inside the image by apps/api's postinstall hook. The host's copy
+# is gitignored, so it may be stale or built on a different platform entirely.
+apps/api/generated
+
+# Local-only source photos for the mock seeds; the uploaded copies live in
+# Cloudinary. See apps/api/prisma/mock-images/README.md
+apps/api/prisma/mock-images
+
+# apps/web is deployed to Vercel, not from this image. Its manifest is the one
+# thing needed, and only so the frozen-lockfile check sees the whole workspace.
+apps/web/*
+!apps/web/package.json
