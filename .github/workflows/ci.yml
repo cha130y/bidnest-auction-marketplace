@@ -126,4 +126,10 @@ jobs:
       # first thing the deployed container does, so a migration that cannot
       # apply fails here rather than at boot in production.
       - run: pnpm --filter api exec prisma migrate deploy
+      # Six of the suites look their actors up by the fixed UUIDs seed.ts
+      # writes, rather than creating them — migrate deploy leaves the tables
+      # empty, and bearerFor then throws for every one of them in beforeAll.
+      # A developer never notices, because a machine that has run the app once
+      # has a seeded database already.
+      - run: pnpm --filter api exec prisma db seed
       - run: pnpm --dir apps/api test:e2e
