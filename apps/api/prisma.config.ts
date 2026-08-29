@@ -7,11 +7,17 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
-    // Compiled first: the generated Prisma client imports with `.js` specifiers
-    // that only tsc resolves back to its `.ts` sources.
-    seed: 'nest build && node dist/prisma/seed.js',
+    // Delegated to the package.json script rather than spelled out here.
+    // Prisma runs this string without a shell, so a `&&` in it is never a
+    // chain: the whole thing is looked up as one command name, fails, and is
+    // reported as success. `pnpm run` is a single command, and the script it
+    // reaches does get a shell.
+    //
+    // The build is not optional: the generated Prisma client imports with
+    // `.js` specifiers that only tsc resolves back to its `.ts` sources.
+    seed: 'pnpm run seed'
   },
   datasource: {
-    url: process.env['DATABASE_URL'],
-  },
+    url: process.env['DATABASE_URL']
+  }
 });
