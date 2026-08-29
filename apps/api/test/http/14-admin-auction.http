@@ -1,0 +1,222 @@
+###############################################################################
+# ADMIN — ควบคุมดูแลประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: ADM-001 admin ยกเลิกประมูลที่ไม่เหมาะสมได้
+# พร้อมบันทึกการกระทำและเหตุผล
+#
+# 💡 ต่างจาก AUC-006 ตรงไหน:
+#    ผู้ขายยกเลิกได้แค่ DRAFT / SCHEDULED และยกเลิกได้เฉพาะของตัวเอง
+#    admin ยกเลิก ACTIVE ได้ด้วย — เป็นเหตุผลที่ requirement นี้มีอยู่
+#    (ประมูลที่ไม่เหมาะสมซึ่งกำลังวิ่งอยู่ ไม่ควรต้องรอให้มันจบเอง)
+#
+# 💡 ยกเลิกไม่ได้ถ้าจบไปแล้ว (SOLD / UNSOLD) — ประมูลที่ขายแล้วมีผู้ชนะ
+#    มีราคา และมีคำสั่งซื้ออยู่เบื้องหลัง การรื้อคือการคืนเงิน ไม่ใช่การยกเลิก
+#
+# ⚠️ ทุกการยกเลิกเขียน admin_actions ใน transaction เดียวกัน (ADM-004)
+#    ถ้ายกเลิกไม่สำเร็จ จะไม่มีแถว audit ค้างไว้
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# AUTH-008 — วาง token จาก `pnpm --filter api exec prisma db seed`
+@adminToken   =
+@sellerAToken =
+@buyerToken   =
+
+#=============================================================================
+# 1. รายการสำหรับดูแล (ADM-001)
+#=============================================================================
+
+### เห็นประมูลทุกสถานะ รวม DRAFT ที่ยังไม่เผยแพร่. expect 200
+# ประมูลถูกรายงานก่อนเผยแพร่พอๆ กับหลังเผยแพร่ admin จึงต้องเห็น draft ด้วย
+# เรียงใหม่สุดขึ้นก่อน — การดูแลจะตามของที่เพิ่งโผล่มา
+# ⚠️ ต้องไม่มี reservePrice โผล่เลย แม้จะเป็น admin (SRS ข้อ 6)
+#    การตัดสินว่าประมูลไม่เหมาะสมไม่เคยต้องใช้ราคาที่ผู้ขายยอมรับ
+GET {{baseUrl}}/admin/auctions?limit=100
+Authorization: Bearer {{adminToken}}
+
+### กรองตามสถานะ. expect 200 + ทุก item เป็น ACTIVE
+GET {{baseUrl}}/admin/auctions?status=ACTIVE&limit=100
+Authorization: Bearer {{adminToken}}
+
+### สถานะที่ไม่มีอยู่จริง. expect 400
+GET {{baseUrl}}/admin/auctions?status=NONSENSE
+Authorization: Bearer {{adminToken}}
+
+### user ธรรมดาเข้าไม่ได้. expect 403
+GET {{baseUrl}}/admin/auctions
+Authorization: Bearer {{buyerToken}}
+
+### ไม่ได้ login. expect 401
+GET {{baseUrl}}/admin/auctions
+
+#=============================================================================
+# 2. เตรียมประมูลที่วิ่งอยู่ไว้ยกเลิก
+#=============================================================================
+
+### สร้าง draft ที่เริ่มไปแล้ว
+# @name liveDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของสำหรับทดสอบ admin cancel",
+  "description": "เริ่มไปแล้ว กำลังมีคนบิด",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Admin"]
+}
+
+@liveId = {{liveDraft.response.body.$.id}}
+
+### publish. expect 200 + status ACTIVE
+POST {{baseUrl}}/auctions/drafts/{{liveId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### ผู้ซื้อบิด (เพื่อให้มีคนต้องได้รับแจ้งเตือนตอนยกเลิก). expect 201
+POST {{baseUrl}}/auctions/{{liveId}}/bids
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "amount": 3000, "clientRequestId": "33333333-3333-4333-8333-333333333301" }
+
+### ผู้ขายลองยกเลิกเอง. expect 400
+# AUC-006 ห้ามผู้ขายยกเลิกประมูลที่ ACTIVE — คนกำลังบิดกับสิ่งที่เห็นอยู่
+POST {{baseUrl}}/auctions/{{liveId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{ "reason": "ขอถอนเอง" }
+
+#=============================================================================
+# 3. ยกเลิกโดย admin (ADM-001)
+#=============================================================================
+
+### เหตุผลว่าง. expect 400
+# ADM-001 บังคับกรอกเหตุผล — ต่างจาก AUC-006 ที่ผู้ขายไม่กรอกก็ได้
+# ผู้ขายถอนของตัวเองไม่ต้องอธิบายใคร แต่ admin ที่ไปคว่ำของคนอื่นต้องตอบได้
+PATCH {{baseUrl}}/admin/auctions/{{liveId}}/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "reason": "   " }
+
+### user ธรรมดายกเลิกไม่ได้ แม้จะมีเหตุผลดีแค่ไหน. expect 403
+PATCH {{baseUrl}}/admin/auctions/{{liveId}}/cancel
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "reason": "ของปลอมชัดๆ" }
+
+### ผู้ขายเจ้าของประมูลก็ใช้ route ของ admin ไม่ได้. expect 403
+PATCH {{baseUrl}}/admin/auctions/{{liveId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{ "reason": "ของผมเอง" }
+
+### admin ยกเลิกจริง. expect 200 + status CANCELLED
+# PATCH ไม่ใช่ DELETE เพราะประมูลไม่ได้ถูกลบ — ยังอ่านได้ในสถานะ CANCELLED
+# พร้อมเหตุผล ซึ่งเป็นสิ่งที่ทำให้ตรวจสอบย้อนหลังได้
+#
+# ในหนึ่ง transaction เดียวกันจะเกิด:
+#   1. auctions.status = CANCELLED + cancellationReason + endedAt
+#   2. auction_events แถวใหม่ CANCELLED (actorUserId = admin)
+#   3. admin_actions แถวใหม่ CANCEL_AUCTION + note (ADM-004)
+#   4. notifications AUCTION_CANCELLED ให้ผู้ขาย + คนบิด + คนติดตาม (NOT-004)
+# แล้วหลัง commit จึง broadcast `auction:cancelled` เข้า room
+PATCH {{baseUrl}}/admin/auctions/{{liveId}}/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "reason": "สินค้าละเมิดลิขสิทธิ์" }
+
+### ยกเลิกซ้ำ. expect 400
+# และต้องไม่มีแถว admin_actions เพิ่มจากครั้งที่ล้มเหลว
+PATCH {{baseUrl}}/admin/auctions/{{liveId}}/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "reason": "ยกเลิกอีกรอบ" }
+
+### id ที่ไม่มีอยู่จริง. expect 404
+PATCH {{baseUrl}}/admin/auctions/00000000-0000-4000-8000-0000000009ff/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "reason": "ไม่มีอยู่จริง" }
+
+### id ที่ไม่ใช่ UUID. expect 400 จาก ParseUUIDPipe
+PATCH {{baseUrl}}/admin/auctions/not-a-uuid/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "reason": "รูปแบบผิด" }
+
+#=============================================================================
+# 4. ตรวจผลหลังยกเลิก
+#=============================================================================
+
+### ประมูลอ่านได้ไหม. expect 404
+# CANCELLED ไม่อยู่ใน PUBLIC_AUCTION_STATUSES — หายจากสายตาสาธารณะ
+GET {{baseUrl}}/auctions/{{liveId}}
+
+### ผู้ขายได้แจ้งเตือนพร้อมเหตุผล. expect 200
+# ต่างจากตอนผู้ขายยกเลิกเอง (ไม่ได้รับแจ้ง) — ครั้งนี้ไม่ใช่การตัดสินใจของเขา
+# เขาจึงเป็นคนที่ควรได้คำอธิบายมากที่สุด
+GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
+Authorization: Bearer {{sellerAToken}}
+
+### คนที่บิดไว้ก็ได้ด้วย. expect 200
+GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
+Authorization: Bearer {{buyerToken}}
+
+### admin ที่กดยกเลิกเองไม่ได้รับแจ้งเตือน. expect 200 + meta.total 0
+GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
+Authorization: Bearer {{adminToken}}
+
+### audit log (ADM-004 — ของ Dev 5). expect 200
+# ต้องเห็นแถว CANCEL_AUCTION พร้อม note = เหตุผลที่กรอกไว้
+GET {{baseUrl}}/admin/actions
+Authorization: Bearer {{adminToken}}
+
+#=============================================================================
+# 5. เคสที่ยกเลิกไม่ได้ — ประมูลที่จบไปแล้ว
+#=============================================================================
+#
+# สร้างประมูล บิดให้ถึง reserve แล้วทำให้หมดเวลา จากนั้น GET /auctions/:id
+# หนึ่งครั้งเพื่อให้ AUC-007 read repair ปิดให้:
+#
+#   docker exec docker-postgres-1 psql -U bidnest -d bidnest_db -c \
+#     "update auctions set current_end_at = now() - interval '1 second' \
+#      where id = '<id>';"
+#
+# แล้วลองยกเลิก → expect 400
+# ประมูลที่ขายแล้วมีผู้ชนะและราคาอยู่เบื้องหลัง การรื้อคือการคืนเงิน
+# ซึ่งเป็นคนละเรื่องกับการยกเลิก และยังไม่มี requirement รองรับใน V1
+#=============================================================================
+
+### WebSocket: ห้องประมูลจะได้ `auction:cancelled` ทันทีที่ยกเลิกสำเร็จ
+#
+#   const socket = io('http://localhost:4000/auctions', {
+#     transports: ['websocket']
+#   });
+#   socket.emit('auction:join', { auctionId: '<liveId>' });
+#   socket.on('auction:cancelled', (e) => console.log(e.status, e.reason));
+#
+# payload มี auctionId / status / endedAt / reason
+# ⚠️ ไม่มีข้อมูลว่า admin คนไหนเป็นคนยกเลิก — "โดน admin สั่งปิด" เป็นเรื่อง
+#    ระหว่างระบบกับผู้ขาย ไม่ใช่เรื่องที่ห้องประมูลต้องรู้
+#
+# 💡 event เดียวกันนี้ยิงตอนผู้ขายยกเลิกเองด้วย (AUC-006) — event หนึ่งตัว
+#    ต้องแปลว่าอย่างเดียวกันเสมอไม่ว่าใครเป็นคนทำ

@@ -6,6 +6,8 @@
 generator client {
   provider     = "prisma-client"
   output       = "../generated/prisma"
+  // NestJS builds to CommonJS — without this the generated ESM client
+  // throws "exports is not defined in ES module scope" at runtime.
   moduleFormat = "cjs"
 }
 
@@ -90,6 +92,7 @@ enum ProductStatus {
   INACTIVE
   OUT_OF_STOCK
   REMOVED
+  SUSPENDED // ADM-005 — admin สั่งปิดเท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้ (PROD-002)
 }
 
 enum OfferDecision {
@@ -125,6 +128,13 @@ enum AIRequestType {
 enum ChatRole {
   USER
   ASSISTANT
+  ADMIN
+}
+
+enum SupportSessionStatus {
+  AI_ONLY
+  ESCALATED
+  RESOLVED
 }
 
 // ============================================================
@@ -132,15 +142,19 @@ enum ChatRole {
 // ============================================================
 
 model User {
-  id              String     @id @default(uuid()) @db.Uuid
-  email           String     @unique @db.VarChar(320)
-  passwordHash    String?    @map("password_hash") @db.VarChar(255)
-  role            UserRole   @default(USER)
-  status          UserStatus @default(ACTIVE)
-  emailVerifiedAt DateTime?  @map("email_verified_at")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  id               String     @id @default(uuid()) @db.Uuid
+  email            String     @unique @db.VarChar(320)
+  passwordHash     String?    @map("password_hash") @db.VarChar(255)
+  role             UserRole   @default(USER)
+  status           UserStatus @default(ACTIVE)
+  emailVerifiedAt  DateTime?  @map("email_verified_at")
+  lastLoginAt      DateTime?  @map("last_login_at")
+  /// CHAT-004 — sent automatically, once, the first time a buyer's order for
+  /// one of this seller's listings is placed. Per-seller rather than
+  /// per-listing: one shop voice, not one to maintain per product.
+  autoReplyMessage String?    @map("auto_reply_message") @db.VarChar(500)
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   // Identity
   profile             UserProfile?
@@ -148,6 +162,7 @@ model User {
   sessions            UserSession[]
   twoFactorCodes      TwoFactorCode[]
   passwordResetTokens PasswordResetToken[]
+  trustedDevices      TrustedDevice[]
 
   // Shared
   createdCategories Category[] @relation("CategoryCreatedByAdmin")
@@ -161,22 +176,24 @@ model User {
 
   // E-commerce
   sellingProducts     Product[]
+  productWatchlists   ProductWatchlist[]
   cart                Cart?
   offers              Offer[]
-  sellingOrders       Order[]        @relation("OrderSeller")
-  buyingOrders        Order[]        @relation("OrderBuyer")
-  buyerConversations  Conversation[] @relation("ConversationBuyer")
-  sellerConversations Conversation[] @relation("ConversationSeller")
+  sellingOrders       Order[]            @relation("OrderSeller")
+  buyingOrders        Order[]            @relation("OrderBuyer")
+  buyerConversations  Conversation[]     @relation("ConversationBuyer")
+  sellerConversations Conversation[]     @relation("ConversationSeller")
   messages            Message[]
 
   // Engagement
-  notifications         Notification[]
-  performedAdminActions AdminAction[]        @relation("AdminActionPerformed")
-  receivedAdminActions  AdminAction[]        @relation("AdminActionReceived")
-  auctionEvents         AuctionEvent[]
-  shipmentEvents        ShipmentEvent[]
-  aiRequests            AIRequest[]
-  supportChatSessions   SupportChatSession[]
+  notifications           Notification[]
+  performedAdminActions   AdminAction[]        @relation("AdminActionPerformed")
+  receivedAdminActions    AdminAction[]        @relation("AdminActionReceived")
+  auctionEvents           AuctionEvent[]
+  shipmentEvents          ShipmentEvent[]
+  aiRequests              AIRequest[]
+  supportChatSessions     SupportChatSession[] @relation("SupportChatSessionUser")
+  assignedSupportSessions SupportChatSession[] @relation("SupportChatSessionAdmin")
 
   @@index([role, status])
   @@map("users")
@@ -189,11 +206,24 @@ model UserProfile {
   displayName            String   @map("display_name") @db.VarChar(100)
   avatarUrl              String?  @map("avatar_url")
   bio                    String?
-  phone                  String?  @db.VarChar(30)
-  location               String?
-  defaultShippingAddress String?  @map("default_shipping_address") @db.Text
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  /// USR-001/CART-004 — the default shipping address, in the same six fields
+  /// `OrderAddress` uses, at the same widths. Checkout prefills its form from
+  /// these, so a shape that did not line up would need a parser between them —
+  /// and a width that did not would let someone save an address here that
+  /// checkout then refuses.
+  ///
+  /// All nullable, unlike OrderAddress: this one is a convenience the buyer
+  /// may never fill in, while an order's copy is the address a parcel really
+  /// went to and cannot be missing.
+  phone         String? @db.VarChar(30)
+  recipientName String? @map("recipient_name") @db.VarChar(150)
+  line1         String? @db.VarChar(200)
+  line2         String? @db.VarChar(200)
+  city          String? @db.VarChar(100)
+  postalCode    String? @map("postal_code") @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -228,6 +258,36 @@ model UserSession {
   @@index([userId, expiresAt])
   @@index([expiresAt])
   @@map("user_sessions")
+}
+
+/// AUTH-007 — a browser the account has already proved itself from.
+///
+/// The emailed code stays mandatory for a browser nobody has seen before. Once
+/// one has been answered, this remembers that browser so the next sign-in from
+/// it does not ask again, the way a bank app stops asking after the first time
+/// on a phone.
+///
+/// Shaped like UserSession on purpose: only the digest is kept, never the token
+/// the browser holds, so a copy of this table is worth nothing on its own. The
+/// row is per browser, not per account, so signing in somewhere new asks for a
+/// code again — which is exactly the moment worth asking about.
+model TrustedDevice {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  /// Enough to recognise the row on a "your devices" screen, never enough to
+  /// identify a person: the browser and platform, and nothing else.
+  label      String?   @db.VarChar(200)
+  expiresAt  DateTime  @map("expires_at")
+  lastUsedAt DateTime  @default(now()) @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("trusted_devices")
 }
 
 model TwoFactorCode {
@@ -333,12 +393,17 @@ model Auction {
   participants  AuctionParticipant[]
   notifications Notification[]
   adminActions  AdminAction[]
+  conversations Conversation[]
+  /// At most one — `OrderItem.auctionId` is unique. A list because that is the
+  /// only shape Prisma gives the other side of a one-to-many.
+  orderItems    OrderItem[]
 
   @@index([status, scheduledStartAt])
   @@index([status, currentEndAt])
   @@index([categoryId, status])
   @@index([sellerId, status])
   @@index([status, bidCount]) // AUC-008 Hot Auctions
+  @@index([status, endedAt]) // AUC-008 recently-ended browse section
   @@map("auctions")
 }
 
@@ -437,6 +502,7 @@ model Product {
   category Category @relation(fields: [categoryId], references: [id])
 
   images        ProductImage[]
+  watchlists    ProductWatchlist[]
   cartItems     CartItem[]
   offers        Offer[]
   orderItems    OrderItem[]
@@ -462,6 +528,27 @@ model ProductImage {
 
   @@unique([productId, position])
   @@map("product_images")
+}
+
+// Beyond the SRS: agreed by the team as an addition, not a requirement.
+//
+// Its own table rather than a column on `watchlists` (§5.1), which is an
+// auction's. Widening that one into `(targetType, targetId)` would give up the
+// foreign key — the column could no longer point at one table — and leave the
+// integrity to application code, on top of migrating the rows WAT-001/002
+// already depend on. Two narrow tables keep both lists honest; the screen puts
+// them side by side, which is a question for the UI rather than the schema.
+model ProductWatchlist {
+  userId    String   @map("user_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+  @@index([productId, createdAt])
+  @@map("product_watchlists")
 }
 
 model Cart {
@@ -546,15 +633,34 @@ model OrderAddress {
   @@map("order_addresses")
 }
 
+/// A line is for exactly one listing — a product or a won auction, never both.
+///
+/// Two nullable FKs rather than one polymorphic column, matching `Conversation`
+/// above: the app enforces "exactly one of the two is set" (see
+/// checkout.service.ts), and a real FK to each keeps referential integrity
+/// Prisma can check instead of trusting a discriminator.
+///
+/// `productId` used to be required. An auction lot is a row in `auctions`, not
+/// in `products`, so a winner could not be billed at all without either this or
+/// a shadow product — which would then appear in the catalogue.
 model OrderItem {
   id        String  @id @default(uuid()) @db.Uuid
   orderId   String  @map("order_id") @db.Uuid
-  productId String  @map("product_id") @db.Uuid
+  productId String? @map("product_id") @db.Uuid
+  /// Unique, so a lot can be paid for once. Postgres allows repeated NULLs, so
+  /// this constrains auction lines only and leaves product lines alone.
+  auctionId String? @unique @map("auction_id") @db.Uuid
   quantity  Int
-  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // ราคาปกติ หรือ negotiated price ถ้า offer accept แล้ว
+  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // ราคาปกติ, negotiated price ถ้า offer accept แล้ว, หรือ soldPrice ถ้ามาจากประมูล
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// `Restrict` on both, spelled out because Prisma's default for an optional
+  /// relation is `SetNull` — which here would quietly empty the only record of
+  /// what an order was for the moment somebody deleted the listing. An order
+  /// line is a receipt; it has to keep pointing at what was bought.
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  auction Auction? @relation(fields: [auctionId], references: [id], onDelete: Restrict)
 
   @@map("order_items")
 }
@@ -571,21 +677,29 @@ model PaymentTransaction {
   @@map("payment_transactions")
 }
 
+/// CHAT-001 — a thread is about exactly one listing, a product or an
+/// auction, never both. Two nullable FKs rather than one polymorphic one: the
+/// app enforces "exactly one of the two is set" (see chat.service.ts), and a
+/// real FK to each keeps referential integrity Prisma can check instead of
+/// trusting a discriminator column.
 model Conversation {
   id        String   @id @default(uuid()) @db.Uuid
-  productId String   @map("product_id") @db.Uuid
+  productId String?  @map("product_id") @db.Uuid
+  auctionId String?  @map("auction_id") @db.Uuid
   buyerId   String   @map("buyer_id") @db.Uuid
   sellerId  String   @map("seller_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
-  product Product @relation(fields: [productId], references: [id])
-  buyer   User    @relation("ConversationBuyer", fields: [buyerId], references: [id])
-  seller  User    @relation("ConversationSeller", fields: [sellerId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+  auction Auction? @relation(fields: [auctionId], references: [id])
+  buyer   User     @relation("ConversationBuyer", fields: [buyerId], references: [id])
+  seller  User     @relation("ConversationSeller", fields: [sellerId], references: [id])
 
   messages      Message[]
   notifications Notification[]
 
   @@unique([productId, buyerId, sellerId])
+  @@unique([auctionId, buyerId, sellerId])
   @@map("conversations")
 }
 
@@ -721,13 +835,17 @@ model AIRequest {
 }
 
 model SupportChatSession {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  status          SupportSessionStatus @default(AI_ONLY)
+  assignedAdminId String?              @map("assigned_admin_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at")
 
-  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages SupportChatMessage[]
+  user          User                 @relation("SupportChatSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedAdmin User?                @relation("SupportChatSessionAdmin", fields: [assignedAdminId], references: [id])
+  messages      SupportChatMessage[]
 
+  @@index([status, createdAt])
   @@map("support_chat_sessions")
 }
 

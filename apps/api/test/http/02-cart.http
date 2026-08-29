@@ -1,0 +1,62 @@
+###############################################################################
+# CART — ตะกร้าของ buyer (ทุก route ต้องเป็น role USER, admin ยิงไม่ได้)
+# ราคาทุกบรรทัดคำนวณสดจากราคาปัจจุบันของผู้ขายทุกครั้งที่อ่าน (CART-002)
+###############################################################################
+
+@baseUrl = http://localhost:4000
+
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
+# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+@buyerToken =
+
+@productA1 = 00000000-0000-4000-8000-000000000201
+@productA2 = 00000000-0000-4000-8000-000000000202
+@productB1 = 00000000-0000-4000-8000-000000000203
+
+### CART-001 อ่านตะกร้า — ครั้งแรกจะสร้างตะกร้าให้อัตโนมัติ. expect 200
+GET {{baseUrl}}/cart
+Authorization: Bearer {{buyerToken}}
+
+### CART-001 เพิ่มสินค้า — keyboard 2 ชิ้น (ยังไม่ถึงเกณฑ์ 3 ชิ้น จึงยังไม่ลด). expect 201
+# @name addKeyboard
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 2 }
+
+@keyboardItemId = {{addKeyboard.response.body.$.items[0].id}}
+
+### CART-001 เพิ่มซ้ำสินค้าเดิม — จำนวนต้องบวกทบ ไม่ใช่สร้างบรรทัดใหม่. expect 201
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "productId": "{{productA1}}", "quantity": 1 }
+
+### PROD-007 ตรวจส่วนลด — ตอนนี้ 3 ชิ้นแล้ว discountPercent ต้องเป็น 10.00
+GET {{baseUrl}}/cart
+Authorization: Bearer {{buyerToken}}
+
+### CART-003 เพิ่มของผู้ขายคนที่สอง — sellerCount ต้องกลายเป็น 2. expect 201
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "productId": "{{productB1}}", "quantity": 1 }
+
+### CART-002 แก้จำนวนของบรรทัดเดิม. expect 200
+PATCH {{baseUrl}}/cart/items/{{keyboardItemId}}
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{ "quantity": 4 }
+
+### CART-002 ลบบรรทัดออกจากตะกร้า. expect 200
+DELETE {{baseUrl}}/cart/items/{{keyboardItemId}}
+Authorization: Bearer {{buyerToken}}
+
+### สรุปตะกร้าก่อนไป checkout (ไฟล์ 03)
+GET {{baseUrl}}/cart
+Authorization: Bearer {{buyerToken}}

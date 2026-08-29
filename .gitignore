@@ -12,3 +12,19 @@ output/
 !.claude/skills/
 .windsurf/
 skills-lock.json
+
+# Editor settings ส่วนตัวของแต่ละคน — ไม่ต้อง sync เข้าทีม
+.vscode/
+
+# lockfile ต้องมีตัวเดียวที่ root เท่านั้น (pnpm workspace)
+apps/*/pnpm-lock.yaml
+packages/*/pnpm-lock.yaml
+
+# Local-only source photos for seed-mock.ts / seed-mock-auction.ts — Cloudinary
+# hosts the uploaded copies, the originals never need to be in git.
+# See apps/api/prisma/mock-images/README.md
+apps/api/prisma/mock-images/**/*.jpg
+apps/api/prisma/mock-images/**/*.jpeg
+apps/api/prisma/mock-images/**/*.png
+apps/api/prisma/mock-images/**/*.webp
+apps/api/prisma/mock-images/**/*.gif

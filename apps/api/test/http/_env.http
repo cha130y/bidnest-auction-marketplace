@@ -1,0 +1,52 @@
+###############################################################################
+# BidNest e-commerce API — shared variables
+#
+# VS Code REST Client keeps `@variables` file-scoped, so every 0X-*.http file
+# repeats this block and works on its own. This file is the single source of
+# truth: if seed.ts changes, update here first, then the copies.
+#
+# ids come from apps/api/prisma/seed.ts (fixed UUIDs, stable across re-seeds).
+###############################################################################
+
+@baseUrl = http://localhost:4000
+
+# --- users --------------------------------------------------------------------
+# ids, still used in request bodies and paths
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@sellerB = 00000000-0000-4000-8000-000000000003
+@buyer   = 00000000-0000-4000-8000-000000000004
+
+# --- auth (AUTH-008) ----------------------------------------------------------
+# The x-mock-user-id header is gone: AccessTokenGuard now wants a real bearer
+# token, so requests carry
+#
+#   Authorization: Bearer {{sellerAToken}}
+#
+# The seed prints a ready @xToken line per actor — paste them below. Run it
+# directly rather than through `prisma db seed`, which swallows the child
+# process output and so hides the very lines you need:
+#
+#   pnpm --dir apps/api exec nest build && node apps/api/dist/prisma/seed.js
+#
+# They expire on JWT_ACCESS_TTL (15m by default), so re-run when a request
+# starts answering 401.
+@adminToken   =
+@sellerAToken =
+@sellerBToken =
+@buyerToken   =
+
+# --- categories --------------------------------------------------------------
+@catElectronics  = 00000000-0000-4000-8000-000000000101
+@catFashion      = 00000000-0000-4000-8000-000000000102
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# --- products ----------------------------------------------------------------
+# A1 keyboard  2500.00  stock 10  seller A  (buy 3+ -> 10% off)
+# A2 usb hub   1200.00  stock  5  seller A
+# B1 jacket    1800.00  stock  2  seller B
+# B2 figurine  4500.00  stock  1  seller B
+@productA1 = 00000000-0000-4000-8000-000000000201
+@productA2 = 00000000-0000-4000-8000-000000000202
+@productB1 = 00000000-0000-4000-8000-000000000203
+@productB2 = 00000000-0000-4000-8000-000000000204

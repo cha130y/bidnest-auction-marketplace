@@ -1,0 +1,7 @@
+# docker-entrypoint.sh is run by /bin/sh inside a Linux image. Checked out with
+# CRLF on a Windows machine, its shebang line ends in a carriage return and the
+# container dies at startup with "no such file or directory" — pointing at an
+# interpreter that does exist. Naming the ending here stops that from depending
+# on whose machine committed the file.
+*.sh text eol=lf
+Dockerfile text eol=lf

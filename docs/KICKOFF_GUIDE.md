@@ -1,6 +1,6 @@
 # คู่มือเริ่มต้นโปรเจค (Kickoff Guide)
 
-อ้างอิงจาก SRS v1.0 และ Team Role Distribution — ทำตามลำดับนี้ได้เลย แต่ละ step มีคำสั่งจริงให้ copy ไปรันตรงๆ
+อ้างอิงจาก SRS v7 และ Team Role Distribution — ทำตามลำดับนี้ได้เลย แต่ละ step มีคำสั่งจริงให้ copy ไปรันตรงๆ
 
 **ผู้รับผิดชอบ Step 1–4 และ 6: Dev 2** (ตามที่ระบุใน Team Role Distribution ว่าเป็นเจ้าของ "NestJS setup, ออกแบบ Prisma schema หลักและดูแล migration ให้ทั้งทีม")
 **Step 5 (Jira):** ไม่ผูกกับ role ใครโดยเฉพาะ ทำคู่ขนานกับ Step 2–4 ได้เลย ใครสะดวกก็ทำได้
@@ -216,18 +216,15 @@ enum Role {
 }
 
 model Category {
-  id     String        @id @default(uuid())
-  name   String
-  scope  CategoryScope
-  active Boolean       @default(true)
-}
-
-enum CategoryScope {
-  AUCTION
-  ECOMMERCE
-  BOTH
+  id       String  @id @default(uuid())
+  parentId String?
+  name     String
+  slug     String  @unique
+  isActive Boolean @default(true)
 }
 ```
+
+**หมายเหตุเรื่อง Category:** ใช้ **ชุดเดียวร่วมกันทั้ง Auction และ E-commerce** ไม่มี field `scope` แยกตามโมดูล ตาม SRS §5.1 ที่ระบุว่า "categories ใช้ร่วมกันทั้งสองโมดูล ไม่แยกขอบเขตตามโมดูล" — ทั้ง `auctions` และ `products` อ้างอิงเข้าตารางนี้ตารางเดียว เหตุผลเต็มดูที่ [ADR-0001](architecture/adr/0001-single-admin-role-and-shared-category-set.md)
 
 ```bash
 pnpm dlx prisma migrate dev --name init_identity_and_categories
@@ -334,40 +331,86 @@ git switch feat/ai-dev5
 
 ---
 
-## Workflow ประจำวัน (หลัง Kickoff ครั้งแรกแล้ว)
+## Setup เครื่องตัวเอง — ทำครั้งแรกครั้งเดียว
 
-**ใช้ได้ทั้งคนที่ join ทีมทีหลัง (ครั้งแรก) และทุกคนตอนกลับมาทำงานต่อในแต่ละวัน**
+**ผู้รับผิดชอบ: ทุกคน** (คนที่เข้าทีมทีหลัง หรือย้ายไปทำอีกเครื่อง ก็ใช้ชุดนี้)
+
+รันครบชุดนี้ **ครั้งเดียวต่อเครื่อง** ทำแล้วไม่ต้องทำอีก จากนั้นใช้แค่ "Workflow ประจำวัน" หัวข้อถัดไป
 
 ```bash
-# 1. Clone — ทำครั้งแรกครั้งเดียวเท่านั้น (ข้ามได้ถ้า clone ไว้แล้ว)
+# 1. Clone repo
 git clone https://github.com/<org>/bidnest-auction-marketplace.git
 cd bidnest-auction-marketplace
 
-# 2. switch branch ของตัวเอง แล้วดึงงานล่าสุดจาก dev เข้ามาก่อนเริ่ม
-git switch dev && git pull
-git switch feat/auth-dev2          # เปลี่ยนเป็น branch ของตัวเอง
-git merge dev
-
-# 3. ติดตั้ง dependency (ต้องรันใหม่ทุกครั้งที่ pnpm-lock.yaml เปลี่ยน เช่นมีคนเพิ่ม package)
+# 2. ติดตั้ง dependency ทั้ง monorepo
 pnpm install
 
-# 4. ตั้งค่า environment variables — ทำครั้งแรกครั้งเดียว (ข้ามได้ถ้ามีไฟล์ .env อยู่แล้ว)
-cp apps/api/.env.example apps/api/.env   # apps/api โหลด .env จาก cwd ของตัวเอง (apps/api/) เท่านั้น
-cp apps/web/.env.example apps/web/.env.local   # apps/web (Next.js) โหลด .env.local จาก cwd ของตัวเอง (apps/web/) เท่านั้น
+# 3. ตั้งค่า environment variables (ไฟล์ .env ไม่ขึ้น git ต้องสร้างเองในเครื่อง)
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
 
-# 5. เปิด Docker (Postgres + Maildev) แล้ว sync โครงสร้างตารางล่าสุดเข้าเครื่องตัวเอง
-docker compose -f infra/docker/compose.dev.yml up -d   # มี restart: unless-stopped แล้ว ปกติจะรันอยู่แล้ว คำสั่งนี้ไม่มีผลถ้า container ทำงานอยู่
+# 4. เปิด Docker (Postgres + Maildev) แล้วสร้างตารางตาม schema ล่าสุด
+docker compose -f infra/docker/compose.dev.yml up -d
 pnpm --dir apps/api exec prisma migrate deploy
 
-# 6. เริ่มพัฒนา
+# 5. เข้า branch ของตัวเอง (เลือกบรรทัดของตัวเองบรรทัดเดียว)
+git switch feat/frontend-dev1
+git switch feat/auth-dev2
+git switch feat/ecommerce-dev3
+git switch feat/auction-dev4
+git switch feat/ai-dev5
+
+# 6. ลองรันดูว่าขึ้นครบทั้ง web และ api
 pnpm dev
 ```
 
-**ทำไมต้อง merge `dev` เข้ามาทุกครั้ง (ขั้นตอน 2):** branch ของแต่ละคนแตกไว้ตั้งแต่วัน Kickoff — ถ้าคนอื่น push งานเข้า `dev` ไปแล้วหลังจากนั้น (เช่น Dev 2 ทำ auth เสร็จ) แต่ไม่ merge เข้ามา จะยังทำงานอยู่กับโค้ดเก่า เชื่อมต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+**ทำไม `.env` ต้อง copy ทีละ app:** `apps/api` โหลด `.env` จาก cwd ของตัวเอง (`apps/api/`) เท่านั้น ส่วน `apps/web` (Next.js) โหลด `.env.local` จาก cwd ของตัวเอง (`apps/web/`) เท่านั้น วางไฟล์เดียวไว้ root ไม่มีผลกับทั้งคู่
 
-**ทำไมต้อง `prisma migrate deploy` (ขั้นตอน 5):** `docker compose up -d` เปิด Postgres มาเฉยๆ ไม่ได้สร้างตารางให้เอง ต้องสั่ง apply migration ให้ตรงกับ `schema.prisma` ก่อน — **ไม่ต้องรันทุกครั้ง** ถ้า container ยังรันต่อเนื่องอยู่ (มี `restart: unless-stopped` แล้ว ข้อมูลอยู่ใน volume ไม่หายไปไหน) รันใหม่แค่ตอน **ครั้งแรกสุด** หรือ **มี migration ใหม่จากคนอื่นเข้ามาหลัง `git merge dev`** เท่านั้น
+**ทำไมต้อง `prisma migrate deploy` (ขั้นตอน 4):** `docker compose up -d` เปิด Postgres มาเฉยๆ ไม่ได้สร้างตารางให้เอง ต้องสั่ง apply migration ให้ตรงกับ `schema.prisma` ก่อน — ทำครั้งเดียวก็พอ เพราะ compose ตั้ง `restart: unless-stopped` ไว้แล้ว และข้อมูลอยู่ใน volume ไม่หายไปไหน
 
 **✅ เสร็จเมื่อ:** `pnpm dev` รันได้ทั้ง web และ api โดยไม่ error และเชื่อมต่อ database ที่มีตารางครบตาม schema ล่าสุด
+
+---
+
+## Workflow ประจำวัน — ทำทุกครั้งที่เริ่มงาน
+
+> หัวข้อนี้มีสำเนาแยกไว้ที่ **[docs/DAILY_WORKFLOW.md](DAILY_WORKFLOW.md)** สำหรับเปิดดูเร็วๆ ตอนทำงานประจำวัน (เนื้อหาเหมือนกัน — **แก้ที่ไหนต้องแก้อีกไฟล์ให้ตรงกันด้วย**)
+
+เปิดเครื่องมาทำงานวันใหม่ หรือกลับมาทำต่อหลังพักไป ให้รันชุดนี้ก่อนเขียนโค้ด
+
+```bash
+git switch dev && git pull
+git switch feat/auction-dev4   # <-- เปลี่ยนเป็น branch ของตัวเอง
+git merge dev
+pnpm check
+pnpm dev
+```
+
+**✅ เสร็จเมื่อ:** `pnpm check` ผ่านหมด และ `pnpm dev` รันได้ทั้ง web และ api
+
+### รันเพิ่มเฉพาะตอนเข้าเงื่อนไข
+
+3 คำสั่งนี้ไม่ต้องรันทุกวัน รันเมื่อเจอเงื่อนไขเท่านั้น (ปกติเจอหลัง `git merge dev`) — รันคำสั่งเช็คนี้ก่อนได้เลย
+
+```bash
+# เช็คว่า merge เมื่อกี้มีอะไรเข้ามาบ้าง (มีชื่อไฟล์ขึ้น = ต้องรันคำสั่งด้านล่างที่ตรงกับไฟล์นั้น)
+git diff --name-only HEAD@{1} HEAD -- pnpm-lock.yaml apps/api/prisma/migrations
+```
+
+```bash
+# เห็น pnpm-lock.yaml ขึ้นมา = มีคนเพิ่ม/อัปเดต package
+pnpm install
+
+# เห็นไฟล์ใน apps/api/prisma/migrations/ ขึ้นมา = มี migration ใหม่จากคนอื่น
+pnpm --dir apps/api exec prisma migrate deploy
+
+# ต่อ database ไม่ได้ / เพิ่งรีสตาร์ทเครื่องแล้ว Docker Desktop ยังไม่ขึ้น
+docker compose -f infra/docker/compose.dev.yml up -d
+```
+
+**ทำไมต้อง merge `dev` เข้ามาทุกครั้ง:** branch ของแต่ละคนแตกไว้ตั้งแต่วัน Kickoff — ถ้าคนอื่น push งานเข้า `dev` ไปแล้วหลังจากนั้น (เช่น Dev 2 ทำ auth เสร็จ) แต่ไม่ merge เข้ามา จะยังทำงานอยู่กับโค้ดเก่า เชื่อมต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+
+**ทำไมต้องรัน `pnpm check` หลัง merge:** `git merge` สำเร็จแค่บอกว่าไม่มี conflict ระดับบรรทัด ไม่ได้การันตีว่าโค้ดยังทำงานถูก (เช่นมีคน rename ฟังก์ชันที่อีกไฟล์หนึ่งยังเรียกชื่อเดิมอยู่ merge ผ่านสนิทแต่พังตอนรัน) และ merge แบบ local นี้ CI ไม่รันให้ (CI รันเฉพาะตอนเปิด PR) — `pnpm check` รวม typecheck ของ apps/api + apps/web, `pnpm test`, และ `pnpm lint` ไว้คำสั่งเดียว ให้รู้ทันทีว่ามีอะไรพังก่อนจะเขียนโค้ดทับต่อ
 
 ---
 

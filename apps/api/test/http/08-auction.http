@@ -1,0 +1,733 @@
+###############################################################################
+# AUC — วงจรชีวิตประมูล (ฝั่ง Dev 4)
+# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+#
+# ครอบคลุมถึงตอนนี้: AUC-001 สร้าง draft ส่วนตัว, AUC-002 ตรวจสอบก่อนเผยแพร่,
+# AUC-003 reserve ซ่อน, AUC-004 preview + publish, AUC-005 ผู้ซื้อมองเห็น, AUC-006 แก้ไข/ยกเลิก, AUC-007 จบประมูล, AUC-008 Hot Auctions + browse sections
+###############################################################################
+
+@baseUrl = http://localhost:4000
+@admin   = 00000000-0000-4000-8000-000000000001
+@sellerA = 00000000-0000-4000-8000-000000000002
+@buyer   = 00000000-0000-4000-8000-000000000004
+@catCollectibles = 00000000-0000-4000-8000-000000000103
+
+# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
+# รัน `pnpm --filter api exec prisma db seed` แล้ว copy บรรทัด @xToken ที่มันพิมพ์
+# ออกมาวางตรงนี้ (token หมดอายุตาม JWT_ACCESS_TTL — พอเริ่มได้ 401 ให้ seed ใหม่)
+@adminToken   =
+@sellerAToken =
+@buyerToken   =
+
+#=============================================================================
+# 1. สร้าง draft (AUC-001)
+#=============================================================================
+
+### AUC-001 create — draft ที่กรอกครบทุกช่อง. expect 201 + status DRAFT
+# reservePrice ต้องกลับมาด้วย เพราะคนยิงคือ "เจ้าของ draft" (AUC-003)
+# originalEndAt กับ currentEndAt ต้องเท่ากันทั้งคู่ = scheduledEndAt ที่ส่งไป
+# @name createDraft
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "Vintage Seiko 5 Automatic",
+  "description": "Created from 08-auction.http — ล้างเครื่องปีที่แล้ว สายเดิมโรงงาน",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-09-01T10:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T12:00:00.000Z",
+  "imageUrls": [
+    "https://placehold.co/600x400?text=Seiko+Front",
+    "https://placehold.co/600x400?text=Seiko+Back"
+  ]
+}
+
+@draftId = {{createDraft.response.body.$.id}}
+
+### AUC-001 create — draft ที่ยังกรอกไม่ครบ (ไม่มี reserve/กำหนดการ/รูป). expect 201
+# ตั้งใจให้ผ่าน: SRS แยกการตรวจครบถ้วนไว้ที่ AUC-002 ตอน "ก่อนเผยแพร่"
+# ไม่ใช่ตอนเซฟ draft — response ต้องได้ reservePrice: null, images: []
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "Draft ที่ยังทำไม่เสร็จ",
+  "description": "ยังไม่ใส่รูปกับกำหนดการ",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 500,
+  "minBidIncrement": 50
+}
+
+#=============================================================================
+# 2. draft เป็นของส่วนตัว (AUC-001)
+#=============================================================================
+
+### AUC-001 detail — เจ้าของเปิด draft ตัวเอง. expect 200 + เห็น reservePrice
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-001 detail — user คนอื่นเปิด draft เดียวกัน. expect 404
+# ต้องเป็น 404 ไม่ใช่ 403 — คำตอบต้องไม่ยืนยันว่า draft นี้มีอยู่จริง
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+Authorization: Bearer {{buyerToken}}
+
+### AUC-001 detail — คนไม่ได้ login. expect 401
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+
+### AUC-001 list — เจ้าของเห็น draft ของตัวเองทั้งหมด. expect 200 + items ≥ 2
+GET {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-001 list — คนอื่นเห็นเป็น list ว่าง. expect 200 + items: []
+GET {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{buyerToken}}
+
+#=============================================================================
+# 3. เคสที่ต้องพัง (ห้ามมี 500)
+#=============================================================================
+
+### สิทธิ์ — แอดมินสร้างประมูลไม่ได้ (SRS §2 แอดมินกำกับดูแล ไม่ได้ขายเอง). expect 403
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "Admin ไม่ควรสร้างได้",
+  "description": "ต้องโดน RolesGuard ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### สิทธิ์ — ไม่ส่ง Authorization header. expect 401
+POST {{baseUrl}}/auctions/drafts
+Content-Type: application/json
+
+{
+  "title": "ไม่ได้ login",
+  "description": "ต้องโดน AccessTokenGuard ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### หมวดหมู่ — id ที่ไม่มีอยู่จริง. expect 400
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "หมวดหมู่ไม่มีจริง",
+  "description": "ต้องได้ Category not found",
+  "categoryId": "00000000-0000-4000-8000-000000009999",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### หมวดหมู่ — หมวดที่ถูกปิดใช้งาน (ADR-0001). expect 400
+# ยิงตรงๆ ตอนนี้ยังไม่ได้: ADM-003 ของ Dev 2 ยัง NotImplemented อยู่
+# วิธีเทสชั่วคราว — เปิด `pnpm --dir apps/api exec prisma studio` แล้วตั้ง
+# categories.is_active = false ของ {{catCollectibles}} ก่อนยิง block นี้ แล้วตั้งกลับ
+# (เคสนี้มีเทสอัตโนมัติคุมอยู่แล้วใน test/auction.e2e-spec.ts)
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "หมวดหมู่ถูกปิด",
+  "description": "ต้องได้ Category is not active",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### validation — ราคาเริ่มต้นต้อง > 0. expect 400
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ราคาเริ่มต้นเป็นศูนย์",
+  "description": "ต้องโดน @IsPositive ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 0,
+  "minBidIncrement": 10
+}
+
+### validation — ชื่อเรื่องมีแต่ช่องว่าง (Trim แล้วต้องว่าง). expect 400
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "   ",
+  "description": "ต้องโดน @Trim + @IsNotEmpty ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10
+}
+
+### validation — ยัด field ที่ไม่ได้อยู่ใน DTO เข้ามา. expect 400
+# ห้ามให้ client ตั้ง status เองเด็ดขาด — draft ต้องเกิดเป็น DRAFT เสมอ
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "แอบตั้ง status เอง",
+  "description": "ต้องโดน forbidNonWhitelisted ปัดตก",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 100,
+  "minBidIncrement": 10,
+  "status": "ACTIVE"
+}
+
+### validation — draft id ที่ไม่ใช่ UUID. expect 400
+GET {{baseUrl}}/auctions/drafts/not-a-uuid
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 4. ตรวจสอบก่อนเผยแพร่ (AUC-002)
+#=============================================================================
+# checklist แบบอ่านอย่างเดียว — ไม่เปลี่ยนสถานะ draft
+# ready: true  = ผ่านครบทุกเกณฑ์ พร้อมให้ AUC-004 publish
+# ready: false = issues[] บอกว่าเหลืออะไร (field = ชื่อช่องในฟอร์ม ไม่ใช่ชื่อคอลัมน์)
+
+### AUC-002 — draft ที่กรอกครบจาก request ที่ 1. expect 200 + ready: true, issues: []
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-002 — draft ที่ยังไม่มีกำหนดการกับรูป. expect 200 + ready: false
+# issues ต้องมี START_AT_REQUIRED, END_AT_REQUIRED, IMAGES_REQUIRED ครบทั้ง 3
+# @name draftIncomplete
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "Draft ที่ยังทำไม่เสร็จ",
+  "description": "ยังไม่ใส่รูปกับกำหนดการ",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 500,
+  "minBidIncrement": 50
+}
+
+@incompleteId = {{draftIncomplete.response.body.$.id}}
+
+### AUC-002 — ยิง checklist ของ draft ที่ยังไม่เสร็จ. expect ready: false + 3 issues
+GET {{baseUrl}}/auctions/drafts/{{incompleteId}}/validation
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-002 — เวลาสิ้นสุดมาก่อนเวลาเริ่ม. expect ready: false + END_AT_NOT_AFTER_START_AT
+# @name draftBadSchedule
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "เวลาสลับกัน",
+  "description": "เวลาสิ้นสุดมาก่อนเวลาเริ่ม",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 500,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-09-01T12:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T10:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Only"]
+}
+
+@badScheduleId = {{draftBadSchedule.response.body.$.id}}
+
+###
+GET {{baseUrl}}/auctions/drafts/{{badScheduleId}}/validation
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-002 — reserve ต่ำกว่าราคาเริ่มต้น. expect ready: false + RESERVE_BELOW_STARTING_PRICE
+# @name draftLowReserve
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "reserve ต่ำกว่าราคาเริ่มต้น",
+  "description": "3000 vs 2999",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "NEW",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 2999,
+  "scheduledStartAt": "2026-09-01T10:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T12:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Only"]
+}
+
+@lowReserveId = {{draftLowReserve.response.body.$.id}}
+
+###
+# response ต้องไม่มีเลข 2999 โผล่ออกมาเลย — บอกได้แค่ว่า "ผิดกฎ" (AUC-003)
+GET {{baseUrl}}/auctions/drafts/{{lowReserveId}}/validation
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-002 — คนอื่นขอดู checklist ของ draft คนอื่น. expect 404
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
+Authorization: Bearer {{buyerToken}}
+
+### AUC-002 — ไม่ได้ login. expect 401
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/validation
+
+### AUC-002 — draft id ที่ไม่ใช่ UUID. expect 400
+GET {{baseUrl}}/auctions/drafts/not-a-uuid/validation
+Authorization: Bearer {{sellerAToken}}
+
+#=============================================================================
+# 5. Preview และ Publish (AUC-004)
+#=============================================================================
+# preview = อ่านอย่างเดียว ไม่เปลี่ยนสถานะ / publish = เปลี่ยนสถานะจริง
+# กติกาสถานะปลายทาง: เวลาเริ่มยังไม่ถึง -> SCHEDULED, ถึงแล้ว -> ACTIVE
+#
+# ⚠️ วันเวลาในไฟล์นี้ fix ไว้ที่ 2026-09-01 ถ้าวันที่จริงเลยไปแล้ว
+#    จะโดน END_AT_IN_THE_PAST ให้แก้เป็นวันในอนาคตก่อนยิง
+
+### AUC-004 preview — เจ้าของดูหน้าตาที่ผู้ซื้อจะเห็น. expect 200
+# ต้องไม่มี reservePrice ในผลลัพธ์เด็ดขาด มีแค่ reserveMet (AUC-003)
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/preview
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 preview — ยิงซ้ำแล้วเช็คว่า draft ยังเป็น DRAFT อยู่. expect status: DRAFT
+GET {{baseUrl}}/auctions/drafts/{{draftId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 preview — คนอื่นขอดู preview. expect 404
+GET {{baseUrl}}/auctions/drafts/{{draftId}}/preview
+Authorization: Bearer {{buyerToken}}
+
+### AUC-004 publish — draft ที่ยังไม่ครบ (ไม่มีรูป/กำหนดการ). expect 400 + issues[]
+POST {{baseUrl}}/auctions/drafts/{{incompleteId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 publish — draft ที่ครบแล้ว เวลาเริ่มยังไม่ถึง. expect 200 + SCHEDULED
+# publishedAt ต้องมีค่า, startedAt ต้องเป็น null
+POST {{baseUrl}}/auctions/drafts/{{draftId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 publish — ยิงซ้ำอันเดิม. expect 404
+# ไม่ใช่ DRAFT แล้ว จึงหาไม่เจอ — กัน publish ซ้ำโดยไม่ต้องพึ่ง client
+POST {{baseUrl}}/auctions/drafts/{{draftId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 publish — draft ที่เวลาเริ่มถึงแล้ว. expect 200 + ACTIVE
+# @name draftStartsNow
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "เริ่มประมูลทันที",
+  "description": "เวลาเริ่มอยู่ในอดีต เวลาจบยังมาไม่ถึง",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 1000,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Live"]
+}
+
+@startsNowId = {{draftStartsNow.response.body.$.id}}
+
+###
+# startedAt ต้องมีค่าด้วย ไม่ใช่แค่ publishedAt
+POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 publish — เวลาจบผ่านไปแล้ว. expect 400 + END_AT_IN_THE_PAST
+# @name draftExpired
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "หมดเวลาไปแล้ว",
+  "description": "ทั้งเวลาเริ่มและเวลาจบอยู่ในอดีต",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 1000,
+  "minBidIncrement": 50,
+  "scheduledStartAt": "2026-01-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-01-02T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Expired"]
+}
+
+@expiredId = {{draftExpired.response.body.$.id}}
+
+###
+GET {{baseUrl}}/auctions/drafts/{{expiredId}}/validation
+Authorization: Bearer {{sellerAToken}}
+
+###
+POST {{baseUrl}}/auctions/drafts/{{expiredId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-004 publish — คนอื่นสั่ง publish draft ของเรา. expect 404
+POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
+Authorization: Bearer {{buyerToken}}
+
+### AUC-004 publish — ไม่ได้ login. expect 401
+POST {{baseUrl}}/auctions/drafts/{{startsNowId}}/publish
+
+#=============================================================================
+# 6. ผู้ซื้อมองเห็นประมูล (AUC-005)
+#=============================================================================
+# publish แล้ว = สาธารณะทันที ตั้งแต่ SCHEDULED ไม่ต้องรอ ACTIVE
+# แต่ biddingOpen จะเป็น true ก็ต่อเมื่อเข้า ACTIVE แล้วเท่านั้น
+#
+# route นี้เป็น @Public — ยิงได้โดยไม่ต้องมี token
+# ถ้าส่ง token มาด้วยและเป็นเจ้าของ จะได้ reservePrice กลับมาเพิ่ม
+
+### AUC-005 — คนไม่ได้ login เปิดดูประมูลที่ publish แล้ว. expect 200
+# ต้องไม่มี reservePrice, มีแค่ reserveMet + biddingOpen
+GET {{baseUrl}}/auctions/{{draftId}}
+
+### AUC-005 — คนอื่นที่ login อยู่เปิดดู. expect 200 + ยังไม่เห็น reservePrice
+GET {{baseUrl}}/auctions/{{draftId}}
+Authorization: Bearer {{buyerToken}}
+
+### AUC-005 — เจ้าของเปิดดูประมูลตัวเองหลัง publish. expect 200 + เห็น reservePrice
+# หลัง publish แล้ว /auctions/drafts/:id จะหาไม่เจอ (ไม่ใช่ DRAFT แล้ว)
+# ทางนี้จึงเป็นทางเดียวที่ผู้ขายยังดู reserve ตัวเองได้
+GET {{baseUrl}}/auctions/{{draftId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-005 — ประมูลที่ ACTIVE แล้ว. expect 200 + biddingOpen: true
+GET {{baseUrl}}/auctions/{{startsNowId}}
+
+### AUC-005 — draft ที่ยังไม่ publish. expect 404
+# ต้อง 404 แม้เจ้าของเป็นคนยิงเอง — route นี้ไม่ให้บริการ DRAFT
+GET {{baseUrl}}/auctions/{{incompleteId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-005 — id ที่ไม่มีอยู่จริง. expect 404
+GET {{baseUrl}}/auctions/00000000-0000-4000-8000-0000000099ff
+
+### AUC-005 — id ที่ไม่ใช่ UUID. expect 400
+GET {{baseUrl}}/auctions/not-a-uuid
+
+### AUC-005 — เช็คว่า :id ไม่กลืน path `drafts`. expect 401 (ไม่ใช่ 400/404)
+# ถ้าเผลอวาง @Get(':id') ไว้เหนือ drafts routes เคสนี้จะพัง
+GET {{baseUrl}}/auctions/drafts
+
+#=============================================================================
+# 7. แก้ไข / ยกเลิก (AUC-006)
+#=============================================================================
+# แก้ไขและยกเลิกได้เฉพาะตอน DRAFT หรือ SCHEDULED และต้องยังไม่มีบิด
+# พอเป็น ACTIVE แล้ว ข้อมูลหลักแตะไม่ได้อีก — ยกเลิกตอน ACTIVE เป็นงาน admin (ADM-001)
+#
+# แก้ SCHEDULED จะถูก re-validate ซ้ำด้วยเกณฑ์ AUC-002
+# เพราะประมูลที่เผยแพร่ไปแล้วห้ามกลายเป็นข้อมูลไม่ครบ
+
+### AUC-006 — สร้าง draft ไว้ทดลองแก้/ยกเลิก
+# @name draftToEdit
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ของทดลองแก้ไข",
+  "description": "จะถูกแก้แล้วยกเลิกในบล็อกถัดไป",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-09-01T10:00:00.000Z",
+  "scheduledEndAt": "2026-09-01T12:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Before"]
+}
+
+@editId = {{draftToEdit.response.body.$.id}}
+
+### AUC-006 — แก้ชื่อกับรายละเอียดตอนเป็น DRAFT. expect 200
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ชื่อใหม่หลังแก้",
+  "description": "รายละเอียดใหม่"
+}
+
+### AUC-006 — ส่ง imageUrls ใหม่ = แทนที่ทั้งชุด ไม่ใช่เพิ่มต่อท้าย. expect 200 + images มี 1 รูป
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "imageUrls": ["https://placehold.co/600x400?text=After"]
+}
+
+### AUC-006 — DRAFT แก้ให้ข้อมูลไม่ครบได้ (ลบรูปหมด). expect 200
+# draft ยังไม่เผยแพร่ จึงไม่ต้องผ่านเกณฑ์ AUC-002
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "imageUrls": []
+}
+
+### AUC-006 — ยัด field ที่ไม่มีใน DTO. expect 400
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### AUC-006 — คนอื่นสั่งแก้ประมูลเรา. expect 404
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "title": "ไม่ใช่ของฉันแต่จะแก้"
+}
+
+### AUC-006 — ไม่ได้ login. expect 401
+PATCH {{baseUrl}}/auctions/{{editId}}
+Content-Type: application/json
+
+{
+  "title": "ไม่ได้ login"
+}
+
+### AUC-006 — แก้ประมูลที่ ACTIVE แล้ว. expect 400
+# {{startsNowId}} ถูก publish เป็น ACTIVE ไปแล้วในบล็อกที่ 5
+PATCH {{baseUrl}}/auctions/{{startsNowId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "สายไปแล้ว แก้ไม่ได้"
+}
+
+### AUC-006 — ยกเลิกประมูลที่ ACTIVE. expect 400
+# ตอน ACTIVE ต้องให้ admin จัดการเท่านั้น (ADM-001)
+POST {{baseUrl}}/auctions/{{startsNowId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "reason": "ผู้ขายยกเลิกเองไม่ได้ตอน ACTIVE"
+}
+
+### AUC-006 — ยกเลิก draft พร้อมเหตุผล. expect 200 + status CANCELLED
+POST {{baseUrl}}/auctions/{{editId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "reason": "ของมีตำหนิ ขอถอนออกก่อน"
+}
+
+### AUC-006 — ยกเลิกซ้ำอันเดิม. expect 400
+POST {{baseUrl}}/auctions/{{editId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{}
+
+### AUC-006 — แก้ประมูลที่ยกเลิกไปแล้ว. expect 400
+PATCH {{baseUrl}}/auctions/{{editId}}
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ยกเลิกไปแล้วแก้ไม่ได้"
+}
+
+### AUC-006 — ยกเลิกโดยไม่ใส่เหตุผล. expect 200
+# ผู้ขายไม่ถูกบังคับให้บอกเหตุผล (ต่างจาก ADM-001 ที่ admin ต้องบันทึกเสมอ)
+POST {{baseUrl}}/auctions/{{incompleteId}}/cancel
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{}
+
+#=============================================================================
+# 8. การจบการประมูล (AUC-007)
+#=============================================================================
+# ผลลัพธ์: บิดสูงสุดที่ผ่าน reserve -> SOLD + บันทึกผู้ชนะ/ราคาที่ชนะ
+#          ไม่มีบิดเลย หรือไม่ผ่าน reserve -> UNSOLD
+#
+# ⚠️ ยังไม่มี scheduler ในระบบ การจบประมูลจึงเกิดตอน "มีคนเปิดอ่าน" ประมูลที่หมดเวลา
+#    (GET /auctions/:id) ยิงซ้ำกี่ครั้งก็จบครั้งเดียว มี ENDED event อันเดียว
+#
+# ⚠️ ยังไม่มี endpoint ลงบิด (BID-001) การเทสมือจึงต้องใส่บิดผ่าน Prisma Studio
+#    หรือ SQL ก่อน แล้วค่อยยิง GET — เคสนี้มีเทสอัตโนมัติคุมครบใน auction.e2e-spec.ts
+
+### AUC-007 — เตรียมประมูลที่หมดเวลาแล้ว (ยิงแล้วต้องแก้ current_end_at เอง)
+# @name auctionToEnd
+POST {{baseUrl}}/auctions/drafts
+Authorization: Bearer {{sellerAToken}}
+Content-Type: application/json
+
+{
+  "title": "ประมูลที่จะจบ",
+  "description": "ใช้ทดสอบผลลัพธ์ SOLD/UNSOLD",
+  "categoryId": "{{catCollectibles}}",
+  "condition": "USED",
+  "startingPrice": 3000,
+  "minBidIncrement": 100,
+  "reservePrice": 4500,
+  "scheduledStartAt": "2026-08-01T00:00:00.000Z",
+  "scheduledEndAt": "2026-12-31T00:00:00.000Z",
+  "imageUrls": ["https://placehold.co/600x400?text=Ending"]
+}
+
+@endingId = {{auctionToEnd.response.body.$.id}}
+
+### publish ให้เป็น ACTIVE ก่อน. expect 200 + ACTIVE
+POST {{baseUrl}}/auctions/drafts/{{endingId}}/publish
+Authorization: Bearer {{sellerAToken}}
+
+###
+# ---------------------------------------------------------------------------
+# ก่อนยิงบล็อกถัดไป ให้เปิด prisma studio แล้วทำ 2 อย่างกับ auction ตัวนี้:
+#   1. ตั้ง current_end_at เป็นเวลาที่ผ่านมาแล้ว
+#   2. (ถ้าอยากได้ SOLD) เพิ่มแถวใน bids: auction_id = {{endingId}},
+#      bidder_id = {{buyer}}, amount = 5000, sequence_no = 1,
+#      client_request_id = uuid อะไรก็ได้
+#      - ใส่ amount 4499 แทน จะได้ UNSOLD (ต่ำกว่า reserve 4500)
+#      - ไม่ใส่บิดเลย ก็ได้ UNSOLD เหมือนกัน
+# ---------------------------------------------------------------------------
+
+### AUC-007 — อ่านประมูลที่หมดเวลา = สั่งให้มันจบ. expect 200 + SOLD หรือ UNSOLD
+# response ต้องไม่มี reservePrice โผล่มาแม้ reserve จะเป็นตัวตัดสินผล (AUC-003)
+GET {{baseUrl}}/auctions/{{endingId}}
+
+### AUC-007 — ยิงซ้ำอีกครั้ง. expect ผลเดิม ไม่เปลี่ยน
+# ตรวจใน prisma studio: auction_events ต้องมี ENDED แค่แถวเดียว
+GET {{baseUrl}}/auctions/{{endingId}}
+
+### AUC-007 — เจ้าของเปิดดูผล. expect 200 + เห็น reservePrice ได้ (เจ้าของเท่านั้น)
+GET {{baseUrl}}/auctions/{{endingId}}
+Authorization: Bearer {{sellerAToken}}
+
+### AUC-007 — ประมูลที่ยังไม่หมดเวลา ต้องไม่ถูกจบ. expect 200 + ACTIVE
+GET {{baseUrl}}/auctions/{{startsNowId}}
+
+#=============================================================================
+# 9. Hot Auctions (AUC-008)
+#=============================================================================
+# list สาธารณะของประมูลที่กำลังวิ่งอยู่ เรียงตามเกณฑ์ตายตัว 3 ชั้น:
+#   1. จำนวนบิดที่ยอมรับแล้ว มาก -> น้อย
+#   2. เวลาสิ้นสุดปัจจุบัน ใกล้ -> ไกล
+#   3. auction id
+#
+# ไม่มี query `sort` ให้เปลี่ยนลำดับ — SRS ระบุว่าห้ามมี flag พิเศษหรือ hidden scoring
+# เห็นเฉพาะ ACTIVE เท่านั้น (SCHEDULED / CANCELLED / จบแล้ว / ถูกลบ จะไม่อยู่ในลิสต์)
+
+### AUC-008 — คนไม่ได้ login ดู hot auctions. expect 200 + items[] + meta
+GET {{baseUrl}}/auctions
+
+### AUC-008 — ขอทีละ 5 รายการ. expect 200 + items ไม่เกิน 5
+GET {{baseUrl}}/auctions?limit=5
+
+### AUC-008 — หน้าที่ 2. expect 200 + ไม่ซ้ำกับหน้าแรก
+GET {{baseUrl}}/auctions?page=2&limit=5
+
+### AUC-008 — เช็คว่า reservePrice ไม่โผล่ในลิสต์เลย (AUC-003)
+# ไล่ดูทุก item ต้องไม่มี key reservePrice
+GET {{baseUrl}}/auctions?limit=100
+
+### AUC-008 — limit เกินเพดาน 100. expect 400
+GET {{baseUrl}}/auctions?limit=500
+
+### AUC-008 — page เป็น 0. expect 400
+GET {{baseUrl}}/auctions?page=0
+
+### AUC-008 — page ไม่ใช่ตัวเลข. expect 400
+GET {{baseUrl}}/auctions?page=abc
+
+### AUC-008 — ส่ง sort มาเอง. expect 400
+# ห้ามให้ client เปลี่ยนลำดับ — DTO ไม่มี field นี้จึงโดน forbidNonWhitelisted ปัดตก
+GET {{baseUrl}}/auctions?sort=price_asc
+
+#=============================================================================
+# 10. Browse sections (ต่อยอด AUC-008)
+#=============================================================================
+# หน้าแรกของเว็บมี 4 การ์ด: hot / ending soon / starting soon / recently ended
+# ทั้งสี่ใช้ endpoint เดียวกัน ต่างกันที่ `section` เท่านั้น
+#
+# มีแค่ `hot` ที่อยู่ใน SRS อีกสามอันมาจาก design ของหน้า home
+#
+# สำคัญ: client เลือกได้แค่ "ชื่อ section" เท่านั้น เปลี่ยนลำดับเองไม่ได้
+# แต่ละ section มี where + orderBy ตายตัวฝั่ง server จึงไม่ขัดข้อกำหนด AUC-008
+# ที่ห้ามมี flag พิเศษหรือ hidden scoring
+#
+# ทุก section เห็นเฉพาะสถานะที่ผู้ซื้อมองเห็นได้อยู่แล้ว (AUC-005)
+# DRAFT / CANCELLED / ที่ถูกลบ ไม่โผล่ใน section ไหนเลย
+
+### section — ไม่ส่งอะไรเลย = hot list เหมือนเดิมทุกประการ. expect 200
+GET {{baseUrl}}/auctions
+
+### section — ส่ง hot ตรงๆ ต้องได้ผลเท่ากับข้างบน. expect 200
+GET {{baseUrl}}/auctions?section=hot
+
+### section — ending soon: ACTIVE เรียงตาม currentEndAt ใกล้ -> ไกล. expect 200
+# ใช้ currentEndAt ไม่ใช่ originalEndAt ประมูลที่โดนต่อเวลา (BID-004)
+# จะเลื่อนลงไปข้างล่าง ไม่ค้างอยู่หัวลิสต์ว่ากำลังจะปิด
+GET {{baseUrl}}/auctions?section=ending-soon
+
+### section — starting soon: SCHEDULED เรียงตาม scheduledStartAt. expect 200
+# ยังไม่เปิดให้บิด แต่ผู้ซื้อดูล่วงหน้าได้ (AUC-005)
+GET {{baseUrl}}/auctions?section=starting-soon
+
+### section — recently ended: SOLD + UNSOLD เรียงตาม endedAt ใหม่ -> เก่า. expect 200
+# ใช้ endedAt (เวลาที่ settle จริง AUC-007) ไม่ใช่ currentEndAt ที่แค่ "ควรจบ"
+# CANCELLED ไม่อยู่ในลิสต์นี้ เพราะไม่ใช่สถานะสาธารณะ
+GET {{baseUrl}}/auctions?section=recently-ended
+
+### section — แบ่งหน้าภายใน section ได้ปกติ. expect 200 + meta.total ของ section นั้น
+# meta.total ต้องนับเฉพาะ section ไม่ใช่ทั้งตาราง
+GET {{baseUrl}}/auctions?section=starting-soon&limit=4
+
+### section — 4 การ์ดหน้าแรก ยิงทีละอันแบบนี้ (การ์ดละ 4 รายการ)
+GET {{baseUrl}}/auctions?section=hot&limit=4
+
+###
+GET {{baseUrl}}/auctions?section=ending-soon&limit=4
+
+###
+GET {{baseUrl}}/auctions?section=starting-soon&limit=4
+
+###
+GET {{baseUrl}}/auctions?section=recently-ended&limit=4
+
+### section — ชื่อ section ที่ไม่มีอยู่จริง. expect 400
+# ไม่ fallback เงียบๆ ไปเป็น hot — หน้าจอที่ขอ section ผิดคือหน้าจอที่มีบั๊ก
+GET {{baseUrl}}/auctions?section=most-expensive
+
+### section — สะกดผิด. expect 400
+GET {{baseUrl}}/auctions?section=ending_soon
+
+### section — ส่ง status มาเอง. expect 400
+# ไม่มี field นี้ใน DTO จึงโดน forbidNonWhitelisted ปัดตก
+# เลือกได้แค่ชื่อ section เท่านั้น ประกอบ filter เองไม่ได้
+GET {{baseUrl}}/auctions?status=SOLD
