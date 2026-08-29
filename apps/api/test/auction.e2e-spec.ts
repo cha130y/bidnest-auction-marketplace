@@ -7,6 +7,7 @@ import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
 import { authRegistry } from './helpers/auth';
 import { expectNoReserve } from './helpers/reserve';
+import { backdateSchedule } from './helpers/schedule';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 /**
@@ -41,6 +42,22 @@ describe('Auction drafts (e2e)', () => {
   let activeCategoryId: string;
   let inactiveCategoryId: string;
 
+  const daysFromNow = (days: number) =>
+    new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+  /**
+   * The schedule every draft in this suite is written with.
+   *
+   * Relative to the run rather than a date written down, because a schedule
+   * may not be written into the past: a fixed date is accepted until the
+   * morning it is not, and a suite that goes red on a particular day for a
+   * reason nothing in it explains is worse than no suite. Resolved once, so
+   * the draft that is created and the response asserted against it name the
+   * same instant to the millisecond.
+   */
+  const DRAFT_START_AT = daysFromNow(1);
+  const DRAFT_END_AT = daysFromNow(2);
+
   const draftBody = () => ({
     title: auctionTitle,
     description: 'Serviced last year, original bracelet.',
@@ -49,8 +66,8 @@ describe('Auction drafts (e2e)', () => {
     startingPrice: 3000,
     minBidIncrement: 100,
     reservePrice: 4500,
-    scheduledStartAt: '2026-09-01T10:00:00.000Z',
-    scheduledEndAt: '2026-09-01T12:00:00.000Z',
+    scheduledStartAt: DRAFT_START_AT,
+    scheduledEndAt: DRAFT_END_AT,
     imageUrls: [
       'https://placehold.co/600x400?text=Front',
       'https://placehold.co/600x400?text=Back'
@@ -141,9 +158,9 @@ describe('Auction drafts (e2e)', () => {
         startingPrice: '3000',
         minBidIncrement: '100',
         reservePrice: '4500',
-        scheduledStartAt: '2026-09-01T10:00:00.000Z',
-        originalEndAt: '2026-09-01T12:00:00.000Z',
-        currentEndAt: '2026-09-01T12:00:00.000Z',
+        scheduledStartAt: DRAFT_START_AT,
+        originalEndAt: DRAFT_END_AT,
+        currentEndAt: DRAFT_END_AT,
         category: { id: activeCategoryId },
         seller: { id: sellerId }
       });
@@ -378,8 +395,8 @@ describe('Auction drafts (e2e)', () => {
 
     it('rejects an end time that is not after the start time', async () => {
       const draftId = await createDraft({
-        scheduledStartAt: '2026-09-01T12:00:00.000Z',
-        scheduledEndAt: '2026-09-01T10:00:00.000Z'
+        scheduledStartAt: daysFromNow(4),
+        scheduledEndAt: daysFromNow(3)
       });
 
       const validation = await validationOf(draftId);
@@ -632,8 +649,15 @@ describe('Auction drafts (e2e)', () => {
 
       it('publishes a draft whose start time has arrived as ACTIVE', async () => {
         const draftId = await createDraft({
-          scheduledStartAt: hoursFromNow(-1),
+          scheduledStartAt: hoursFromNow(1),
           scheduledEndAt: hoursFromNow(4)
+        });
+        // The start arrives while the draft waits. A seller cannot write a
+        // time that has already gone by, so the fixture ages instead — which
+        // is how an auction reaches its own start time anyway.
+        await backdateSchedule(prisma, draftId, {
+          startAt: new Date(hoursFromNow(-1)),
+          endAt: new Date(hoursFromNow(4))
         });
 
         const response = await request(app.getHttpServer())
@@ -653,8 +677,12 @@ describe('Auction drafts (e2e)', () => {
           scheduledEndAt: hoursFromNow(4)
         });
         const liveId = await createDraft({
-          scheduledStartAt: hoursFromNow(-1),
+          scheduledStartAt: hoursFromNow(1),
           scheduledEndAt: hoursFromNow(4)
+        });
+        await backdateSchedule(prisma, liveId, {
+          startAt: new Date(hoursFromNow(-1)),
+          endAt: new Date(hoursFromNow(4))
         });
 
         for (const id of [scheduledId, liveId]) {
@@ -715,8 +743,12 @@ describe('Auction drafts (e2e)', () => {
 
       it('refuses a draft whose end time has already passed', async () => {
         const draftId = await createDraft({
-          scheduledStartAt: hoursFromNow(-4),
-          scheduledEndAt: hoursFromNow(-1)
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+        await backdateSchedule(prisma, draftId, {
+          startAt: new Date(hoursFromNow(-4)),
+          endAt: new Date(hoursFromNow(-1))
         });
 
         const response = await request(app.getHttpServer())
@@ -780,18 +812,32 @@ describe('Auction drafts (e2e)', () => {
     const hoursFromNow = (hours: number) =>
       new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
-    /** Creates a draft and publishes it, returning its id. */
+    /**
+     * Creates a draft and publishes it, returning its id.
+     *
+     * A negative `startInHours` asks for an auction that is already running.
+     * The draft is still written with a schedule in the future, because
+     * AUC-001 refuses one that is not, and is then aged into place.
+     */
     const publishAuction = async (startInHours: number) => {
+      const writable = Math.max(startInHours, 1);
       const created = await request(app.getHttpServer())
         .post('/auctions/drafts')
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(startInHours),
-          scheduledEndAt: hoursFromNow(startInHours + 4)
+          scheduledStartAt: hoursFromNow(writable),
+          scheduledEndAt: hoursFromNow(writable + 4)
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      if (startInHours < 0) {
+        await backdateSchedule(prisma, id, {
+          startAt: new Date(hoursFromNow(startInHours)),
+          endAt: new Date(hoursFromNow(startInHours + 4))
+        });
+      }
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -1050,12 +1096,15 @@ describe('Auction drafts (e2e)', () => {
       });
 
       it('refuses to edit an ACTIVE auction', async () => {
-        const id = await publish(
-          await createDraft({
-            scheduledStartAt: hoursFromNow(-1),
-            scheduledEndAt: hoursFromNow(4)
-          })
-        );
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+        await backdateSchedule(prisma, draftId, {
+          startAt: new Date(hoursFromNow(-1)),
+          endAt: new Date(hoursFromNow(4))
+        });
+        const id = await publish(draftId);
         expect(await statusOf(id)).toBe('ACTIVE');
 
         await request(app.getHttpServer())
@@ -1140,12 +1189,15 @@ describe('Auction drafts (e2e)', () => {
       });
 
       it('refuses to cancel an ACTIVE auction — that is an admin action', async () => {
-        const id = await publish(
-          await createDraft({
-            scheduledStartAt: hoursFromNow(-1),
-            scheduledEndAt: hoursFromNow(4)
-          })
-        );
+        const draftId = await createDraft({
+          scheduledStartAt: hoursFromNow(1),
+          scheduledEndAt: hoursFromNow(4)
+        });
+        await backdateSchedule(prisma, draftId, {
+          startAt: new Date(hoursFromNow(-1)),
+          endAt: new Date(hoursFromNow(4))
+        });
+        const id = await publish(draftId);
 
         await request(app.getHttpServer())
           .post(`/auctions/${id}/cancel`)
@@ -1221,12 +1273,19 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(-2).toISOString(),
-          scheduledEndAt: hoursFromNow(2).toISOString(),
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(5).toISOString(),
           ...overrides
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-2),
+        endAt: hoursFromNow(2)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -1333,11 +1392,18 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...rest,
-          scheduledStartAt: hoursFromNow(-2).toISOString(),
-          scheduledEndAt: hoursFromNow(2).toISOString()
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(5).toISOString()
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-2),
+        endAt: hoursFromNow(2)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -1389,11 +1455,19 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(-1).toISOString(),
-          scheduledEndAt: hoursFromNow(4).toISOString()
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(5).toISOString()
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-1),
+        endAt: hoursFromNow(4)
+      });
+
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
         .set('Authorization', authOf(sellerId))
@@ -1443,11 +1517,18 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(-1).toISOString(),
-          scheduledEndAt: hoursFromNow(endsInHours).toISOString()
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(endsInHours + 2).toISOString()
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-1),
+        endAt: hoursFromNow(endsInHours)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -1870,12 +1951,19 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(-1).toISOString(),
-          scheduledEndAt: hoursFromNow(4).toISOString(),
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(5).toISOString(),
           ...overrides
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-1),
+        endAt: hoursFromNow(4)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -2148,11 +2236,18 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(-1).toISOString(),
-          scheduledEndAt: hoursFromNow(4).toISOString()
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(5).toISOString()
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-1),
+        endAt: hoursFromNow(4)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -2336,11 +2431,18 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: minutesFromNow(-60).toISOString(),
-          scheduledEndAt: minutesFromNow(120).toISOString()
+          scheduledStartAt: minutesFromNow(60).toISOString(),
+          scheduledEndAt: minutesFromNow(180).toISOString()
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: minutesFromNow(-60),
+        endAt: minutesFromNow(120)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)
@@ -2547,11 +2649,18 @@ describe('Auction drafts (e2e)', () => {
         .set('Authorization', authOf(sellerId))
         .send({
           ...draftBody(),
-          scheduledStartAt: hoursFromNow(-1).toISOString(),
-          scheduledEndAt: hoursFromNow(4).toISOString()
+          scheduledStartAt: hoursFromNow(1).toISOString(),
+          scheduledEndAt: hoursFromNow(5).toISOString()
         })
         .expect(201);
       const id = (created.body as { id: string }).id;
+
+      // A seller cannot write a start that has already gone by, so the draft
+      // is aged into place instead — which is how it reaches its start time.
+      await backdateSchedule(prisma, id, {
+        startAt: hoursFromNow(-1),
+        endAt: hoursFromNow(4)
+      });
 
       await request(app.getHttpServer())
         .post(`/auctions/drafts/${id}/publish`)

@@ -10,6 +10,7 @@ import { AuctionGateway } from './../src/realtime/auction.gateway';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { authRegistry } from './helpers/auth';
 import { expectNoReserve } from './helpers/reserve';
+import { backdateSchedule } from './helpers/schedule';
 
 /**
  * LIV-001 — the lobby before an auction starts, end to end: the auction on
@@ -61,8 +62,17 @@ describe('Live lobby (e2e)', () => {
     return user.id;
   };
 
-  /** Creates a draft and publishes it, returning its id. */
+  /**
+   * Creates a draft and publishes it, returning its id.
+   *
+   * A negative `startInHours` asks for an auction that is already running. The
+   * draft is still written with a schedule in the future, because AUC-001
+   * refuses one that is not, and is then aged into place — which is what
+   * really happens to an auction whose start time arrives.
+   */
   const publishAuction = async (startInHours: number) => {
+    const writable = Math.max(startInHours, 1);
+
     const created = await request(app.getHttpServer())
       .post('/auctions/drafts')
       .set('Authorization', authOf(sellerId))
@@ -74,13 +84,20 @@ describe('Live lobby (e2e)', () => {
         startingPrice: 3000,
         minBidIncrement: 100,
         reservePrice: 4500,
-        scheduledStartAt: hoursFromNow(startInHours),
-        scheduledEndAt: hoursFromNow(startInHours + 4),
+        scheduledStartAt: hoursFromNow(writable),
+        scheduledEndAt: hoursFromNow(writable + 4),
         imageUrls: ['https://placehold.co/600x400?text=Front']
       })
       .expect(201);
 
     const id = (created.body as { id: string }).id;
+
+    if (startInHours < 0) {
+      await backdateSchedule(prisma, id, {
+        startAt: new Date(hoursFromNow(startInHours)),
+        endAt: new Date(hoursFromNow(startInHours + 4))
+      });
+    }
 
     await request(app.getHttpServer())
       .post(`/auctions/drafts/${id}/publish`)
