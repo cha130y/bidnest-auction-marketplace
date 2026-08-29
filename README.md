@@ -56,6 +56,7 @@ packages/
 infra/docker/             compose.dev.yml — Postgres + Maildev สำหรับเครื่อง dev
 scripts/                  dev.mjs, dev-preflight.mjs, check-setup.mjs
 docs/                     SRS, ERD, ADR, ผัง workflow, คู่มือทีม
+Dockerfile                image ของ apps/api สำหรับ deploy — build จากรากของ repo
 ```
 
 เบราว์เซอร์ไม่คุยกับฐานข้อมูลหรือบริการภายนอกโดยตรง — ทุกอย่างผ่าน `apps/api` ชั้นเดียว
@@ -112,6 +113,54 @@ pnpm dev
 
 ---
 
+## Deploy
+
+| ส่วน | ที่ไหน | branch |
+| --- | --- | --- |
+| `apps/api` | Railway (Docker) | `main` → production · `dev` → staging |
+| `apps/web` | Vercel | `main` → production · `dev` → staging |
+| PostgreSQL | Railway — service แยกใน project เดียวกับ api | — |
+
+[`Dockerfile`](Dockerfile) ที่รากของ repo build เฉพาะ `apps/api` (`apps/web` ไม่ผ่าน Docker เลย)
+build context ต้องเป็นรากของ repo เพราะ pnpm อ่าน workspace จาก lockfile ที่นั่น — ลองในเครื่องได้ด้วย
+
+```bash
+docker build -t bidnest-api .
+docker run --rm -p 4000:4000 --env-file apps/api/.env bidnest-api
+```
+
+[`docker-entrypoint.sh`](docker-entrypoint.sh) รัน `prisma migrate deploy` ให้เองก่อน start ทุกครั้ง ตอน deploy จึงไม่ต้องรัน migration แยก
+
+### ค่าตั้งของ production อยู่ใน dashboard ไม่ได้อยู่ใน repo
+
+[`railway.json`](railway.json) **ไม่ได้ถูกอ่าน** — Config as Code ของ Railway ถูก deprecated และตั้งแต่ 2026-08-28 service ที่ไม่เคยใช้มาก่อน (รวมถึงของเรา) เปิดใช้ไม่ได้อีก ไฟล์นี้เก็บไว้เป็นบันทึกว่าควรตั้งอะไรบ้างเท่านั้น ของจริงต้องไปกดเองที่ Settings ของ service
+
+| ช่อง | ค่า |
+| --- | --- |
+| Builder | `Dockerfile` — ค่า default คือ Railpack ซึ่ง build monorepo นี้ไม่ถูก |
+| Root Directory | ปล่อยว่าง ไม่ใช่ `apps/api` |
+| Healthcheck Path | `/health` |
+| Watch Paths | `apps/api/**` `packages/**` `Dockerfile` `.dockerignore` `docker-entrypoint.sh` `package.json` `pnpm-lock.yaml` `pnpm-workspace.yaml` |
+| Region | ให้ตรงกับ service Postgres ไม่งั้นทุก query วิ่งข้ามทวีป |
+| Custom Start Command | **ปล่อยว่าง** — ถ้าใส่จะทับ `ENTRYPOINT` แล้ว migration จะไม่ถูกรัน |
+| Wait for CI | ปิด — [ci.yml](.github/workflows/ci.yml) รันเฉพาะตอน `pull_request` ตอน push เข้า branch จะไม่มี check ให้รอ |
+
+env ที่ระบบบังคับจริงมีแค่ `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` ที่เหลือมี default หมด (ดู [env.validation.ts](apps/api/src/config/env.validation.ts)) แต่ production ต้องตั้งเพิ่มอย่างน้อย
+
+- `WEB_APP_URL` = โดเมนของ Vercel **ห้ามมี `/` ต่อท้าย** ไม่งั้น CORS บล็อกทั้งเว็บ
+- `MAIL_*` = SMTP จริง ห้ามชี้ Maildev เด็ดขาด — หน้า dashboard ของมันโชว์ OTP ให้ใครก็ได้ที่เข้าถึงได้
+- `ADMIN_SKIP_2FA` = ไม่ต้องใส่ ค่าที่ไม่มีคือปิด
+
+### seed ข้อมูลตั้งต้น
+
+image มี seed ที่ compile แล้วติดไปด้วย รันจากแท็บ Console ของ service ได้เลย ไม่ต้องเปิดฐานข้อมูลออกสู่ public
+
+```bash
+node apps/api/dist/prisma/seed.js
+```
+
+---
+
 ## เอกสาร
 
 | เอกสาร | เนื้อหา |
@@ -138,7 +187,7 @@ type ที่ใช้: `feat` `fix` `refactor` `test` `docs` `chore` `ci` — 
 
 **Pull Request:** base branch เป็น `dev` เสมอ (ไม่ merge เข้า `main` โดยตรง) · title และ description เป็นภาษาอังกฤษ
 
-**CI:** ทุก PR เข้า `dev` หรือ `main` จะรัน lint → test → build ฝั่ง web อัตโนมัติ ([ci.yml](.github/workflows/ci.yml))
+**CI:** ทุก PR เข้า `dev` หรือ `main` จะรัน lint → test → build ฝั่ง web และ build Docker image ของ api อัตโนมัติ ([ci.yml](.github/workflows/ci.yml))
 
 **ไฟล์ที่ต้องให้เจ้าของ approve ก่อน merge** (ดู [CODEOWNERS](.github/CODEOWNERS)): `CLAUDE.md`, `docs/requirements/`, `docs/architecture/`, `docs/team-role/`, `apps/api/prisma/`, `.github/`, `package.json`
 
