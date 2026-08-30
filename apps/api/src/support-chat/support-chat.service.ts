@@ -13,6 +13,7 @@ import {
 } from '../ai-tools/prompt-builder.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ChatRole, SupportSessionStatus } from '../../generated/prisma/enums';
+import { GeminiUnavailableException } from '../ai-tools/exceptions/gemini-unavailable.exception';
 import {
   ChatMessageDto,
   GetHistoryResponseDto,
@@ -23,36 +24,60 @@ const ESCALATION_THRESHOLD = 3;
 const FALLBACK_MARKER = 'ยังไม่มีข้อมูลเรื่องนี้';
 
 /**
- * Substring match, not an LLM judgement call — a user asking for a human
- * outright shouldn't have to fail the AI three times first to get the same
- * "คุยกับแอดมิน" button the fallback heuristic already produces.
+ * Set by prompt rule 3 (prompt-builder.service.ts) when the AI has already
+ * walked the user through everything the FAQ covers and it still isn't
+ * resolved — distinct from FALLBACK_MARKER (topic never matched the FAQ at
+ * all), so it escalates on its own turn instead of waiting for
+ * ESCALATION_THRESHOLD repeats. A miss on an unrelated question shouldn't
+ * fast-track a button that "I already gave you my best shot" earns instantly.
  */
-const ESCALATION_PHRASES = [
-  'ติดต่อแอดมิน',
-  'คุยกับแอดมิน',
-  'ขอคุยกับแอดมิน',
-  'อยากคุยกับแอดมิน',
-  'ติดต่อเจ้าหน้าที่',
-  'คุยกับเจ้าหน้าที่',
-  'ขอคุยกับเจ้าหน้าที่',
-  'ขอคุยกับคนจริง',
-  'อยากคุยกับคนจริง',
-  'ต้องการเจ้าหน้าที่',
-  'ขอสายแอดมิน',
-  'contact admin',
-  'talk to admin',
-  'talk to a human',
-  'human agent'
-];
+const EXHAUSTED_MARKER = 'ผมลองช่วยเต็มที่แล้ว';
+
+/**
+ * Shown in place of a real AI reply when Gemini itself is unavailable
+ * (quota, outage, timeout) — reuses EXHAUSTED_MARKER so the "คุยกับแอดมิน"
+ * button appears immediately rather than the caller seeing a raw 503 with
+ * nothing to do about it.
+ */
+const GEMINI_DOWN_REPLY = `ตอนนี้ผู้ช่วย AI มีคนใช้งานเยอะชั่วคราวครับ ${EXHAUSTED_MARKER}ในส่วนนี้ครับ แนะนำให้ติดต่อแอดมินได้เลยครับ`;
 
 const CONTACT_ADMIN_REPLY =
   'ได้เลยครับ กดปุ่ม "คุยกับแอดมิน" ด้านล่างเพื่อติดต่อทีมงานได้เลยครับ';
 
+/**
+ * A contact-intent verb within a few characters of an "admin"/"a human"
+ * noun, checked as one combined pattern rather than "both words appear
+ * somewhere in the message" — that looser check (the previous approach) is
+ * too eager: "แอดมินจะเห็นข้อความที่ผมคุยกับผู้ขายไหม" contains both "แอดมิน"
+ * and "คุย" but is a real FAQ-answerable privacy question, not a request for
+ * a human, because "คุย" there belongs to "คุยกับผู้ขาย", nowhere near
+ * "แอดมิน". Requiring the two words to actually sit next to each other (a
+ * short character gap, to absorb connectors like "กับ"/"หน่อย") is what
+ * keeps mixed-language phrasing like "ติดต่อ admin" catchable without also
+ * catching unrelated sentences that merely mention the word "แอดมิน".
+ */
+const ADMIN_NOUN = '(?:แอดมิน|admin|เจ้าหน้าที่|คนจริง|human agent|human)';
+const CONTACT_VERB = '(?:ติดต่อ|พูดคุย|คุย|ขอสาย|call|talk|speak|contact)';
+const PROXIMITY_GAP = '.{0,8}';
+const NEAR_ADMIN_REQUEST_PATTERN = new RegExp(
+  `${CONTACT_VERB}${PROXIMITY_GAP}${ADMIN_NOUN}|${ADMIN_NOUN}${PROXIMITY_GAP}${CONTACT_VERB}`,
+  'i'
+);
+const ADMIN_NOUN_PATTERN = new RegExp(ADMIN_NOUN, 'i');
+const SHORT_MESSAGE_THRESHOLD = 8;
+
 function isExplicitEscalationRequest(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return ESCALATION_PHRASES.some((phrase) =>
-    normalized.includes(phrase.toLowerCase())
-  );
+  const normalized = message.trim();
+  if (NEAR_ADMIN_REQUEST_PATTERN.test(normalized)) return true;
+
+  // A lone mention with barely anything else around it ("แอดมิน", "admin
+  // ครับ") still counts even with no verb attached — a frustrated user often
+  // just types the word itself. Checked on the whole remaining message (not
+  // just what trails the word) so a long, unrelated sentence that happens to
+  // mention "แอดมิน" once doesn't qualify as "just the word".
+  if (!ADMIN_NOUN_PATTERN.test(normalized)) return false;
+  const withoutAdminNoun = normalized.replace(ADMIN_NOUN_PATTERN, '').trim();
+  return withoutAdminNoun.length <= SHORT_MESSAGE_THRESHOLD;
 }
 
 @Injectable()
@@ -132,7 +157,7 @@ export class SupportChatService {
       message
     );
 
-    const replyText = await this.geminiClient.generateReply(prompt);
+    const replyText = await this.generateReplySafely(prompt);
 
     const replyMessage = await this.prisma.supportChatMessage.create({
       data: { sessionId: session.id, role: ChatRole.ASSISTANT, body: replyText }
@@ -178,16 +203,31 @@ export class SupportChatService {
    * A message into an already-escalated session — no Gemini call, this goes
    * straight to whichever admin is watching (or the next one to open the
    * queue). `sendMessage` above is the AI turn; this is the human one.
+   *
+   * Also reopens a RESOLVED session back to ESCALATED, mirroring
+   * `AdminSupportService#reply`'s reopen-on-reply behaviour — otherwise a
+   * user messaging a closed case never surfaces in the admin's default
+   * (ESCALATED-only) queue, and nothing would ever prompt an admin to reply
+   * and trigger that reopen from their side.
    */
   async sendUserMessageToAdmin(
     sessionId: string,
     userId: string,
     body: string
   ): Promise<ChatMessageDto> {
-    await this.getOwnedSession(sessionId, userId);
+    const session = await this.getOwnedSession(sessionId, userId);
 
-    const message = await this.prisma.supportChatMessage.create({
-      data: { sessionId, role: ChatRole.USER, body }
+    const message = await this.prisma.$transaction(async (tx) => {
+      if (session.status === SupportSessionStatus.RESOLVED) {
+        await tx.supportChatSession.update({
+          where: { id: sessionId },
+          data: { status: SupportSessionStatus.ESCALATED }
+        });
+      }
+
+      return tx.supportChatMessage.create({
+        data: { sessionId, role: ChatRole.USER, body }
+      });
     });
 
     this.realtime.emitSupportMessage(sessionId, message);
@@ -215,7 +255,7 @@ export class SupportChatService {
     }
 
     const prompt = this.promptBuilder.buildSupportPrompt(guestHistory, message);
-    const replyText = await this.geminiClient.generateReply(prompt);
+    const replyText = await this.generateReplySafely(prompt);
 
     const priorAssistantBodies = guestHistory
       .filter((item) => item.role === ChatRole.ASSISTANT)
@@ -231,8 +271,27 @@ export class SupportChatService {
         body: replyText,
         createdAt: new Date()
       },
-      escalated: this.isEscalated([...priorAssistantBodies, replyText])
+      escalated:
+        replyText.includes(EXHAUSTED_MARKER) ||
+        this.isEscalated([...priorAssistantBodies, replyText])
     };
+  }
+
+  /**
+   * Gemini being down (quota, outage, timeout) shouldn't surface as a raw
+   * 503 mid-demo — reply with the same "I've done what I can" message an
+   * exhausted AI would give, so the caller gets the "คุยกับแอดมิน" button
+   * instead of a dead end.
+   */
+  private async generateReplySafely(prompt: string): Promise<string> {
+    try {
+      return await this.geminiClient.generateReply(prompt);
+    } catch (error) {
+      if (error instanceof GeminiUnavailableException) {
+        return GEMINI_DOWN_REPLY;
+      }
+      throw error;
+    }
   }
 
   private async getOwnedSession(sessionId: string, userId: string) {
@@ -263,6 +322,10 @@ export class SupportChatService {
         orderBy: { createdAt: 'desc' },
         take: ESCALATION_THRESHOLD
       });
+
+    if (recentAssistantMessages[0]?.body.includes(EXHAUSTED_MARKER)) {
+      return true;
+    }
 
     if (this.isEscalated(recentAssistantMessages.map((item) => item.body))) {
       return true;
