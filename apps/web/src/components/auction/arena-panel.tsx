@@ -123,6 +123,54 @@ export function ArenaPanel({
     router.replace(`/auctions/${auctionId}/result`)
   }, [result, auctionId, router])
 
+  /**
+   * BID-004 / AUC-003 — the two facts about this auction that move but are
+   * rendered on the other side of the page.
+   *
+   * `extensionCount` and `reserveMet` sit in the spec list in the left column,
+   * which the Server Component around this panel rendered from an arena read
+   * that happened once, when the page was requested. Nothing in here can reach
+   * them: they are above this component in the tree and in the other branch of
+   * it. So an extension landing while somebody watches leaves the banner a few
+   * inches to the right saying "ครั้งที่ 3" over a list that still says two,
+   * until they reload the page — which is the only way that list has ever been
+   * updated.
+   *
+   * `router.refresh()` re-runs that Server Component and reconciles its output
+   * into the live page, leaving the state of every Client Component in it
+   * alone — the countdown, the bid box and the presence count all keep going.
+   *
+   * Guarded on the values rather than fired on every read, so this costs one
+   * request per actual change: five of them over an entire auction at most
+   * (MAX_EXTENSIONS), plus the single moment a price crosses the reserve.
+   *
+   * The other way — publishing the arena somewhere both columns can read it —
+   * updates without a round trip, and buys that with a second copy of this
+   * state to keep in step. Not a trade worth making for two values that move a
+   * handful of times in a day.
+   */
+  const rendered = useRef({
+    extensionCount: initialArena.auction.extensionCount,
+    reserveMet: initialArena.auction.reserveMet,
+  })
+
+  const { extensionCount, reserveMet } = auction
+
+  useEffect(() => {
+    if (
+      rendered.current.extensionCount === extensionCount &&
+      rendered.current.reserveMet === reserveMet
+    ) {
+      return
+    }
+
+    // Recorded before the refresh, not after: this is what the server is being
+    // asked for, and leaving it until the answer arrives would fire a second
+    // request for the same change on the next read.
+    rendered.current = { extensionCount, reserveMet }
+    router.refresh()
+  }, [extensionCount, reserveMet, router])
+
   return (
     <div className="flex flex-col gap-4">
       {/**
