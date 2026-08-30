@@ -45,6 +45,24 @@ export async function apiFetch<T>(
   const send = async (headers: Record<string, string>) => {
     try {
       return await fetch(`${API_BASE_URL}${path}`, {
+        /**
+         * Nothing this API answers is cacheable by URL.
+         *
+         * `GET /auctions/:id/arena` is a price, a leader and a deadline that
+         * move while somebody is looking at them; the cart, the unread badge
+         * and the profile are per-person and change on the next click. Left to
+         * Next's default, a Server Component read of any of them is stored and
+         * replayed — so a page re-rendered by `router.refresh()` came back
+         * carrying the answer from the refresh before it, one extension behind
+         * the live panel next to it, and a first-time visitor could be handed
+         * a price that had already been beaten.
+         *
+         * Before `...init`, so a caller that genuinely wants a cached read can
+         * still say so. Every hand-written fetch in `lib/auth` already passes
+         * this; the entry point every screen actually goes through was the one
+         * place it was missing.
+         */
+        cache: "no-store",
         ...init,
         headers: {
           "Content-Type": "application/json",
