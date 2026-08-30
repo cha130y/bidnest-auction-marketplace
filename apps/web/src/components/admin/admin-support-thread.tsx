@@ -147,8 +147,13 @@ export function AdminSupportThread({ sessionId }: { sessionId: string }) {
 
   // The list is re-fetched after every mutation, so this only ever bridges
   // the gap between "the reply just landed over the socket" and "the next
-  // refetch settles" — not a second source of truth.
-  const messages = [...data.messages, ...liveMessages];
+  // refetch settles" — not a second source of truth. Dedupe by id: a reply
+  // this admin just sent lands twice otherwise (once from `invalidate()`'s
+  // refetch, once from the socket echo into the same room this admin is
+  // also joined to), which crashes React on the duplicate key.
+  const seenIds = new Set(data.messages.map((message) => message.id));
+  const bridgingMessages = liveMessages.filter((message) => !seenIds.has(message.id));
+  const messages = [...data.messages, ...bridgingMessages];
   const customerLabel = data.user?.displayName ?? data.user?.email ?? '?';
 
   return (
