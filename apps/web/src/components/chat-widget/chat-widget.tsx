@@ -91,10 +91,14 @@ export function ChatWidget() {
     sessionStorage.setItem(storageKey(userId), sessionId);
   }, [userId, sessionId]);
 
+  // The room broadcasts every message, including this viewer's own — those
+  // are already appended optimistically in SupportChatPanel's `onMutate`,
+  // so re-adding them here from the echo would show every message twice.
   const onAdminMessage = useCallback((raw: unknown) => {
     const message = raw as ChatMessage;
+    if (message.role !== 'ADMIN') return;
     setMessages((prev) => [...prev, message]);
-    if (message.role === 'ADMIN' && !(isOpenRef.current && modeRef.current === 'AI')) {
+    if (!(isOpenRef.current && modeRef.current === 'AI')) {
       setHasUnread(true);
     }
   }, []);

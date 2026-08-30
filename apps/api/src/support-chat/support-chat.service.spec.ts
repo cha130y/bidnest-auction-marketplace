@@ -8,9 +8,13 @@ import { GeminiClientService } from '../ai-tools/gemini-client.service';
 import { PromptBuilderService } from '../ai-tools/prompt-builder.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { GeminiUnavailableException } from '../ai-tools/exceptions/gemini-unavailable.exception';
+import { FAQ_KNOWLEDGE_BASE } from '../ai-tools/faq-knowledge-base';
 import { SupportChatService } from './support-chat.service';
 
 const FALLBACK = 'ยังไม่มีข้อมูลเรื่องนี้ แนะนำให้ติดต่อแอดมินเพิ่มเติม';
+const EXHAUSTED =
+  'ผมลองช่วยเต็มที่แล้วในส่วนนี้ครับ ถ้ายังไม่หายแนะนำให้ติดต่อแอดมินเพื่อช่วยตรวจสอบให้ละเอียดขึ้นครับ';
 
 describe('SupportChatService', () => {
   const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -28,6 +32,7 @@ describe('SupportChatService', () => {
       findFirst: jest.Mock;
       create: jest.Mock;
     };
+    $transaction: jest.Mock;
   };
   let geminiClient: { generateReply: jest.Mock };
   let promptBuilder: { buildSupportPrompt: jest.Mock };
@@ -60,7 +65,12 @@ describe('SupportChatService', () => {
           .mockImplementation(({ data }) =>
             Promise.resolve({ id: 'msg-1', createdAt: new Date(), ...data })
           )
-      }
+      },
+      $transaction: jest
+        .fn()
+        .mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+          fn(prisma)
+        )
     };
     geminiClient = {
       generateReply: jest.fn().mockResolvedValue('คำตอบจาก AI')
@@ -154,6 +164,115 @@ describe('SupportChatService', () => {
 
       expect(geminiClient.generateReply).not.toHaveBeenCalled();
       expect(result.escalated).toBe(true);
+    });
+
+    it('recognizes a mixed-language ask for admin, not just the exact phrases on the fixed list', async () => {
+      const result = await service.sendMessage(
+        undefined,
+        'ติดต่อ admin หน่อยครับ'
+      );
+
+      expect(geminiClient.generateReply).not.toHaveBeenCalled();
+      expect(result.escalated).toBe(true);
+    });
+
+    it('does not treat every mention of the word "แอดมิน" as a request to escalate', async () => {
+      geminiClient.generateReply.mockResolvedValue(FALLBACK);
+
+      const result = await service.sendMessage(
+        undefined,
+        'แอดมินคนก่อนตอบไม่ตรงคำถามที่ผมถามไปเลย'
+      );
+
+      expect(geminiClient.generateReply).toHaveBeenCalled();
+      expect(result.escalated).toBe(false);
+    });
+
+    it('escalates on the spot once the AI signals it has already done everything it can', async () => {
+      geminiClient.generateReply.mockResolvedValue(EXHAUSTED);
+
+      const result = await service.sendMessage(undefined, 'ยังไม่หายเลยครับ');
+
+      expect(result.escalated).toBe(true);
+    });
+
+    // Every real FAQ question must actually reach the AI rather than get
+    // short-circuited by the keyword check — this is the "answerable
+    // questions must be answered" requirement, checked against the live FAQ
+    // list rather than a hand-picked sample so a future FAQ edit gets
+    // re-verified automatically.
+    describe.each(FAQ_KNOWLEDGE_BASE.map((entry) => entry.question))(
+      'FAQ question: "%s"',
+      (question) => {
+        it('reaches the AI instead of the canned admin reply', async () => {
+          geminiClient.generateReply.mockResolvedValue('คำตอบจาก AI');
+
+          const result = await service.sendMessage(undefined, question);
+
+          expect(geminiClient.generateReply).toHaveBeenCalled();
+          expect(result.reply.body).not.toBe(
+            'ได้เลยครับ กดปุ่ม "คุยกับแอดมิน" ด้านล่างเพื่อติดต่อทีมงานได้เลยครับ'
+          );
+        });
+      }
+    );
+
+    // Same requirement, but for realistic sentences that mention an admin or
+    // "คุย" in passing while asking about something else entirely — these are
+    // the shapes that broke the very first (presence-anywhere) version of the
+    // keyword check.
+    describe.each([
+      'แอดมินจะเห็นข้อความในแชทที่ผมคุยกับผู้ขายไหม',
+      'ถ้าผู้ขายไม่ตอบแชท แอดมินช่วยดูให้ได้ไหมคะ',
+      'เจ้าหน้าที่จัดส่งเอาของมาส่งกี่โมงคะ',
+      'มีเจ้าหน้าที่คอยตรวจสอบสินค้าก่อนขายไหม',
+      'คนขายกับคนซื้อคุยกันได้ที่ไหน'
+    ])(
+      'a question that mentions an admin/staff/chat word in passing: "%s"',
+      (question) => {
+        it('still reaches the AI instead of the canned admin reply', async () => {
+          geminiClient.generateReply.mockResolvedValue('คำตอบจาก AI');
+
+          await service.sendMessage(undefined, question);
+
+          expect(geminiClient.generateReply).toHaveBeenCalled();
+        });
+      }
+    );
+
+    // The other side of the same requirement: real ways a frustrated user
+    // asks for a human, including phrasing not on the old fixed-phrase list.
+    describe.each([
+      'ติดต่อแอดมินหน่อยครับ',
+      'คุยกับแอดมิน',
+      'ขอคุยกับแอดมินหน่อย',
+      'อยากคุยกับแอดมิน',
+      'ติดต่อ admin หน่อยครับ',
+      'contact admin please',
+      'talk to a human',
+      'ขอคุยกับเจ้าหน้าที่ได้ไหม',
+      'พูดคุยกับเจ้าหน้าที่หน่อยค่ะ',
+      'ขอสายแอดมินหน่อย',
+      'แอดมิน',
+      'admin'
+    ])('an explicit ask for a human: "%s"', (message) => {
+      it('escalates immediately without calling the AI', async () => {
+        const result = await service.sendMessage(undefined, message);
+
+        expect(geminiClient.generateReply).not.toHaveBeenCalled();
+        expect(result.escalated).toBe(true);
+      });
+    });
+
+    it('falls back to a friendly reply and offers the admin button when Gemini itself is unavailable', async () => {
+      geminiClient.generateReply.mockRejectedValue(
+        new GeminiUnavailableException()
+      );
+
+      const result = await service.sendMessage(undefined, 'สวัสดี');
+
+      expect(result.escalated).toBe(true);
+      expect(result.reply.body).not.toMatch(/undefined|error|Error/);
     });
   });
 
@@ -250,6 +369,17 @@ describe('SupportChatService', () => {
       geminiClient.generateReply.mockResolvedValue(FALLBACK);
 
       const result = await service.sendMessage(USER_ID, 'สวัสดี');
+
+      expect(result.escalated).toBe(true);
+    });
+
+    it('escalates on the spot once the AI signals it has already done everything it can, without waiting for three misses', async () => {
+      prisma.supportChatMessage.findMany.mockResolvedValue([
+        { body: EXHAUSTED }
+      ]);
+      geminiClient.generateReply.mockResolvedValue(EXHAUSTED);
+
+      const result = await service.sendMessage(USER_ID, 'ยังไม่หายเลยครับ');
 
       expect(result.escalated).toBe(true);
     });
@@ -404,6 +534,25 @@ describe('SupportChatService', () => {
       await expect(
         service.sendUserMessageToAdmin(SESSION_ID, USER_ID, 'ข้อความ')
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('reopens a RESOLVED session back to ESCALATED so it resurfaces in the admin queue', async () => {
+      prisma.supportChatSession.findUnique.mockResolvedValue({
+        id: SESSION_ID,
+        userId: USER_ID,
+        status: 'RESOLVED'
+      });
+
+      await service.sendUserMessageToAdmin(
+        SESSION_ID,
+        USER_ID,
+        'ยังไม่หายเลยครับ'
+      );
+
+      expect(prisma.supportChatSession.update).toHaveBeenCalledWith({
+        where: { id: SESSION_ID },
+        data: { status: 'ESCALATED' }
+      });
     });
   });
 });
