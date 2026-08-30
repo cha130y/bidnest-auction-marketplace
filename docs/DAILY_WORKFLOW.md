@@ -65,3 +65,17 @@ git push -u origin feat/auction-dev4                          # <-- branch ข�
 ```
 
 จากนั้นเปิด PR โดย **base branch ต้องเป็น `dev` เสมอ** (ห้าม push ตรงเข้า `main` หรือ `dev` และห้าม commit ไฟล์ `.env` หรือ secret) — รูปแบบ commit message เต็มๆ ดูที่ [Commit Message Convention](KICKOFF_GUIDE.md#commit-message-convention)
+
+---
+
+## ตอนจะปล่อยขึ้น production
+
+งานประจำวันจบที่ `dev` — การเลื่อนงานจาก `dev` ขึ้น `main` เป็นคนละเรื่องและ **ไม่มี automation ตัวไหนทำให้** ต้องเปิด release PR เองทุกรอบ
+
+```bash
+# เช็คว่ามีอะไรค้างรอปล่อยบ้าง (อ่านอย่างเดียว ไม่ได้สร้าง PR)
+git fetch origin
+git log --merges --pretty='- %s' origin/main..origin/dev
+```
+
+มีรายการขึ้นมา = มีของรอปล่อย ทำตาม [`docs/RELEASE_GUIDE.md`](RELEASE_GUIDE.md) ต่อ (6 ขั้นที่คนกด + 2 ช่วงที่เครื่องทำเอง)
