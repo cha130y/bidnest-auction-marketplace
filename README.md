@@ -150,6 +150,93 @@ env ที่ระบบบังคับจริงมีแค่ `DATABASE
 - `WEB_APP_URL` = โดเมนของ Vercel **ห้ามมี `/` ต่อท้าย** ไม่งั้น CORS บล็อกทั้งเว็บ
 - `MAIL_*` = SMTP จริง ห้ามชี้ Maildev เด็ดขาด — หน้า dashboard ของมันโชว์ OTP ให้ใครก็ได้ที่เข้าถึงได้
 - `ADMIN_SKIP_2FA` = ไม่ต้องใส่ ค่าที่ไม่มีคือปิด
+- `GOOGLE_CLIENT_ID` / `LINE_CHANNEL_ID` = เฉพาะเมื่อจะเปิด Google/LINE login ด้วย — ดูหัวข้อถัดไป
+
+### Google / LINE login บน production (AUTH-003 / AUTH-006)
+
+client ตัวเดียวกับที่ใช้ในเครื่องใช้ต่อบน production ได้เลย ไม่ต้องสร้างใหม่ — แต่ต้องเพิ่มโดเมนของ production เข้าไปในคอนโซลของทั้งสองเจ้า และค่าต้องไปให้ถูกฝั่ง
+
+| ตัวแปร | ตั้งที่ | ค่า |
+| --- | --- | --- |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Vercel | client ID ตัวเดียวกับที่ตั้งใน Railway |
+| `GOOGLE_CLIENT_ID` | Railway | ต้องตรงกับฝั่ง Vercel เป๊ะ ไม่งั้นตอบ `Google token was issued for another app` |
+| `LINE_CHANNEL_ID` | Vercel **และ** Railway | channel ID เดียวกันทั้งสองฝั่ง |
+| `LINE_CHANNEL_SECRET` | **Vercel เท่านั้น** | ห้ามใส่ที่ Railway — ฝั่ง api ไม่ได้ใช้ ไม่ควรมีสำเนาเพิ่มโดยไม่จำเป็น |
+| `AUTH_URL` | Vercel | origin สาธารณะของเว็บ **ห้ามมี `/` ต่อท้าย** |
+| `NEXT_PUBLIC_API_URL` | Vercel | โดเมนของ api บน Railway |
+| `AUTH_SECRET` | Vercel | ของ production ต้องเป็นคนละค่ากับในเครื่อง |
+
+`AUTH_TRUST_HOST` ไม่ต้องตั้ง Vercel จัดการให้เอง · ฝั่ง api ถือแค่ตัวระบุสาธารณะเพราะมันแค่ *ตรวจ* token ไม่ได้ *แลก* token
+
+สองข้อที่พังเงียบที่สุด
+
+- **`AUTH_URL` ผิด = LINE พังทั้งเส้น** [`siteOrigin()`](apps/web/src/lib/auth/oauth-flow.ts) อ่านตัวนี้ก่อน URL ของ request เพราะหลัง proxy ของ Vercel URL ที่ route เห็นเป็น URL ภายใน ส่วน LINE เทียบ `redirect_uri` ตอน authorize กับตอนแลก token **ทีละไบต์**
+- **`NEXT_PUBLIC_*` ถูกฝังตอน build ไม่ใช่ตอนรัน** ตั้งค่าที่ Vercel แล้วต้องกด **Redeploy** ปุ่ม Google ถึงจะโผล่
+
+#### Google Cloud Console — Credentials → OAuth client (Web application)
+
+- **Authorized JavaScript origins** ใส่โดเมน production และ staging — เฉพาะ origin ห้ามมี path หรือ `/` ต่อท้าย
+- **Authorized redirect URIs ไม่ต้องใส่** Google Identity Services ส่ง ID token ให้หน้าเว็บตรงๆ โฟลว์นี้ไม่มีขา redirect เลย
+- OAuth consent screen ที่ยังเป็น **Testing** ล็อกอินได้เฉพาะอีเมลที่อยู่ใน Test users (สูงสุด 100 บัญชี) จะให้ใครก็เข้าได้ต้องกด **Publish app** — scope ที่ใช้มีแค่ `openid` `email` `profile` ซึ่งเป็น non-sensitive จึงไม่ต้องผ่าน verification
+
+#### LINE Developers — LINE Login channel → Basic settings
+
+- **Callback URL** ช่องนี้รับหลายค่า บรรทัดละอัน ใส่ทั้ง production และ staging
+
+```
+https://<โดเมน production>/api/auth/line/callback
+https://<โดเมน staging>/api/auth/line/callback
+```
+
+- สถานะ channel ต้องเป็น **Published** — ตอนเป็น Developing เข้าได้เฉพาะคนที่อยู่ใน role ของ channel นั้น
+- **ไม่ต้องขอ permission อีเมล** AUTH-006 ออกแบบมาให้ทำงานตอน LINE ไม่ส่งอีเมลมาอยู่แล้ว (ครั้งแรกหน้า `/login/oauth` จะถามอีเมลเอง) และ permission นี้ต้องยื่นขออนุมัติกับ LINE
+
+#### ข้อจำกัดและของที่ลืมบ่อย
+
+- **Preview deployment ของ Vercel ใช้ OAuth ไม่ได้** แต่ละ preview ได้ URL สุ่มใหม่ ซึ่งไม่มีทางอยู่ใน origin/callback ที่ลงทะเบียนไว้ — จะเทสบน staging ต้องผูก branch `dev` กับโดเมนคงที่ แล้วเอาโดเมนนั้นไปลงทะเบียนทั้งสองคอนโซล
+- **`MAIL_*` จริงที่ Railway ยังจำเป็น** AUTH-007 บังคับ OTP ทุกช่องทางรวมทั้ง Google/LINE — เมลส่งไม่ออก ล็อกอินด้วย provider ก็จบไม่ได้เหมือนกัน ดูหัวข้อถัดไป
+- **ก่อนให้คนอื่นลอง** Google consent screen ที่ยังเป็น Testing และ LINE channel ที่ยังเป็น Developing เข้าได้เฉพาะเจ้าของกับคนที่ถูกเพิ่มไว้ — บนเครื่องคนตั้งค่าจะดูเหมือนใช้งานได้ปกติทั้งที่คนอื่นเข้าไม่ได้เลย
+
+#### เมล OTP บน production — จุดที่พังบ่อยที่สุด
+
+ทุกทางเข้าจบที่ OTP ทางอีเมล (AUTH-007) **เมลส่งไม่ออก = ล็อกอินไม่ได้ทั้งระบบ** ทั้ง Google, LINE และรหัสผ่าน สิ่งที่ผู้ใช้เห็นคือ `Internal server error` เฉยๆ เพราะ [MailService](apps/api/src/mail/mail.service.ts) โยน error ต่อเมื่อส่งไม่สำเร็จ — สาเหตุจริงอยู่ใน Deploy Logs ของ Railway ค้นคำว่า `Failed to deliver` แล้วอ่าน stack ที่ตามมาใต้บรรทัดนั้น
+
+production ใช้ **บัญชี Gmail แยกสำหรับส่งเมลระบบ** ไม่ใช้บัญชีส่วนตัวของใครในทีม และ `MAIL_FROM` ต้องเป็นบัญชีเดียวกับ `MAIL_USER` ไม่งั้น Gmail เขียนผู้ส่งทับให้เองหรือตีกลับ
+
+**Gmail รับเฉพาะ App Password** ใส่รหัสผ่านบัญชีปกติจะได้
+
+```
+Invalid login: 534-5.7.9 Please log in with your web browser and then try again
+https://support.google.com/mail/?p=WebLoginRequired
+```
+
+`534` ไม่ใช่ `535` — ไม่ได้แปลว่ารหัสผิด แต่แปลว่า Google ไม่ยอมรับ *วิธี* ล็อกอินนี้ App Password จะสร้างได้ก็ต่อเมื่อเปิด 2-Step Verification ของบัญชีนั้นแล้ว ([สร้างที่นี่](https://myaccount.google.com/apppasswords)) และต้องกรอกเป็น 16 ตัวติดกัน ไม่มีช่องว่างที่ Google แสดงคั่นให้
+
+ถ้าเจอ `534` ทั้งที่ใช้ App Password ถูกแล้ว แปลว่า Google บล็อกเพราะ IP ของ Railway เป็น datacenter ปลดล็อกชั่วคราวได้ที่ [DisplayUnlockCaptcha](https://accounts.google.com/DisplayUnlockCaptcha) แต่ Google ล็อกซ้ำได้ตลอด — ทางแก้ถาวรคือย้ายไป transactional relay (Brevo, SendGrid, Resend) แก้แค่ 4 ตัวแปร ไม่ต้องแตะโค้ด
+
+```
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=587
+MAIL_USER=<Login จากหน้า SMTP & API>
+MAIL_PASSWORD=<SMTP key>
+```
+
+relay พวกนี้ต้อง verify sender ก่อนถึงจะส่งในนามอีเมลนั้นได้ · เครื่อง dev ยังใช้ Maildev ตามเดิม ไม่กระทบใคร
+
+#### ตั้งผิดแล้วจะเห็นอาการแบบไหน
+
+| อาการ | สาเหตุ |
+| --- | --- |
+| ปุ่ม Google ไม่ขึ้นเลย | Vercel ยังไม่มี `NEXT_PUBLIC_GOOGLE_CLIENT_ID` หรือตั้งแล้วยังไม่ได้ redeploy |
+| ปุ่ม Google ขึ้นแต่กดแล้วเงียบ | โดเมนไม่ได้อยู่ใน Authorized JavaScript origins |
+| `Google token was issued for another app` | client ID ฝั่ง Vercel กับ Railway คนละตัว |
+| `Google sign-in is not configured on this server` (503) | Railway ยังไม่มี `GOOGLE_CLIENT_ID` |
+| ปุ่ม LINE ไม่ขึ้น | Vercel ขาด `LINE_CHANNEL_ID` หรือ `LINE_CHANNEL_SECRET` — ต้องมีครบคู่ปุ่มถึงจะแสดง |
+| LINE ตอบ 400 ตั้งแต่หน้าแรก | Callback URL ไม่ตรงกับที่ลงทะเบียน มัก `AUTH_URL` ผิด |
+| `แลกโทเคนกับ LINE ไม่สำเร็จ` | `redirect_uri` ตอน authorize กับตอนแลก token ไม่ตรงกัน หรือ channel secret ผิด |
+| `LINE ไม่ได้ส่ง ID token กลับมา` | channel ไม่ได้เปิด scope `openid` |
+| `Internal server error` หลังเลือกบัญชีเสร็จ | ส่งเมล OTP ไม่ออก — ดูหัวข้อเมล OTP ข้างบน |
+| ทุกอย่างผ่านแต่รหัสไม่มา | `MAIL_*` ที่ Railway หรือเมลตกโฟลเดอร์ Junk |
 
 ### แต่งตั้ง admin บน production
 

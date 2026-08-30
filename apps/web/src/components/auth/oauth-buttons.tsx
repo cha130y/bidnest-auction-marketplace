@@ -51,6 +51,30 @@ declare global {
   }
 }
 
+/**
+ * Why a provider is missing — said to whoever is setting the app up, and to
+ * nobody else.
+ *
+ * The name of an unset variable is a note to a developer: it means nothing to
+ * a visitor, and on a deployment where one provider is configured and the
+ * other is not, it would print our own configuration on the public login page.
+ * `NODE_ENV` is inlined at build time, so this leaves the production bundle
+ * entirely rather than being hidden after the fact.
+ *
+ * Nothing is lost by the silence. `pnpm check:setup` reports the same thing
+ * with more detail and without a browser, and a visitor learns exactly as much
+ * from a button that is not there.
+ */
+function NotConfigured({ hint }: { hint: string }) {
+  if (process.env.NODE_ENV === "production") return null
+
+  return (
+    <p className="text-center text-xs text-muted-foreground">
+      ยังไม่ได้ตั้งค่า {hint}
+    </p>
+  )
+}
+
 export function OAuthButtons({ lineEnabled }: { lineEnabled: boolean }) {
   const router = useRouter()
   const params = useSearchParams()
@@ -152,9 +176,7 @@ export function OAuthButtons({ lineEnabled }: { lineEnabled: boolean }) {
           <div ref={googleSlot} className="flex justify-center" />
         </>
       ) : (
-        <p className="text-center text-xs text-muted-foreground">
-          ยังไม่ได้ตั้งค่า NEXT_PUBLIC_GOOGLE_CLIENT_ID
-        </p>
+        <NotConfigured hint="NEXT_PUBLIC_GOOGLE_CLIENT_ID" />
       )}
 
       {lineEnabled ? (
@@ -165,9 +187,7 @@ export function OAuthButtons({ lineEnabled }: { lineEnabled: boolean }) {
           เข้าสู่ระบบด้วย LINE
         </a>
       ) : (
-        <p className="text-center text-xs text-muted-foreground">
-          ยังไม่ได้ตั้งค่า LINE Login (LINE_CHANNEL_ID / LINE_CHANNEL_SECRET)
-        </p>
+        <NotConfigured hint="LINE Login (LINE_CHANNEL_ID / LINE_CHANNEL_SECRET)" />
       )}
 
       {failure && (
