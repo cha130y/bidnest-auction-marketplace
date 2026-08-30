@@ -112,8 +112,9 @@ export function SupportChatPanel({
     onSuccess: (session) => setSessionStatus(session.status),
   });
 
-  // RESOLVED still goes to the admin endpoint, not the AI: a reply there
-  // reopens the session (see AdminSupportService#reply), same conversation.
+  // RESOLVED still goes to the admin endpoint, not the AI: sending here
+  // reopens the session back to ESCALATED server-side (see
+  // SupportChatService#sendUserMessageToAdmin), same conversation.
   const sending = sessionStatus !== 'AI_ONLY' ? adminMutation : aiMutation;
 
   const errorMessage =
