@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import { Menu } from "@base-ui/react/menu"
+import { useQuery } from "@tanstack/react-query"
 import { signOut, useSession } from "next-auth/react"
 import {
   ChevronDown,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { getMyProfile, myProfileQueryKey } from "@/lib/api/users"
 import { initialOf } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -68,6 +70,34 @@ export function AccountMenu({ className }: { className?: string }) {
   const pathname = usePathname()
   const search = useSearchParams().toString()
 
+  /**
+   * USR-001 — the picture, taken from the account rather than the session.
+   *
+   * The session carries one too, and it used to be what this drew. But that is
+   * a copy, kept in step by writing to it every time the profile is saved —
+   * and a copy that has to be maintained is a copy that can be wrong. On
+   * production it was: the account held the picture just uploaded, the session
+   * still held the one before it, and no reload would shift it.
+   *
+   * This is the same cache entry the profile page reads and writes, so saving
+   * a picture redraws the header in the same tick, with no round trip and
+   * nothing left to keep in step. The session's copy is still the first thing
+   * drawn, which is what stops the circle showing an initial for a moment on
+   * every page load.
+   */
+  const { data: profile } = useQuery({
+    queryKey: myProfileQueryKey,
+    queryFn: getMyProfile,
+    enabled: Boolean(session?.accessToken),
+    // This header is on every page, so it must not cost a request per
+    // navigation. Well past the 30s default, and still short enough that a
+    // picture changed on another device catches up on its own.
+    staleTime: 5 * 60_000,
+    // A 401 will not fix itself by trying again, and a missing picture is not
+    // worth three attempts.
+    retry: false
+  })
+
   // Reserve the space while the session resolves, so the header does not shift
   // under the pointer a moment after it paints.
   if (status === "loading") {
@@ -98,6 +128,7 @@ export function AccountMenu({ className }: { className?: string }) {
   }
 
   const name = session.user?.name ?? session.user?.email ?? "บัญชีของฉัน"
+  const avatarUrl = profile?.profile.avatarUrl ?? session.user?.image ?? null
   const isAdmin = session.role === "ADMIN"
 
   return (
@@ -109,13 +140,13 @@ export function AccountMenu({ className }: { className?: string }) {
         )}
         aria-label={`บัญชี: ${name}`}
       >
-        {session.user?.image ? (
+        {avatarUrl ? (
           // A plain <img> for the reason ProductImage gives: avatarUrl has no
           // host allowlist, so next/image would need remotePatterns open to
           // the whole internet to match it.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={session.user.image}
+            src={avatarUrl}
             alt=""
             className="size-8 shrink-0 rounded-full object-cover"
           />
