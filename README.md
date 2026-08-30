@@ -117,9 +117,15 @@ pnpm dev
 
 | ส่วน | ที่ไหน | branch |
 | --- | --- | --- |
-| `apps/api` | Railway (Docker) | `main` → production · `dev` → staging |
-| `apps/web` | Vercel | `main` → production · `dev` → staging |
+| `apps/api` | Railway (Docker) | `main` → production |
+| `apps/web` | Vercel | `main` → production · `dev` → preview |
 | PostgreSQL | Railway — service แยกใน project เดียวกับ api | — |
+
+> **ยังไม่มี staging** — มีแค่ production กับ Vercel preview
+>
+> preview ของ Vercel deploy จาก `dev` อัตโนมัติ แต่**ได้ URL สุ่มใหม่ทุก deploy** และชี้ไปที่ API ตัวเดียวกับ production จึงใช้เทสหน้าตาได้ แต่ใช้เทสล็อกอิน Google/LINE ไม่ได้ (ดูหัวข้อ OAuth ข้างล่าง)
+>
+> staging จริงต้องมี service ที่สองบน Railway **พร้อมฐานข้อมูลแยกอีกตัว** ตั้ง env ใหม่ทั้ง 29 ตัว แล้วผูก `dev` กับโดเมนคงที่บน Vercel เพื่อเอาไปลงทะเบียนกับ Google/LINE — ยังไม่ได้ทำ
 
 [`Dockerfile`](Dockerfile) ที่รากของ repo build เฉพาะ `apps/api` (`apps/web` ไม่ผ่าน Docker เลย)
 build context ต้องเป็นรากของ repo เพราะ pnpm อ่าน workspace จาก lockfile ที่นั่น — ลองในเครื่องได้ด้วย
@@ -175,17 +181,16 @@ client ตัวเดียวกับที่ใช้ในเครื่�
 
 #### Google Cloud Console — Credentials → OAuth client (Web application)
 
-- **Authorized JavaScript origins** ใส่โดเมน production และ staging — เฉพาะ origin ห้ามมี path หรือ `/` ต่อท้าย
+- **Authorized JavaScript origins** ใส่โดเมน production (ถ้าวันหลังมี staging ก็เพิ่มอีกบรรทัด) — เฉพาะ origin ห้ามมี path หรือ `/` ต่อท้าย
 - **Authorized redirect URIs ไม่ต้องใส่** Google Identity Services ส่ง ID token ให้หน้าเว็บตรงๆ โฟลว์นี้ไม่มีขา redirect เลย
 - OAuth consent screen ที่ยังเป็น **Testing** ล็อกอินได้เฉพาะอีเมลที่อยู่ใน Test users (สูงสุด 100 บัญชี) จะให้ใครก็เข้าได้ต้องกด **Publish app** — scope ที่ใช้มีแค่ `openid` `email` `profile` ซึ่งเป็น non-sensitive จึงไม่ต้องผ่าน verification
 
 #### LINE Developers — LINE Login channel → Basic settings
 
-- **Callback URL** ช่องนี้รับหลายค่า บรรทัดละอัน ใส่ทั้ง production และ staging
+- **Callback URL** ช่องนี้รับหลายค่า บรรทัดละอัน ตอนนี้มีแค่ production (ถ้าวันหลังมี staging ก็เพิ่มอีกบรรทัด)
 
 ```
 https://<โดเมน production>/api/auth/line/callback
-https://<โดเมน staging>/api/auth/line/callback
 ```
 
 - สถานะ channel ต้องเป็น **Published** — ตอนเป็น Developing เข้าได้เฉพาะคนที่อยู่ใน role ของ channel นั้น
@@ -193,7 +198,7 @@ https://<โดเมน staging>/api/auth/line/callback
 
 #### ข้อจำกัดและของที่ลืมบ่อย
 
-- **Preview deployment ของ Vercel ใช้ OAuth ไม่ได้** แต่ละ preview ได้ URL สุ่มใหม่ ซึ่งไม่มีทางอยู่ใน origin/callback ที่ลงทะเบียนไว้ — จะเทสบน staging ต้องผูก branch `dev` กับโดเมนคงที่ แล้วเอาโดเมนนั้นไปลงทะเบียนทั้งสองคอนโซล
+- **Preview deployment ของ Vercel ใช้ OAuth ไม่ได้** แต่ละ preview ได้ URL สุ่มใหม่ ซึ่งไม่มีทางอยู่ใน origin/callback ที่ลงทะเบียนไว้ — ถ้าอยากเทส OAuth นอก production ต้องผูก branch `dev` กับโดเมนคงที่ก่อน แล้วเอาโดเมนนั้นไปลงทะเบียนทั้งสองคอนโซล (ยังไม่ได้ทำ)
 - **`MAIL_*` จริงที่ Railway ยังจำเป็น** AUTH-007 บังคับ OTP ทุกช่องทางรวมทั้ง Google/LINE — เมลส่งไม่ออก ล็อกอินด้วย provider ก็จบไม่ได้เหมือนกัน ดูหัวข้อถัดไป
 - **ก่อนให้คนอื่นลอง** Google consent screen ที่ยังเป็น Testing และ LINE channel ที่ยังเป็น Developing เข้าได้เฉพาะเจ้าของกับคนที่ถูกเพิ่มไว้ — บนเครื่องคนตั้งค่าจะดูเหมือนใช้งานได้ปกติทั้งที่คนอื่นเข้าไม่ได้เลย
 
@@ -249,6 +254,16 @@ relay พวกนี้ต้อง verify sender ก่อนถึงจะ�
 ```bash
 node apps/api/dist/prisma/promote-admins.js
 ```
+
+> ⚠️ **ที่ dashboard ห้ามใส่เครื่องหมายคำพูด** พิมพ์ค่าเปล่าๆ แบบนี้
+>
+> ```
+> one@example.com,two@example.com
+> ```
+>
+> เครื่องหมายคำพูดใช้เฉพาะในไฟล์ `.env` เพราะ dotenv ถลกออกให้ — **Railway ไม่ถลกให้** ค่าที่ใส่ว่า `"a@x.com,b@y.com"` จะกลายเป็นอีเมลชื่อ `"a@x.com` กับ `b@y.com"` ติดอัญประกาศไปด้วย แล้วหาบัญชีไม่เจอทั้งคู่ สคริปต์จะบอกแค่ว่าไม่พบอีเมล ไม่ได้บอกว่าเป็นเพราะอัญประกาศ
+>
+> กติกาเดียวกันนี้ใช้กับ **ทุกตัวแปรที่ตั้งบน Railway** ไม่ใช่แค่ `ADMIN_EMAILS`
 
 เลื่อนได้เฉพาะบัญชีที่มีอยู่แล้ว ไม่สร้างบัญชี ไม่ตั้งรหัสผ่าน รันซ้ำได้ไม่มีผลข้างเคียง
 และจบด้วย exit code 1 ถ้ามีอีเมลไหนหาบัญชีไม่เจอ
