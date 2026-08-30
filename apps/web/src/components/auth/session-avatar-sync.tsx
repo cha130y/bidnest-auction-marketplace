@@ -67,6 +67,25 @@ function markChecked() {
   }
 }
 
+/**
+ * Lets the next page load reconcile again.
+ *
+ * `markChecked` is what stops a tab asking twice, and that is right for a tab
+ * where nothing has changed since. Saving a picture is exactly the thing that
+ * can leave the session and the account disagreeing, though, and the flag then
+ * keeps that tab from ever noticing — reloading does not help, because
+ * sessionStorage survives a reload. The only cures left were a new tab or the
+ * next token renewal, up to fifteen minutes later, which is a long time to be
+ * shown the picture you just replaced.
+ */
+export function forgetAvatarSync() {
+  try {
+    sessionStorage.removeItem(CHECKED_KEY)
+  } catch {
+    // Nothing to forget where nothing could be written.
+  }
+}
+
 export function SessionAvatarSync() {
   const { data: session, status, update } = useSession()
   const running = useRef(false)
@@ -78,17 +97,31 @@ export function SessionAvatarSync() {
    * finishes first — so without this, the profile fetched a moment ago (still
    * carrying the old picture) would land afterwards and put it back. Which is
    * the version of this bug that only happens sometimes.
+   *
+   * Declared before the effect that reads it so it is assigned first on every
+   * commit: effects run in the order they are written.
    */
+  const inSession = useRef<string | null>(null)
+  useEffect(() => {
+    inSession.current = session?.user?.image ?? null
+  }, [session?.user?.image])
+
   useEffect(() => {
     if (status !== "authenticated") return
     if (running.current || alreadyChecked()) return
 
     running.current = true
+    const before = session?.user?.image ?? null
 
     void (async () => {
       try {
         const profile = await getMyProfile()
         const onAccount = profile.profile.avatarUrl ?? null
+
+        // A save that landed while this was in flight knows something this
+        // answer does not, so it wins and this one is dropped. The flag is
+        // deliberately left unset: the next page load reconciles instead.
+        if (inSession.current !== before) return
 
         // The account is the source of truth, so this writes what it says.
         // A save landing at the same moment writes the same value from the
@@ -98,7 +131,7 @@ export function SessionAvatarSync() {
         //
         // Only when they differ, though: writing an identical value would
         // rewrite the session cookie on every page load for no reason.
-        if (onAccount !== (session?.user?.image ?? null)) {
+        if (onAccount !== inSession.current) {
           await update({ image: onAccount })
         }
 

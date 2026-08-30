@@ -20,6 +20,7 @@ import {
   type UpdateMyProfile
 } from "@/lib/api/users"
 import { profileSchema, type ProfileValues } from "@/lib/auth/schemas"
+import { forgetAvatarSync } from "@/components/auth/session-avatar-sync"
 import { AvatarPicker } from "@/components/user/avatar-picker"
 import { formatDateTime, initialOf } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -205,6 +206,11 @@ export function ProfileForm() {
     queryClient.setQueryData(myProfileQueryKey, updated)
     reset(toFormValues(updated), { keepDirtyValues: true })
     await updateSession({ image: updated.profile.avatarUrl })
+    // The session is right as of this line. Should anything put a stale value
+    // back — a reconciliation already in flight is the way that happens — this
+    // is what lets the next page load notice, rather than the tab being stuck
+    // with it until the token renews.
+    forgetAvatarSync()
   }
 
   return (
