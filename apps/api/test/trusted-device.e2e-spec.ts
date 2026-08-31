@@ -49,20 +49,49 @@ describe('Trusted devices (e2e)', () => {
     ).length;
   };
 
+  /**
+   * Waits for the inbox to hold exactly `expected` codes, then returns.
+   *
+   * The API answers a login before the mail reaches the relay
+   * (two-factor.service.ts), so counting the moment the response lands would
+   * read a number that is merely early. Worse for the assertion this file
+   * exists for: a message still in flight from an earlier case could land
+   * during the "no mail at all" test and be counted against it. Settling the
+   * count first is what keeps both readings honest.
+   */
+  const waitForMailCount = async (expected: number): Promise<number> => {
+    const deadline = Date.now() + 5_000;
+
+    for (;;) {
+      const count = await mailCount();
+      if (count >= expected || Date.now() > deadline) return count;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  };
+
+  /** Polled, for the same reason `waitForMailCount` is. */
   const readOtp = async (): Promise<string> => {
-    const messages = (await (await fetch(`${maildev}/api/email`)).json()) as {
-      subject: string;
-      text: string;
-      to: { address: string }[];
-      time: string;
-    }[];
-    const mine = messages
-      .filter((m) => m.to.some((t) => t.address === email))
-      .filter((m) => m.subject.includes('รหัสยืนยัน'))
-      .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
-    const match = /\b(\d{6})\b/.exec(mine[0]?.text ?? '');
-    if (!match) throw new Error('No OTP found in the delivered mail');
-    return match[1];
+    const deadline = Date.now() + 5_000;
+
+    for (;;) {
+      const messages = (await (await fetch(`${maildev}/api/email`)).json()) as {
+        subject: string;
+        text: string;
+        to: { address: string }[];
+        time: string;
+      }[];
+      const mine = messages
+        .filter((m) => m.to.some((t) => t.address === email))
+        .filter((m) => m.subject.includes('รหัสยืนยัน'))
+        .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+      const match = /\b(\d{6})\b/.exec(mine[0]?.text ?? '');
+      if (match) return match[1];
+
+      if (Date.now() > deadline) {
+        throw new Error('No OTP found in the delivered mail');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
   };
 
   /** A device row in whatever state a test needs, without the mail round trip. */
@@ -122,7 +151,7 @@ describe('Trusted devices (e2e)', () => {
 
       expect(response.body).toMatchObject({ status: 'PENDING_2FA' });
       expect(response.body).not.toHaveProperty('accessToken');
-      expect(await mailCount()).toBe(before + 1);
+      expect(await waitForMailCount(before + 1)).toBe(before + 1);
     });
 
     it('hands back a device token when the code is answered', async () => {

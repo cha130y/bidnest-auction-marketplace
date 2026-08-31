@@ -92,6 +92,42 @@ describe('TwoFactorService (AUTH-007)', () => {
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
 
+    /**
+     * The code is in the database before the mail is handed over, so the
+     * sign-in has already succeeded by the time the relay is involved. A relay
+     * that is down or slow must not turn that into a failed login: the person
+     * would be told to try again while a perfectly good code sat in their
+     * inbox, or in the queue behind whatever was stuck.
+     *
+     * MailService logs the failure with a stack — that is where a delivery
+     * problem is meant to surface, not in the caller's response.
+     */
+    it('answers even when the relay refuses the message', async () => {
+      mail.sendTwoFactorCode.mockRejectedValue(new Error('smtp is down'));
+
+      await expect(
+        service.issue({ id: 'u1', email: 'a@example.com' })
+      ).resolves.toBeUndefined();
+    });
+
+    // Handed over, not waited on: a relay that never settles must not hold the
+    // response open behind it.
+    it('does not wait for the relay to finish', async () => {
+      let deliver: () => void = () => undefined;
+      mail.sendTwoFactorCode.mockReturnValue(
+        new Promise<void>((resolve) => {
+          deliver = resolve;
+        })
+      );
+
+      await expect(
+        service.issue({ id: 'u1', email: 'a@example.com' })
+      ).resolves.toBeUndefined();
+
+      expect(mail.sendTwoFactorCode).toHaveBeenCalled();
+      deliver();
+    });
+
     it('sets the expiry from OTP_TTL_MINUTES', async () => {
       const before = Date.now();
       await service.issue({ id: 'u1', email: 'a@example.com' });

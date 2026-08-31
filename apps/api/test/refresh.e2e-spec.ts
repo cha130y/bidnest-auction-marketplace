@@ -21,23 +21,36 @@ describe('Refresh and logout (e2e)', () => {
   const email = `refresh-e2e-${Date.now()}@example.com`;
   const password = 'Str0ngPassw0rd';
 
+  /**
+   * Polled: the API hands the code to the relay without waiting for it
+   * (two-factor.service.ts), so the login response can beat the mail into the
+   * inbox. Five seconds, then it is a real failure rather than a hang.
+   */
   const readOtpFromInbox = async (): Promise<string> => {
-    const response = await fetch('http://localhost:1080/api/email');
-    const messages = (await response.json()) as {
-      subject: string;
-      text: string;
-      to: { address: string }[];
-      time: string;
-    }[];
+    const deadline = Date.now() + 5_000;
 
-    const mine = messages
-      .filter((m) => m.to.some((t) => t.address === email))
-      .filter((m) => m.subject.includes('รหัสยืนยัน'))
-      .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    for (;;) {
+      const response = await fetch('http://localhost:1080/api/email');
+      const messages = (await response.json()) as {
+        subject: string;
+        text: string;
+        to: { address: string }[];
+        time: string;
+      }[];
 
-    const match = /\b(\d{6})\b/.exec(mine[0]?.text ?? '');
-    if (!match) throw new Error('No OTP found in the delivered mail');
-    return match[1];
+      const mine = messages
+        .filter((m) => m.to.some((t) => t.address === email))
+        .filter((m) => m.subject.includes('รหัสยืนยัน'))
+        .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+
+      const match = /\b(\d{6})\b/.exec(mine[0]?.text ?? '');
+      if (match) return match[1];
+
+      if (Date.now() > deadline) {
+        throw new Error('No OTP found in the delivered mail');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
   };
 
   /**

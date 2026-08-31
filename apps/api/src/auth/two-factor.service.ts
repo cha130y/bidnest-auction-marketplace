@@ -76,7 +76,31 @@ export class TwoFactorService {
     // The code itself never reaches a log — only the fact that one was sent.
     this.logger.log(`Issued a 2FA code for user ${user.id}`);
 
-    await this.mail.sendTwoFactorCode(user.email, code, this.ttlMinutes);
+    /**
+     * Handed to the relay without waiting for it.
+     *
+     * The code is in the database by this line, so the caller already has
+     * everything it needs to answer: the screen that asks for it does not
+     * depend on the mail having left. Waiting made the whole sign-in as slow
+     * as the slowest SMTP handshake — a fresh TCP connection, TLS and a login
+     * before the first byte of the message moves, on every attempt — and when
+     * that outlasted the caller's own timeout, somebody was told their login
+     * failed while their code was already on its way to them. That is the
+     * worst of both: the wait and a wrong answer at the end of it.
+     *
+     * Delivery still has to be watched, but a log is where that belongs.
+     * MailService records every failure with a stack, and somebody who never
+     * receives a code asks for another one — the same recovery a mail lost in
+     * transit needs, and one this route already offers.
+     *
+     * `.catch()` is not optional here: MailService rethrows after logging, and
+     * an unhandled rejection in Node takes the process down. Nothing is left
+     * to act on by then — the response went out long ago — so it is swallowed
+     * deliberately rather than by omission.
+     */
+    void this.mail
+      .sendTwoFactorCode(user.email, code, this.ttlMinutes)
+      .catch(() => undefined);
   }
 
   /**
