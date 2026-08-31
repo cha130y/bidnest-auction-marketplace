@@ -228,6 +228,18 @@ export class AuctionController {
   }
 
   /**
+   * The home page's three headline numbers. Public, and above `:id` for the
+   * same reason `drafts` is: `stats` is a literal segment that route would
+   * otherwise swallow — and `ParseUUIDPipe` would then reject it as a
+   * malformed id, which reads as a client bug rather than a routing one.
+   */
+  @Public()
+  @Get('stats')
+  getStats() {
+    return this.auctionService.getStats();
+  }
+
+  /**
    * AUC-005 — the first buyer-facing route, and the reason every `drafts` path
    * above has to stay above it: `:id` would otherwise swallow the literal
    * segment `drafts`.
