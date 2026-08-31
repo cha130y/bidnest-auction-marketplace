@@ -19,24 +19,40 @@ describe('Login and 2FA (e2e)', () => {
   const password = 'Str0ngPassw0rd';
   const maildev = 'http://localhost:1080';
 
-  /** Newest code Maildev holds for this address. */
+  /**
+   * Newest code Maildev holds for this address.
+   *
+   * Polled rather than read once. The API hands the message to the relay
+   * without waiting for it (two-factor.service.ts), so a login response
+   * arriving before the mail does is now the ordinary case rather than a
+   * fault. Giving up after five seconds keeps a code that genuinely never
+   * arrives a failure rather than a hang.
+   */
   const readOtpFromInbox = async (): Promise<string> => {
-    const response = await fetch(`${maildev}/api/email`);
-    const messages = (await response.json()) as {
-      subject: string;
-      text: string;
-      to: { address: string }[];
-      time: string;
-    }[];
+    const deadline = Date.now() + 5_000;
 
-    const mine = messages
-      .filter((m) => m.to.some((t) => t.address === email))
-      .filter((m) => m.subject.includes('รหัสยืนยัน'))
-      .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    for (;;) {
+      const response = await fetch(`${maildev}/api/email`);
+      const messages = (await response.json()) as {
+        subject: string;
+        text: string;
+        to: { address: string }[];
+        time: string;
+      }[];
 
-    const match = /\b(\d{6})\b/.exec(mine[0]?.text ?? '');
-    if (!match) throw new Error('No OTP found in the delivered mail');
-    return match[1];
+      const mine = messages
+        .filter((m) => m.to.some((t) => t.address === email))
+        .filter((m) => m.subject.includes('รหัสยืนยัน'))
+        .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+
+      const match = /\b(\d{6})\b/.exec(mine[0]?.text ?? '');
+      if (match) return match[1];
+
+      if (Date.now() > deadline) {
+        throw new Error('No OTP found in the delivered mail');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
   };
 
   const login = () =>

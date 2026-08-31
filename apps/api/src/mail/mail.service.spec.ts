@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import * as nodemailer from 'nodemailer';
-import { MailService } from './mail.service';
+import { MailService, parseAddress } from './mail.service';
 
 jest.mock('nodemailer');
 
@@ -18,6 +18,11 @@ type TransportOptions = {
   ignoreTLS: boolean;
   tls: { rejectUnauthorized: boolean };
   auth?: { user: string; pass: string };
+  pool: boolean;
+  maxConnections: number;
+  connectionTimeout: number;
+  greetingTimeout: number;
+  socketTimeout: number;
 };
 
 const maildev: Record<string, unknown> = {
@@ -40,7 +45,9 @@ describe('MailService', () => {
     }).compile();
 
     const service = moduleRef.get(MailService);
-    const options = createTransport.mock.calls[0][0] as TransportOptions;
+    // Optional: the SendGrid API path opens no connection, so there is no
+    // transport for it to have configured.
+    const options = createTransport.mock.calls[0]?.[0] as TransportOptions;
     return { service, options };
   }
 
@@ -54,6 +61,29 @@ describe('MailService', () => {
   });
 
   describe('transport', () => {
+    /**
+     * Connection reuse is the difference between a login code going out in
+     * milliseconds and waiting on a fresh TCP connection, a TLS handshake and
+     * an SMTP login first. It is not environment-specific — Maildev benefits
+     * the same way a hosted relay does — so it is asserted once, here.
+     */
+    it('reuses one pooled connection rather than dialling per message', async () => {
+      const { options } = await transportFor(maildev);
+
+      expect(options.pool).toBe(true);
+      expect(options.maxConnections).toBe(3);
+    });
+
+    // A relay that accepts a connection and then goes quiet must not hold a
+    // pooled slot for ever — the messages queued behind it would never move.
+    it('gives up on a relay that stops answering', async () => {
+      const { options } = await transportFor(maildev);
+
+      expect(options.connectionTimeout).toBe(10_000);
+      expect(options.greetingTimeout).toBe(10_000);
+      expect(options.socketTimeout).toBe(20_000);
+    });
+
     it('talks plain SMTP to Maildev in development', async () => {
       const { options } = await transportFor(maildev);
 
@@ -180,6 +210,151 @@ describe('MailService', () => {
       // lives — so only the subject may be named.
       const logged = JSON.stringify(error.mock.calls);
       expect(logged).not.toContain('043915');
+    });
+  });
+
+  /**
+   * The path production actually runs on. Every SendGrid SMTP port times out
+   * from Railway, so the same account is reached over HTTPS instead — which
+   * makes these the tests that cover how mail leaves the deployed system.
+   */
+  describe('the SendGrid API', () => {
+    const sendgrid: Record<string, unknown> = {
+      NODE_ENV: 'production',
+      SENDGRID_API_KEY: 'SG.test-key',
+      MAIL_FROM: 'BidNest <no-reply@bidnest.test>'
+    };
+
+    let fetchMock: jest.Mock;
+
+    beforeEach(() => {
+      // 202 with an empty body is what SendGrid answers when it accepts a
+      // message for delivery.
+      fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 202 });
+      global.fetch = fetchMock;
+    });
+
+    /** The request body, parsed back out of what fetch was handed. */
+    const sentBody = () => {
+      const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+      return JSON.parse(init.body) as {
+        personalizations: { to: { email: string }[] }[];
+        from: { email: string; name?: string };
+        subject: string;
+        content: { type: string; value: string }[];
+      };
+    };
+
+    // No connection is opened at all on this path, so there is nothing to
+    // pool, time out, or close on shutdown.
+    it('builds no SMTP transport when the key is set', async () => {
+      await transportFor(sendgrid);
+
+      expect(createTransport).not.toHaveBeenCalled();
+    });
+
+    it('posts the message to the mail send endpoint with the key', async () => {
+      const { service } = await transportFor(sendgrid);
+
+      await service.sendTwoFactorCode('somchai@example.com', '043915', 10);
+
+      const [url, init] = fetchMock.mock.calls[0] as [
+        string,
+        { method: string; headers: Record<string, string> }
+      ];
+      expect(url).toBe('https://api.sendgrid.com/v3/mail/send');
+      expect(init.method).toBe('POST');
+      expect(init.headers.Authorization).toBe('Bearer SG.test-key');
+    });
+
+    it('splits MAIL_FROM into the name and address the API expects', async () => {
+      const { service } = await transportFor(sendgrid);
+
+      await service.sendTwoFactorCode('somchai@example.com', '043915', 10);
+
+      expect(sentBody().from).toEqual({
+        email: 'no-reply@bidnest.test',
+        name: 'BidNest'
+      });
+    });
+
+    it('carries the recipient, subject and code', async () => {
+      const { service } = await transportFor(sendgrid);
+
+      await service.sendTwoFactorCode('somchai@example.com', '043915', 10);
+
+      const body = sentBody();
+      expect(body.personalizations[0].to).toEqual([
+        { email: 'somchai@example.com' }
+      ]);
+      expect(body.subject).toContain('รหัสยืนยัน');
+      expect(body.content[0].value).toContain('043915');
+    });
+
+    /**
+     * SendGrid names the problem exactly — an unverified sender, a revoked
+     * key — and that sentence is the whole value of the log line, so it has to
+     * survive into the error.
+     */
+    it('raises what SendGrid said when it refuses the message', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: () =>
+          Promise.resolve(
+            '{"errors":[{"message":"The from address does not match a verified Sender Identity"}]}'
+          )
+      });
+      const { service } = await transportFor(sendgrid);
+      jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation(() => undefined);
+
+      await expect(
+        service.sendTwoFactorCode('somchai@example.com', '043915', 10)
+      ).rejects.toThrow(/403.*verified Sender Identity/s);
+    });
+
+    it('keeps the code out of the log when the API refuses', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve('unauthorized')
+      });
+      const { service } = await transportFor(sendgrid);
+      const error = jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation(() => undefined);
+
+      await expect(
+        service.sendTwoFactorCode('somchai@example.com', '043915', 10)
+      ).rejects.toThrow();
+
+      expect(JSON.stringify(error.mock.calls)).not.toContain('043915');
+    });
+  });
+
+  describe('parseAddress', () => {
+    it('splits a display name from the address', () => {
+      expect(parseAddress('BidNest <no-reply@bidnest.test>')).toEqual({
+        email: 'no-reply@bidnest.test',
+        name: 'BidNest'
+      });
+    });
+
+    // Valid on both paths, and the shape the API wants for it has no `name`
+    // key at all rather than an empty one.
+    it('accepts a bare address', () => {
+      expect(parseAddress('no-reply@bidnest.test')).toEqual({
+        email: 'no-reply@bidnest.test'
+      });
+    });
+
+    it('trims the padding a copied env value brings with it', () => {
+      expect(parseAddress('  BidNest  < no-reply@bidnest.test >  ')).toEqual({
+        email: 'no-reply@bidnest.test',
+        name: 'BidNest'
+      });
     });
   });
 });
