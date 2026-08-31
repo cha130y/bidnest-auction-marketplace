@@ -79,6 +79,20 @@ const envSchema = z.object({
   AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(5),
   OTP_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
 
+  /**
+   * Send over SendGrid's HTTPS API instead of SMTP, when set.
+   *
+   * Not a preference — on Railway it is the only way out. Every SendGrid SMTP
+   * port is unreachable from there (587, 465 and 2525 all time out, while
+   * smtp.gmail.com:587 connects from the same container), which is a sending
+   * network refusing traffic from a hosting provider's addresses rather than
+   * anything wrong with the account. `api.sendgrid.com:443` answers normally.
+   *
+   * Absent, MailService keeps using SMTP with the MAIL_* settings below, which
+   * is what every developer's Maildev needs.
+   */
+  SENDGRID_API_KEY: blankAsUnset,
+
   // Maildev in development, a real SMTP relay in production (SRS section 3).
   // Nothing but these settings changes between the two — see MailService.
   MAIL_HOST: z.string().default('localhost'),
