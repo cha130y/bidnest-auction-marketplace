@@ -10,7 +10,10 @@ import {
   HomeHeroSpotlight,
   HomeHeroSpotlightFallback,
 } from "@/components/home/home-hero"
-import { HomeLiveTicker } from "@/components/home/home-live-ticker"
+import {
+  HomeLiveTicker,
+  HomeLiveTickerFallback,
+} from "@/components/home/home-live-ticker"
 import { HomeStatsStrip } from "@/components/home/home-stats-strip"
 import { HomeProductPicksSection } from "@/components/shop/home-picks-section"
 import { CardGridSkeleton } from "@/components/ui/card-grid-skeleton"
@@ -38,7 +41,12 @@ export default function Home() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
       <AppHeader />
-      <HomeLiveTicker />
+
+      {/* Reads the hot list now, so it gets a boundary of its own like every
+          other live row on this page. */}
+      <Suspense fallback={<HomeLiveTickerFallback />}>
+        <HomeLiveTicker />
+      </Suspense>
 
       <main className="flex-1">
         <HomeHero
