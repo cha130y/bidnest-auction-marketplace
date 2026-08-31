@@ -133,8 +133,18 @@ branch protection บังคับ `required_approving_review_count: 1` — �
 
 ไม่ต้องทำอะไร ทั้งสองเจ้าเห็น `main` ขยับแล้วเริ่มเอง
 
-- **Railway → `apps/api`** อ่าน `railway.json` เห็น `builder: DOCKERFILE` แล้ว build image ตาม `Dockerfile` พอ container บูต `docker-entrypoint.sh` จะรัน `prisma migrate deploy` ให้ก่อนเสมอ — **ไม่ต้องไป migrate เองด้วยมือ**
+- **Railway → `apps/api`** build image ตาม [`Dockerfile`](../Dockerfile) พอ container บูต [`docker-entrypoint.sh`](../docker-entrypoint.sh) จะรัน `prisma migrate deploy` ให้ก่อนเสมอ — **ไม่ต้องไป migrate เองด้วยมือ**
 - **Vercel → `apps/web`** build Next.js เอง คนละสายกับ Railway โดยสิ้นเชิง `apps/web` ไม่เคยผ่าน Docker image เลย
+
+> ⚠️ **`railway.json` ที่รากรีโปไม่ใช่ตัวที่ Railway อ่าน**
+>
+> ไฟล์นั้นเขียน `builder`, `healthcheckPath` และ `restartPolicy` ไว้ก็จริง แต่ค่าที่ใช้จริงตอน deploy อยู่ที่ **Settings ของ service บน Railway dashboard** แก้ไฟล์แล้ว commit ขึ้นไปจะไม่มีอะไรเปลี่ยน และไม่มี error บอกด้วย
+>
+> ถ้าต้องแก้ builder หรือ health check ให้ไปแก้ที่:
+>
+> ```
+> Railway → project BidNest → service ของ API → Settings
+> ```
 
 CI จะรันซ้ำอีกรอบบน `main` ด้วย เป็นด่านสุดท้ายก่อนของจริงออก
 
