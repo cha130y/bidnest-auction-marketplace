@@ -4,6 +4,7 @@ import type {
   AuctionArena,
   AuctionLobby,
   AuctionSection,
+  AuctionStats,
   OwnerAuction,
   Paginated,
   PlacedBid,
@@ -39,6 +40,16 @@ export type AuctionListParams = {
 /** AUC-008 — the public auction list, one section at a time. */
 export function listAuctions(params: AuctionListParams = {}) {
   return apiFetch<Paginated<Auction>>(`/auctions${buildQuery({ ...params })}`)
+}
+
+/**
+ * The three numbers under the home page hero. `@Public()`, one round trip,
+ * and counted in the database — the list endpoint caps `limit` at 100, so
+ * totalling a page of it would go quietly wrong once there are more auctions
+ * than that.
+ */
+export function getAuctionStats() {
+  return apiFetch<AuctionStats>("/auctions/stats")
 }
 
 /**

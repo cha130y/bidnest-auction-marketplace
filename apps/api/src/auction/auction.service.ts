@@ -425,6 +425,68 @@ export class AuctionService {
   }
 
   /**
+   * The three numbers the home page puts under its hero: what is running, how
+   * much bidding has happened, and the last thing that actually sold.
+   *
+   * A route of its own rather than something the frontend assembles from the
+   * list endpoint. `listAuctions` caps `limit` at 100, so a total across every
+   * auction would mean paging through all of them on every visit to the home
+   * page — and the moment the finished ones pass a hundred, a frontend adding
+   * up one page would quietly start reporting a number that is too low. These
+   * are three counts the database answers directly.
+   *
+   * `deletedAt: null` throughout, matching the list: an auction an admin has
+   * removed is gone from what a visitor is told, and so are its bids.
+   *
+   * The last sale is the newest SOLD auction by `endedAt` — when settlement
+   * recorded the outcome (AUC-007), the same field `recently-ended` sorts on.
+   * `id` breaks a tie so two auctions settled in the same instant cannot swap
+   * places between reads. Null until somebody sells something, which the
+   * caller has to handle: on a fresh deployment that is the normal state, not
+   * an error.
+   *
+   * `soldPrice` rather than `currentPrice`: what somebody paid, not where the
+   * bidding got to. The reserve is not read here at all, so AUC-003 has
+   * nothing to leak through this route.
+   */
+  async getStats() {
+    const [activeAuctions, totalBids, lastSale] = await Promise.all([
+      this.prisma.auction.count({
+        where: { status: 'ACTIVE', deletedAt: null }
+      }),
+      this.prisma.bid.count({ where: { auction: { deletedAt: null } } }),
+      this.prisma.auction.findFirst({
+        where: { status: 'SOLD', deletedAt: null, soldPrice: { not: null } },
+        orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          soldPrice: true,
+          bidCount: true,
+          endedAt: true
+        }
+      })
+    ]);
+
+    return {
+      activeAuctions,
+      totalBids,
+      // The `soldPrice` test is what narrows the type, and it holds for the
+      // same reason the query filters on it: a SOLD auction without a price
+      // is a row nothing in the app produces.
+      lastSale: lastSale?.soldPrice
+        ? {
+            id: lastSale.id,
+            title: lastSale.title,
+            soldPrice: lastSale.soldPrice.toString(),
+            bidCount: lastSale.bidCount,
+            endedAt: lastSale.endedAt
+          }
+        : null
+    };
+  }
+
+  /**
    * AUC-007 — decides how an auction ends. The highest valid bid that clears
    * the reserve makes it SOLD and records the winner and the winning price; no
    * bids at all, or a top bid under the reserve, makes it UNSOLD (AUC-003).
