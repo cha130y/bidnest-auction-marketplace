@@ -14,7 +14,10 @@ import {
   HomeLiveTicker,
   HomeLiveTickerFallback,
 } from "@/components/home/home-live-ticker"
-import { HomeStatsStrip } from "@/components/home/home-stats-strip"
+import {
+  HomeStatsStrip,
+  HomeStatsStripFallback,
+} from "@/components/home/home-stats-strip"
 import { HomeProductPicksSection } from "@/components/shop/home-picks-section"
 import { CardGridSkeleton } from "@/components/ui/card-grid-skeleton"
 
@@ -58,7 +61,9 @@ export default function Home() {
         />
 
         <div className="mx-auto w-full max-w-330 px-4 pb-16 md:px-6">
-          <HomeStatsStrip />
+          <Suspense fallback={<HomeStatsStripFallback />}>
+            <HomeStatsStrip />
+          </Suspense>
 
           <Suspense
             fallback={

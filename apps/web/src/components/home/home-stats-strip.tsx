@@ -1,59 +1,98 @@
-import { Gavel, KeyRound, ShieldCheck } from "lucide-react"
+import { Gavel, ShoppingBag, TrendingUp } from "lucide-react"
+
+import { getAuctionStats } from "@/lib/api/auctions"
+import { formatTHB } from "@/lib/format"
+import { cn } from "@/lib/utils"
 
 /**
- * The three rules of the house, under the hero.
+ * The three headline numbers under the hero.
  *
- * This strip used to carry counts — active auctions, listings, verified
- * sellers — with placeholder numbers standing in until there was real data.
- * The counts are gone rather than wired up. Two of them could be read from
- * the API today, but a marketplace that has just opened answers them with
- * single digits, and a row of them below the hero reads as "nobody is here"
- * on the page whose job is to say the opposite. The third had no answer at
- * all: nothing in the schema records a seller being verified.
+ * This strip used to carry invented counts — 340+ auctions, 1,850+ listings,
+ * 210+ verified sellers — standing in until there was real data. These are
+ * the real ones, from `GET /auctions/stats`, which counts them in the
+ * database rather than adding up a page of the list.
  *
- * What replaces them is true on the first day and on the thousandth, and is
- * what somebody about to bid actually wants to know. Every line is a rule the
- * API enforces, and the numbers in them are the constants it enforces them
- * with — keep them in step:
+ * Each number answers a different question, which is why these three and not
+ * three sizes of the same thing: what is running now, how much bidding this
+ * place actually sees, and what the last real sale went for. The count of
+ * listings is deliberately not here — it is the slowest number in the system
+ * to move, so it is the one that sits at a single digit longest.
  *
- *   BID-004  bid/utils/calculate-anti-sniping.util.ts (window, extension, cap)
- *   AUC-003  auction.service.ts — under the reserve settles UNSOLD
- *   AUTH-007 a code on every sign-in from a browser the account has not used
+ * `async` behind its own `<Suspense>` in `page.tsx`, like the ticker and the
+ * hero spotlight.
  */
-const HOUSE_RULES = [
-  {
-    icon: Gavel,
-    title: "ต่อเวลาอัตโนมัติ",
-    detail: "บิดใน 2 นาทีสุดท้าย เวลายืดให้อีก 2 นาที สูงสุด 5 ครั้ง",
-  },
-  {
-    icon: ShieldCheck,
-    title: "ราคาขั้นต่ำที่ผู้ขายรับได้",
-    detail: "ประมูลไม่ถึงราคาที่ผู้ขายตั้งไว้ ระบบไม่ตัดขายให้",
-  },
-  {
-    icon: KeyRound,
-    title: "ยืนยันตัวตนสองชั้น",
-    detail: "เข้าสู่ระบบจากเครื่องใหม่ ต้องกรอกรหัสที่ส่งไปทางอีเมล",
-  },
-]
+export async function HomeStatsStrip() {
+  let stats: Awaited<ReturnType<typeof getAuctionStats>>
 
-export function HomeStatsStrip() {
+  try {
+    stats = await getAuctionStats()
+  } catch {
+    // Same rule as the ticker: the true thing or nothing. A strip of zeroes
+    // because a read failed would be a claim about the marketplace rather
+    // than a report of one.
+    return null
+  }
+
+  const cells = [
+    {
+      icon: Gavel,
+      value: stats.activeAuctions.toLocaleString("th-TH"),
+      label: "ประมูลที่กำลังดำเนินอยู่",
+    },
+    {
+      icon: TrendingUp,
+      value: stats.totalBids.toLocaleString("th-TH"),
+      label: "ครั้งที่มีคนเสนอราคา",
+    },
+    // Dropped rather than rendered empty until somebody sells something. Two
+    // columns is a layout; a column reading "—" is a gap with a label on it.
+    ...(stats.lastSale
+      ? [
+          {
+            icon: ShoppingBag,
+            value: formatTHB(stats.lastSale.soldPrice),
+            label: `ดีลล่าสุด · ${stats.lastSale.title}`,
+          },
+        ]
+      : []),
+  ]
+
+  // Nothing running, nobody has bid and nothing has sold — a brand new
+  // deployment. Three zeroes say less than no strip at all.
+  if (stats.activeAuctions === 0 && stats.totalBids === 0 && !stats.lastSale) {
+    return null
+  }
+
   return (
-    <div className="my-8 grid grid-cols-1 divide-y divide-white/10 overflow-hidden rounded-r4 bg-linear-to-b from-[#2b303b] to-ink shadow-sh2 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-      {HOUSE_RULES.map(({ icon: Icon, title, detail }) => (
-        <div key={title} className="flex items-center gap-3 px-6 py-6">
+    <div
+      className={cn(
+        "my-8 grid grid-cols-1 divide-y divide-white/10 overflow-hidden rounded-r4 bg-linear-to-b from-[#2b303b] to-ink shadow-sh2 sm:divide-x sm:divide-y-0",
+        cells.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"
+      )}
+    >
+      {cells.map(({ icon: Icon, value, label }) => (
+        <div key={label} className="flex items-center gap-3 px-6 py-6">
           <Icon className="size-6 shrink-0 text-amber-400" />
-          <div>
-            <div className="font-display text-base font-extrabold text-amber-400">
-              {title}
+          <div className="min-w-0">
+            <div className="font-display text-2xl font-extrabold text-amber-400 tabular-nums">
+              {value}
             </div>
-            <div className="mt-0.5 text-xs font-semibold text-n-300">
-              {detail}
+            {/* A sold item's title is whatever the seller typed, so it is the
+                one label here that can run long. */}
+            <div className="truncate text-xs font-semibold text-n-300">
+              {label}
             </div>
           </div>
         </div>
       ))}
     </div>
   )
+}
+
+/**
+ * Holds the strip's height while it loads. Matches the rendered card: `py-6`
+ * around a 2xl number over a 12px label, plus the `my-8` around it.
+ */
+export function HomeStatsStripFallback() {
+  return <div className="my-8 h-23 animate-pulse rounded-r4 bg-n-200" />
 }

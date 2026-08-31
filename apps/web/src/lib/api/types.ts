@@ -280,6 +280,31 @@ export type AuctionSection =
   | "starting-soon"
   | "recently-ended"
 
+/**
+ * The home page's three headline numbers — src/auction/auction.service.ts →
+ * getStats. Counted in the database rather than added up from a page of the
+ * list, so they stay right however many auctions there are.
+ */
+export type AuctionStats = {
+  /** Running right now, not everything ever published. */
+  activeAuctions: number
+  /** Every bid ever placed, minus those on auctions an admin removed. */
+  totalBids: number
+  /**
+   * The newest auction that actually sold, or null before anything has —
+   * which is the ordinary state of a fresh deployment, not an error. Callers
+   * have to render something sensible for null.
+   */
+  lastSale: {
+    id: string
+    title: string
+    /** What the winner paid (AUC-007), never the reserve. */
+    soldPrice: string
+    bidCount: number
+    endedAt: string | null
+  } | null
+}
+
 export type AuctionImage = {
   /** Needed to remove one — see removeDraftImage. */
   id: string
