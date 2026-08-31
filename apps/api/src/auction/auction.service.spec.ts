@@ -145,7 +145,7 @@ describe('AuctionService', () => {
       findFirst: jest.Mock;
       update: jest.Mock;
     };
-    bid: { findFirst: jest.Mock; findMany: jest.Mock };
+    bid: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     watchlist: { findMany: jest.Mock };
     notification: { createMany: jest.Mock };
     category: { findUnique: jest.Mock };
@@ -180,7 +180,11 @@ describe('AuctionService', () => {
         findFirst: jest.fn(),
         update: jest.fn()
       },
-      bid: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      bid: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
       watchlist: { findMany: jest.fn().mockResolvedValue([]) },
       notification: { createMany: jest.fn() },
       category: { findUnique: jest.fn() },
@@ -2363,6 +2367,115 @@ describe('AuctionService', () => {
           service.removeDraftImage(DRAFT_ID, SELLER_ID, IMAGE_ID)
         ).resolves.toBeDefined();
       });
+    });
+  });
+
+  describe('getStats', () => {
+    const SOLD_AUCTION_ID = '00000000-0000-4000-8000-000000000401';
+
+    const soldRow = (overrides: Record<string, unknown> = {}) => ({
+      id: SOLD_AUCTION_ID,
+      title: '2025 Porsche Cayman',
+      soldPrice: new Prisma.Decimal(2600000),
+      bidCount: 6,
+      endedAt: new Date('2026-08-30T18:26:01.050Z'),
+      ...overrides
+    });
+
+    const statsReturn = (
+      active: number,
+      bids: number,
+      sale: Record<string, unknown> | null
+    ) => {
+      prisma.auction.count.mockResolvedValue(active);
+      prisma.bid.count.mockResolvedValue(bids);
+      prisma.auction.findFirst.mockResolvedValue(sale);
+    };
+
+    it('counts only auctions that are running and not deleted', async () => {
+      statsReturn(3, 20, soldRow());
+
+      await service.getStats();
+
+      const countArgs = (
+        prisma.auction.count.mock.calls as WhereArgs[][]
+      )[0][0];
+      expect(countArgs.where).toEqual({ status: 'ACTIVE', deletedAt: null });
+    });
+
+    // A bid on an auction an admin removed is not part of what a visitor is
+    // told about, the same way the auction itself is not.
+    it('leaves out bids on deleted auctions', async () => {
+      statsReturn(3, 20, soldRow());
+
+      await service.getStats();
+
+      const bidCountArgs = (prisma.bid.count.mock.calls as WhereArgs[][])[0][0];
+      expect(bidCountArgs.where).toEqual({ auction: { deletedAt: null } });
+    });
+
+    it('takes the newest settled sale, breaking a tie on id', async () => {
+      statsReturn(3, 20, soldRow());
+
+      await service.getStats();
+
+      const findFirstArgs = (
+        prisma.auction.findFirst.mock.calls as {
+          where: Record<string, unknown>;
+          orderBy: unknown;
+        }[][]
+      )[0][0];
+      expect(findFirstArgs.where).toEqual({
+        status: 'SOLD',
+        deletedAt: null,
+        soldPrice: { not: null }
+      });
+      expect(findFirstArgs.orderBy).toEqual([
+        { endedAt: 'desc' },
+        { id: 'desc' }
+      ]);
+    });
+
+    it('serialises the sold price as a string, like every other read', async () => {
+      statsReturn(3, 20, soldRow());
+
+      const result = await service.getStats();
+
+      expect(result).toEqual({
+        activeAuctions: 3,
+        totalBids: 20,
+        lastSale: {
+          id: SOLD_AUCTION_ID,
+          title: '2025 Porsche Cayman',
+          soldPrice: '2600000',
+          bidCount: 6,
+          endedAt: new Date('2026-08-30T18:26:01.050Z')
+        }
+      });
+    });
+
+    // The normal state of a fresh deployment, not an error.
+    it('reports no last sale before anything has sold', async () => {
+      statsReturn(0, 0, null);
+
+      const result = await service.getStats();
+
+      expect(result).toEqual({
+        activeAuctions: 0,
+        totalBids: 0,
+        lastSale: null
+      });
+    });
+
+    // AUC-003 — the reserve is not read on this route at all, so there is
+    // nothing for it to leak through.
+    it('never returns the reserve', async () => {
+      statsReturn(3, 20, soldRow());
+
+      const result = await service.getStats();
+
+      expect(JSON.stringify(result)).not.toContain('4500');
+      expect(result.lastSale).not.toHaveProperty('reservePrice');
     });
   });
 });

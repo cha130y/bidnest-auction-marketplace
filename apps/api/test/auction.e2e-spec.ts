@@ -2909,4 +2909,52 @@ describe('Auction drafts (e2e)', () => {
       });
     });
   });
+
+  /**
+   * The three numbers the home page puts under its hero. Counted in the
+   * database rather than added up from a page of the list, so the totals stay
+   * right once there are more auctions than one page holds.
+   */
+  describe('GET /auctions/stats', () => {
+    it('answers a signed-out visitor', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/auctions/stats')
+        .expect(200);
+
+      const body = response.body as {
+        activeAuctions: unknown;
+        totalBids: unknown;
+      };
+
+      expect(typeof body.activeAuctions).toBe('number');
+      expect(typeof body.totalBids).toBe('number');
+      // Present either way: null until something sells, an object after.
+      expect(response.body).toHaveProperty('lastSale');
+    });
+
+    /**
+     * `stats` is a literal segment sitting where `:id` also matches, and the
+     * route declared first is the one that answers. Were they the other way
+     * round, ParseUUIDPipe would reject `stats` as a malformed id and this
+     * would be a 400 — which is why the assertion above is worth making
+     * separately from the shape.
+     */
+    it('is not swallowed by the :id route', async () => {
+      await request(app.getHttpServer()).get('/auctions/stats').expect(200);
+
+      await request(app.getHttpServer())
+        .get('/auctions/definitely-not-a-uuid')
+        .expect(400);
+    });
+
+    // AUC-003 — the reserve is not read on this route at all.
+    it('never carries the reserve', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/auctions/stats')
+        .expect(200);
+
+      expect(response.body).not.toHaveProperty('reservePrice');
+      expectNoReserve(response.body, 4500);
+    });
+  });
 });
