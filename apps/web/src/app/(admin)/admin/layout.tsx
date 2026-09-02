@@ -21,6 +21,7 @@ import { fetchAdminSupportSessions, fetchCurrentUser } from '@/lib/api/admin';
 import { useAuthToken } from '@/lib/api/auth/use-auth-token';
 import { loginHref } from '@/lib/api/auth/login-redirect';
 import { useSupportInboxChannel } from '@/lib/use-support-inbox-channel';
+import { isSessionUnread } from '@/lib/support-inbox-seen';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -117,7 +118,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     queryFn: () => fetchAdminSupportSessions({ status: 'ESCALATED' }),
     enabled: ready && !!token && isAdmin,
   });
-  const escalatedCount = escalatedSessions?.length ?? 0;
+  // Every ESCALATED session, not just the ones still waiting on a reply,
+  // used to count here — so the badge stayed lit long after an admin had
+  // already read (or even replied to) a session, only clearing once it was
+  // fully resolved. Only count one this browser hasn't seen the latest
+  // message of yet (AdminSupportThread marks a session seen on open).
+  const escalatedCount = (escalatedSessions ?? []).filter((session) =>
+    isSessionUnread(session.id, session.lastMessage?.id),
+  ).length;
 
   useSupportInboxChannel(
     isAdmin ? token : null,

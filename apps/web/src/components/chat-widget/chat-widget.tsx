@@ -15,6 +15,7 @@ import {
   fetchSupportChatHistory,
 } from '@/lib/api/support-chat';
 import { useSupportSessionRoom } from '@/lib/use-support-session-room';
+import { isSessionUnread, markSessionSeen } from '@/lib/support-inbox-seen';
 import { cn } from '@/lib/utils';
 
 type Mode = 'AI' | 'CHAT';
@@ -78,6 +79,14 @@ export function ChatWidget() {
         setSessionId(stored);
         setSessionStatus(history.status);
         setMessages(history.messages);
+
+        // An admin reply that arrived while this tab was closed left no live
+        // socket event to set the dot from — without this, reopening the
+        // site after being replied to showed no unread badge at all.
+        const last = history.messages.at(-1);
+        if (last?.role === 'ADMIN' && isSessionUnread(stored, last.id)) {
+          setHasUnread(true);
+        }
       })
       .catch(() => {
         // Gone, or belongs to a session that no longer checks out — nothing
@@ -108,6 +117,16 @@ export function ChatWidget() {
     token,
     onAdminMessage,
   );
+
+  // The single place that marks a session "seen" — covers opening the
+  // widget, switching to the AI tab, and a new admin reply landing while
+  // already on it, all at once, rather than duplicating the same write at
+  // every call site that clears `hasUnread`.
+  useEffect(() => {
+    if (!(isOpen && mode === 'AI') || !sessionId) return;
+    const last = messages.at(-1);
+    if (last?.role === 'ADMIN') markSessionSeen(sessionId, last.id);
+  }, [isOpen, mode, messages, sessionId]);
 
   // Opening on an unread reply jumps straight to the AI tab, since that's
   // presumably what the dot was about; opening with nothing unread leaves
