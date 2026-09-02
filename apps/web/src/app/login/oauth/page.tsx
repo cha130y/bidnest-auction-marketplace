@@ -1,3 +1,4 @@
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { OAuthReady } from "@/app/login/oauth/oauth-ready"
@@ -40,6 +41,15 @@ export default async function OAuthVerifyPage({
 
   const pending = await readPending()
   if (!pending) {
+    // The second place that answers with "เซสชันหมดอายุ กรุณาลองใหม่", and from
+    // the login page the two are indistinguishable. Reaching here means the
+    // callback did its work and set the cookie, and the browser that landed
+    // here did not send it back — a different failure from Line never
+    // returning the state at all, and one worth being able to tell apart.
+    console.warn(
+      `[login/oauth] no pending sign-in: ready=${params.ready === "1"} ` +
+        `cookiesOnRequest=${(await cookies()).getAll().length}`
+    )
     redirect(`/login?error=${encodeURIComponent("เซสชันหมดอายุ กรุณาลองใหม่")}`)
   }
 
