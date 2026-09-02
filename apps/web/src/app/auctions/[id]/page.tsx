@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 
 import { ArenaPanel } from "@/components/auction/arena-panel"
-import { AuctionImage } from "@/components/auction/auction-image"
+import { AuctionGallery } from "@/components/auction/auction-gallery"
 import { AuctionNegotiateButton } from "@/components/auction/negotiate-button"
 import { WatchButton } from "@/components/auction/watch-button"
 import { SiteFooter } from "@/components/layout/site-footer"
@@ -35,10 +35,6 @@ export default async function AuctionDetailPage({
   const arena = await readArena(id)
   const { auction } = arena
 
-  const primaryImage =
-    auction.images.find((image) => image.isPrimary) ?? auction.images[0]
-  const gallery = auction.images.filter((image) => image !== primaryImage)
-
   return (
     <div className="flex min-h-full flex-1 flex-col bg-n-100">
       <AppHeader />
@@ -57,23 +53,7 @@ export default async function AuctionDetailPage({
 
           <div className="grid gap-8 lg:grid-cols-2">
             <div>
-              <AuctionImage
-                src={primaryImage?.url}
-                alt={auction.title}
-                className="aspect-square w-full rounded-r4 shadow-sh1"
-              />
-              {gallery.length > 0 && (
-                <div className="mt-3 grid grid-cols-4 gap-3">
-                  {gallery.map((image) => (
-                    <AuctionImage
-                      key={image.url}
-                      src={image.url}
-                      alt={auction.title}
-                      className="aspect-square w-full rounded-r2 shadow-sh1"
-                    />
-                  ))}
-                </div>
-              )}
+              <AuctionGallery images={auction.images} title={auction.title} />
 
               <dl className="mt-6 grid gap-3 rounded-r4 bg-white p-5 text-sm shadow-sh1">
                 <Row label="สภาพสินค้า" value={auction.condition === "NEW" ? "ของใหม่" : "มือสอง"} />

@@ -127,7 +127,21 @@ export function AccountMenu({ className }: { className?: string }) {
     )
   }
 
-  const name = session.user?.name ?? session.user?.email ?? "บัญชีของฉัน"
+  /**
+   * USR-001 — the name, on exactly the terms the picture above is on, and for
+   * the reason given there: the session's copy is maintained by writing to it
+   * on every save, and a copy that has to be maintained can be wrong. It was.
+   * Renaming yourself left the header showing the old name until a fresh
+   * sign-in, which is the same failure the picture had before it stopped
+   * reading from the session.
+   *
+   * Reading it from the cache the profile page writes on save means the header
+   * redraws in the same tick, with no round trip and nothing to keep in step.
+   * The session's copy still comes first on a cold load, so the name does not
+   * flash in after the page paints.
+   */
+  const accountName = profile?.profile.displayName ?? session.user?.name
+  const name = accountName ?? session.user?.email ?? "บัญชีของฉัน"
   const avatarUrl = profile?.profile.avatarUrl ?? session.user?.image ?? null
   const isAdmin = session.role === "ADMIN"
 
@@ -152,7 +166,7 @@ export function AccountMenu({ className }: { className?: string }) {
           />
         ) : (
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-b from-amber-400 to-amber-500 text-sm font-bold text-ink">
-            {initialOf(session.user?.name, session.user?.email)}
+            {initialOf(accountName, session.user?.email)}
           </span>
         )}
         <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">
