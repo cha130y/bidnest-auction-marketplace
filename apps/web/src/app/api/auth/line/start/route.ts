@@ -56,6 +56,31 @@ export async function GET(request: Request) {
   // the display name. Email is deliberately not asked for — AUTH-006 is built
   // around not getting one, and the permission needs Line's own approval.
   authorize.searchParams.set("scope", "openid profile")
+  /**
+   * Keep the whole sign-in in the browser that started it.
+   *
+   * Left to itself, a phone with the Line app installed does not finish this
+   * where it began: Line hands the login to the app, and the app opens the way
+   * back in its own in-app browser. That browser is a different cookie jar, so
+   * the state cookie set above — the thing that ties the callback to this
+   * browser — is not on the request, and the callback can only refuse it.
+   *
+   * Measured on production, and it is not subtle. Every desktop attempt
+   * completed; the one from an iPhone arrived at the callback carrying Line's
+   * own `liffClientId` and `liffRedirectUri`, which only its in-app browser
+   * adds, and `cookiesOnRequest=0` — not our cookie missing, but a browser
+   * that had never seen this site at all.
+   *
+   * The cost is the one-tap login on mobile: with this set, somebody signing
+   * in on a phone gets Line's SSO screen, or its email login if SSO has
+   * nothing to offer. Worth it against a sign-in that cannot succeed. Carrying
+   * the state in the URL instead would survive the browser change, but the
+   * cookie is what stops somebody else's Line login landing in this session,
+   * and a query parameter cannot do that job.
+   *
+   * https://developers.line.biz/en/docs/line-login/integrate-line-login/
+   */
+  authorize.searchParams.set("disable_auto_login", "true")
 
   return NextResponse.redirect(authorize)
 }
