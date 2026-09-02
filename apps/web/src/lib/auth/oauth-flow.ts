@@ -157,13 +157,17 @@ export async function hasParkedTokens(): Promise<boolean> {
 export async function startOAuth(
   pending: PendingOAuth,
   /**
-   * Offer the trusted-device token, so a browser that has answered a code
-   * before comes straight back with the token pair.
+   * Offer the trusted-device token, so a browser that has already answered a
+   * code for this account comes straight back with the token pair instead of
+   * being asked for another one (AUTH-007).
    *
-   * Off for Line's callback. That leg is a full-page redirect with nowhere to
-   * hand a token pair to — the page it lands on would have to be given them
-   * through yet another cookie — so Line still asks for the code every time.
-   * Worth doing, not worth doing badly in the same change.
+   * Both callers pass it, Line's included. They differ only in how they
+   * deliver a pair that comes back: the Google leg answers the page directly
+   * and hands it over in the response, while Line's callback only gets to
+   * redirect, so it parks the pair in a short-lived cookie for the landing
+   * page to claim — `parkTokens`, and `?ready=1` to say it is there. That
+   * difference is why this is a parameter at all rather than something this
+   * function simply does.
    */
   options: { withDevice?: boolean } = {}
 ): Promise<StartResult> {
