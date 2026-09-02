@@ -9,14 +9,15 @@ import { ApiError } from "@/lib/api/client"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
 import {
-  listProductWatchlist,
+  productWatchlistCountQueryKey,
+  productWatchlistQueryKey,
+  productWatchlistQueryOptions,
   unwatchProduct,
   watchProduct,
 } from "@/lib/api/product-watchlist"
+import type { Paginated, ProductWatchlistEntry } from "@/lib/api/types"
 import { useHydrated } from "@/lib/use-hydrated"
 import { cn } from "@/lib/utils"
-
-export const productWatchlistQueryKey = ["product-watchlist"] as const
 
 /**
  * Whether the viewer follows this listing, and the toggle for it.
@@ -45,11 +46,8 @@ function useProductWatch(productId: string) {
   const isAuthenticated = ready && Boolean(token)
 
   const { data } = useQuery({
-    queryKey: productWatchlistQueryKey,
-    queryFn: () => listProductWatchlist({ limit: 100 }),
+    ...productWatchlistQueryOptions(),
     enabled: isAuthenticated,
-    // A 401 will not fix itself by trying again
-    retry: false,
   })
 
   // Gated on `isAuthenticated` rather than on the data alone, so signing out —
@@ -61,7 +59,70 @@ function useProductWatch(productId: string) {
   const mutation = useMutation({
     mutationFn: () =>
       isWatching ? unwatchProduct(productId) : watchProduct(productId),
-    onSuccess: () =>
+
+    /**
+     * Takes the listing out of the cached list before the request is sent, so
+     * `/watchlist` drops the card on the press rather than on the response.
+     *
+     * Only for un-following. Adding one would mean inventing the entry the
+     * list holds — `{ watchedAt, product }` — from a hook that was handed an id
+     * and nothing else; and no screen is waiting for a card to *appear*, so the
+     * refetch below is soon enough for that direction.
+     */
+    onMutate: async () => {
+      if (!isWatching) return {}
+
+      // A refetch already in flight would land after this write and put the
+      // card back. Stop it first.
+      await queryClient.cancelQueries({ queryKey: productWatchlistQueryKey })
+
+      const previousList = queryClient.getQueryData<
+        Paginated<ProductWatchlistEntry>
+      >(productWatchlistQueryKey)
+      const previousCount = queryClient.getQueryData<{ total: number }>(
+        productWatchlistCountQueryKey
+      )
+
+      if (previousList) {
+        queryClient.setQueryData(productWatchlistQueryKey, {
+          ...previousList,
+          items: previousList.items.filter(
+            (entry) => entry.product.id !== productId
+          ),
+          meta: {
+            ...previousList.meta,
+            total: Math.max(0, previousList.meta.total - 1),
+          },
+        })
+      }
+
+      // The header's badge is its own query, not a slice of the one above, so
+      // it has to be moved by hand — left alone it keeps the old number until
+      // the refetch lands, which reads as the count being broken.
+      if (previousCount) {
+        queryClient.setQueryData(productWatchlistCountQueryKey, {
+          total: Math.max(0, previousCount.total - 1),
+        })
+      }
+
+      return { previousList, previousCount }
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(productWatchlistQueryKey, context.previousList)
+      }
+      if (context?.previousCount) {
+        queryClient.setQueryData(
+          productWatchlistCountQueryKey,
+          context.previousCount
+        )
+      }
+    },
+
+    // Settled rather than success: whichever way it went, the server holds the
+    // answer worth keeping. The prefix matches the count key too.
+    onSettled: () =>
       queryClient.invalidateQueries({ queryKey: productWatchlistQueryKey }),
   })
 
