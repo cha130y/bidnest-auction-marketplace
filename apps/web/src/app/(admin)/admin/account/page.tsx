@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMyProfile, updateMyProfile, type MyProfile } from '@/lib/api/users';
 import { changeOwnPassword } from '@/lib/api/admin';
@@ -45,6 +46,7 @@ const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
  */
 export default function AdminAccountPage() {
   const queryClient = useQueryClient();
+  const { update: updateSession } = useSession();
 
   const { data, isLoading, error } = useQuery({
     queryKey: adminProfileQueryKey,
@@ -69,9 +71,15 @@ export default function AdminAccountPage() {
         avatarUrl: orNull(values.avatarUrl),
         bio: orNull(values.bio),
       }),
-    onSuccess: (updated) => {
+    onSuccess: async (updated) => {
       queryClient.setQueryData(adminProfileQueryKey, updated);
       setFields(toFields(updated));
+      // Header อ่านชื่อ/รูปจาก session ไม่ใช่จาก query นี้ — ต้อง sync ไว้ ไม่งั้น
+      // ชื่อใน header จะไม่เปลี่ยนจนกว่าจะ login ใหม่ (เหมือน profile-form.tsx)
+      await updateSession({
+        name: updated.profile.displayName,
+        image: updated.profile.avatarUrl,
+      });
     },
   });
 

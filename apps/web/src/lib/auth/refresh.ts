@@ -37,19 +37,45 @@ const SKEW_MS = 60_000
  * everything.
  *
  * So a completed refresh is remembered by the token it consumed. Whoever
- * arrives late with that same token — because their request was already in
- * flight when the cookie was replaced — is handed the pair it became, rather
- * than being sent to the API to be treated as an attacker.
+ * arrives late with that same token is handed the pair it became, rather than
+ * being sent to the API to be treated as an attacker.
+ *
+ * Half an hour, where it used to be one minute. A minute only covers the
+ * request that was already in flight when the cookie was replaced, and that is
+ * not who arrives late. A phone renewing as it is being backgrounded has the
+ * response — and the cookie it was carrying — dropped by the browser, while
+ * the rotation it asked for has already been committed at apps/api. It is left
+ * holding a token it has no way of knowing is spent, and it will not ask again
+ * until somebody brings the tab back, which is a lunch break away rather than
+ * a second. It happened in production: one "Refresh token replayed for user …
+ * — revoking all sessions" in the API log, and every device on that account
+ * signed out with "เซสชันหมดอายุแล้ว".
+ *
+ * The wider window costs one map entry per rotation while it is open, which is
+ * a couple per signed-in person — a rotation only happens every fifteen
+ * minutes, and each entry is a token and the pair it became.
  */
-const GRACE_MS = 60_000
+const GRACE_MS = 30 * 60_000
+
+/**
+ * How far one straggler may follow the chain of remembered rotations.
+ *
+ * The window now outlives the access tokens handed out inside it: thirty
+ * minutes of memory over a fifteen-minute token means a late arrival can be
+ * given a pair that has itself gone stale. Following the chain one link lands
+ * on the rotation that replaced it, which is newer by construction, so the
+ * walk is short on its own. The cap is only so that a mistake above it cannot
+ * turn "short" into "forever".
+ */
+const MAX_HOPS = 4
 
 /**
  * Refreshes by the token they spend: in flight while the request is running,
  * then the result it produced until the grace period is up.
  *
- * One process, one map. A second Next instance would keep its own, which is
- * why the API's own reuse detection stays the real defence and this is only
- * here to stop us tripping it ourselves.
+ * One process, one map. A second Next instance would keep its own, and a
+ * restart drops the lot — which is why the API's own reuse detection stays the
+ * real defence and this is only here to stop us tripping it ourselves.
  */
 const spent = new Map<string, Promise<RefreshResult>>()
 
@@ -133,11 +159,15 @@ async function requestRefresh(refreshToken: string): Promise<RefreshResult> {
 
 /**
  * Spend a refresh token, at most once, however many callers ask at the same
- * moment.
+ * moment — and never hand back a pair that went stale while it was remembered.
  */
 export function refreshTokens(refreshToken: string): Promise<RefreshResult> {
+  return follow(refreshToken, MAX_HOPS)
+}
+
+function follow(refreshToken: string, hops: number): Promise<RefreshResult> {
   const already = spent.get(refreshToken)
-  if (already) return already
+  if (already) return already.then((result) => catchUp(result, hops))
 
   const attempt = requestRefresh(refreshToken).then((result) => {
     if (result.outcome === "renewed") {
@@ -155,4 +185,28 @@ export function refreshTokens(refreshToken: string): Promise<RefreshResult> {
 
   spent.set(refreshToken, attempt)
   return attempt
+}
+
+/**
+ * A remembered pair, brought up to date when it is no longer usable.
+ *
+ * The point of the grace window is that a straggler is handed something it can
+ * put on the session, and an access token that expired ten minutes ago is not
+ * that — every request made with it would come back 401, and the session would
+ * be no better off than if it had been refused. Spending the token that
+ * replaced it is safe for the same reason the window exists at all: whoever
+ * holds that one will be handed whatever *it* became, out of this same map.
+ *
+ * A pair still in date is returned untouched, which is every ordinary call.
+ * Nothing walks the chain unless a straggler really did arrive after the pair
+ * it was promised had aged out.
+ */
+async function catchUp(
+  result: RefreshResult,
+  hops: number
+): Promise<RefreshResult> {
+  if (result.outcome !== "renewed") return result
+  if (hops <= 0 || !needsRefresh(result.tokens.accessToken)) return result
+
+  return follow(result.tokens.refreshToken, hops - 1)
 }

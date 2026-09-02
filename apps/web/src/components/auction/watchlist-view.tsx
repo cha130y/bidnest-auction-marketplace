@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 
 import { AuctionCard } from "@/components/auction/auction-card"
@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api/client"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
-import { listWatchlist } from "@/lib/api/watchlist"
-import type { Paginated, WatchlistEntry } from "@/lib/api/types"
+import { auctionWatchlistQueryOptions } from "@/lib/api/watchlist"
 
 /**
  * WAT-002 — the auctions somebody is following.
@@ -22,30 +21,27 @@ import type { Paginated, WatchlistEntry } from "@/lib/api/types"
  * Nothing is rendered as an answer until `ready` — the flag exists so a page
  * does not flash "please sign in" at somebody who is signed in, in the moment
  * before localStorage has been read.
+ *
+ * Reads the query the hearts already share rather than fetching into state of
+ * its own. This was a `useEffect` writing to `useState`, which is what made
+ * un-following leave the card on screen: the heart invalidated the cache, and
+ * nothing here was listening to it — the effect's dependencies are the session,
+ * which had not changed. Subscribed to the same key, the grid drops the card
+ * the moment the button's `onMutate` removes it, and the page costs one request
+ * on this route instead of two.
  */
 export function WatchlistView() {
   const router = useRouter()
   const { token, ready } = useAuthToken()
-  const [page, setPage] = useState<Paginated<WatchlistEntry> | null>(null)
-  const [error, setError] = useState<unknown>(null)
 
-  useEffect(() => {
-    if (!ready || !token) return
-
-    let cancelled = false
-
-    listWatchlist({ limit: 24 })
-      .then((result) => {
-        if (!cancelled) setPage(result)
-      })
-      .catch((caught: unknown) => {
-        if (!cancelled) setError(caught)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [ready, token])
+  const {
+    data: page,
+    error,
+    isPending,
+  } = useQuery({
+    ...auctionWatchlistQueryOptions(),
+    enabled: ready && Boolean(token),
+  })
 
   if (!ready) {
     return <Skeleton />
@@ -83,7 +79,7 @@ export function WatchlistView() {
     )
   }
 
-  if (!page) return <Skeleton />
+  if (isPending || !page) return <Skeleton />
 
   if (page.items.length === 0) {
     return (
