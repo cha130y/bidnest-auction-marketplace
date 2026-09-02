@@ -54,8 +54,10 @@ export async function POST(request: Request) {
       email: body.email ?? parked?.email,
       callbackUrl: safeCallback(body.callbackUrl) ?? parked?.callbackUrl
     },
-    // This leg answers the page directly, so it can hand back a token pair —
-    // unlike Line's callback, which only gets to redirect.
+    // AUTH-007 — a browser that has answered a code for this account before
+    // comes straight back with the pair. This leg can simply return it, being
+    // an answer to the page; Line's callback offers the same thing and parks
+    // the pair in a cookie instead, having only a redirect to work with.
     { withDevice: true }
   )
 
