@@ -19,10 +19,25 @@ const SECTION_HINT: Record<AuctionSection, string> = {
   "recently-ended": "เพิ่งปิดไป",
 }
 
+/**
+ * The row only ever holds as many columns as it has auctions to show, so the
+ * track count is written out per case — Tailwind reads these class names at
+ * build time and would not see one assembled from a number at runtime.
+ */
+const GRID_COLUMNS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 sm:grid-cols-2",
+  3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+  4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
+}
+
+/** The widest this row was drawn for, and the last key in GRID_COLUMNS. */
+const MAX_COLUMNS = 4
+
 type SectionPick = {
   section: AuctionSection
   label: string
-  auction: Auction | null
+  auction: Auction
 }
 
 /**
@@ -39,8 +54,12 @@ type SectionPick = {
  * would push the products below the fold for no gain.
  *
  * The reads are `allSettled` and one auction deep: a section that is empty, or
- * one whose read fails, costs its own column and nothing else. The whole row
- * is one Suspense boundary on the page, so the four go out together.
+ * one whose read fails, simply drops out of the row and the remaining columns
+ * spread to fill it. An empty placeholder used to hold that spot, which was
+ * worth it while the catalogue was thin; now that every section normally has
+ * something, a dashed box reads as a hole rather than as information. If none
+ * of the four has anything, the whole row goes away. The row is one Suspense
+ * boundary on the page, so the four reads go out together.
  */
 export async function HomeAuctionSections() {
   const results = await Promise.allSettled(
@@ -49,16 +68,15 @@ export async function HomeAuctionSections() {
     )
   )
 
-  const picks: SectionPick[] = AUCTION_SECTION_TABS.map((tab, index) => {
+  const picks = AUCTION_SECTION_TABS.flatMap<SectionPick>((tab, index) => {
     const result = results[index]
+    const auction =
+      result.status === "fulfilled" ? (result.value.items[0] ?? null) : null
 
-    return {
-      section: tab.value,
-      label: tab.label,
-      auction:
-        result.status === "fulfilled" ? (result.value.items[0] ?? null) : null,
-    }
+    return auction ? [{ section: tab.value, label: tab.label, auction }] : []
   })
+
+  if (picks.length === 0) return null
 
   return (
     <section className="py-4">
@@ -79,7 +97,13 @@ export async function HomeAuctionSections() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Clamped rather than looked up straight: a fifth tab added to
+          AUCTION_SECTION_TABS would find no entry above and put the word
+          `undefined` in the class list, which drops the row to one column and
+          gives nobody a reason why. Beyond four, the extra cards wrap. */}
+      <div
+        className={`grid gap-5 ${GRID_COLUMNS[Math.min(picks.length, MAX_COLUMNS)]}`}
+      >
         {picks.map((pick) => (
           <div key={pick.section} className="flex flex-col gap-2">
             {/* The label is the link: the card underneath already goes to its
@@ -98,36 +122,10 @@ export async function HomeAuctionSections() {
               </span>
             </Link>
 
-            {pick.auction ? (
-              <AuctionCard auction={pick.auction} />
-            ) : (
-              <EmptyColumn section={pick.section} />
-            )}
+            <AuctionCard auction={pick.auction} />
           </div>
         ))}
       </div>
     </section>
-  )
-}
-
-/**
- * A section with nothing in it, which is a normal state rather than a fault —
- * nothing is scheduled, or nothing has ended yet. Kept the same height as a
- * card so one empty column does not pull the row out of line, and still
- * clickable, because the section is where you would go to check.
- *
- * A failed read lands here too. The row deliberately does not distinguish the
- * two: an empty section and one that could not be read look the same to
- * somebody who just wants to see what is on, and the difference is not theirs
- * to act on.
- */
-function EmptyColumn({ section }: { section: AuctionSection }) {
-  return (
-    <Link
-      href={`/auctions?section=${section}`}
-      className="flex flex-1 items-center justify-center rounded-r4 border border-dashed border-n-300 bg-white/50 px-4 py-16 text-center text-sm text-n-500 transition-colors hover:border-amber-400 hover:text-amber-600"
-    >
-      ยังไม่มีรายการ
-    </Link>
   )
 }
