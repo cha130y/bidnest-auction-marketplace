@@ -24,8 +24,16 @@ const SELLER_ID = '00000000-0000-4000-8000-000000000002';
 const CATEGORY_ID = '00000000-0000-4000-8000-000000000101';
 const DRAFT_ID = '00000000-0000-4000-8000-000000000301';
 
-const START_AT = new Date('2026-09-01T10:00:00.000Z');
-const END_AT = new Date('2026-09-01T12:00:00.000Z');
+// Relative, not absolute. These stand for a schedule that has not run yet —
+// every case that wants a past one builds its own — so written as fixed dates
+// they stop meaning "upcoming" the moment the clock passes them, and the suite
+// starts failing on a date rather than on a change. Which is what happened:
+// they read 2026-09-01, and on 2026-09-02 `validateOwnDraft` correctly reported
+// END_AT_IN_THE_PAST while the test still expected a publishable draft, and
+// `findPublicAuction` correctly settled the auction instead of reporting
+// bidding open. The rest of this file already uses `Date.now()` offsets.
+const START_AT = new Date(Date.now() + 60 * 60 * 1000);
+const END_AT = new Date(Date.now() + 3 * 60 * 60 * 1000);
 
 const validDto = (): CreateAuctionDraftDto => ({
   title: 'Vintage Seiko 5 Automatic',

@@ -8,11 +8,16 @@ import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api/client"
 import { loginHref } from "@/lib/api/auth/login-redirect"
 import { useAuthToken } from "@/lib/api/auth/use-auth-token"
-import { listWatchlist, unwatchAuction, watchAuction } from "@/lib/api/watchlist"
+import {
+  auctionWatchlistCountQueryKey,
+  auctionWatchlistQueryKey,
+  auctionWatchlistQueryOptions,
+  unwatchAuction,
+  watchAuction,
+} from "@/lib/api/watchlist"
+import type { Paginated, WatchlistEntry } from "@/lib/api/types"
 import { useHydrated } from "@/lib/use-hydrated"
 import { cn } from "@/lib/utils"
-
-export const auctionWatchlistQueryKey = ["auction-watchlist"] as const
 
 /**
  * WAT-001 — whether the viewer follows this auction, and the toggle for it.
@@ -50,11 +55,8 @@ function useAuctionWatch(auctionId: string) {
   // is a page long at most here, and the alternative — an endpoint per auction
   // — is a route nobody else needs.
   const { data } = useQuery({
-    queryKey: auctionWatchlistQueryKey,
-    queryFn: () => listWatchlist({ limit: 100 }),
+    ...auctionWatchlistQueryOptions(),
     enabled: isAuthenticated,
-    // A 401 will not fix itself by trying again
-    retry: false,
   })
 
   // Gated on `isAuthenticated` rather than on the data alone, so signing out —
@@ -66,7 +68,71 @@ function useAuctionWatch(auctionId: string) {
   const mutation = useMutation({
     mutationFn: () =>
       isWatching ? unwatchAuction(auctionId) : watchAuction(auctionId),
-    onSuccess: () =>
+
+    /**
+     * Takes the auction out of the cached list before the request is sent, so
+     * `/watchlist` drops the card on the press rather than on the response.
+     *
+     * Only for un-following. Adding one would mean inventing the entry the
+     * list holds — `{ watchedAt, auction }` — from a hook that was handed an id
+     * and nothing else; and no screen is waiting for a card to *appear*, so the
+     * refetch below is soon enough for that direction.
+     */
+    onMutate: async () => {
+      if (!isWatching) return {}
+
+      // A refetch already in flight would land after this write and put the
+      // card back. Stop it first.
+      await queryClient.cancelQueries({ queryKey: auctionWatchlistQueryKey })
+
+      const previousList =
+        queryClient.getQueryData<Paginated<WatchlistEntry>>(
+          auctionWatchlistQueryKey
+        )
+      const previousCount = queryClient.getQueryData<{ total: number }>(
+        auctionWatchlistCountQueryKey
+      )
+
+      if (previousList) {
+        queryClient.setQueryData(auctionWatchlistQueryKey, {
+          ...previousList,
+          items: previousList.items.filter(
+            (entry) => entry.auction.id !== auctionId
+          ),
+          meta: {
+            ...previousList.meta,
+            total: Math.max(0, previousList.meta.total - 1),
+          },
+        })
+      }
+
+      // The header's badge is its own query, not a slice of the one above, so
+      // it has to be moved by hand — left alone it keeps the old number until
+      // the refetch lands, which reads as the count being broken.
+      if (previousCount) {
+        queryClient.setQueryData(auctionWatchlistCountQueryKey, {
+          total: Math.max(0, previousCount.total - 1),
+        })
+      }
+
+      return { previousList, previousCount }
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(auctionWatchlistQueryKey, context.previousList)
+      }
+      if (context?.previousCount) {
+        queryClient.setQueryData(
+          auctionWatchlistCountQueryKey,
+          context.previousCount
+        )
+      }
+    },
+
+    // Settled rather than success: whichever way it went, the server holds the
+    // answer worth keeping. The prefix matches the count key too.
+    onSettled: () =>
       queryClient.invalidateQueries({ queryKey: auctionWatchlistQueryKey }),
   })
 
