@@ -70,3 +70,29 @@ export const productWatchlistCountQueryKey = [
   "product-watchlist",
   "count",
 ] as const
+
+/** The list itself. `productWatchlistCountQueryKey` extends this by a segment,
+ * so invalidating this prefix invalidates the count derived from it. */
+export const productWatchlistQueryKey = ["product-watchlist"] as const
+
+/**
+ * The one description of this query, shared by everything that reads it.
+ *
+ * Both the hearts and `/watchlist`'s listings tab subscribe under the same key.
+ * React Query keeps one entry per key and runs whichever `queryFn` the first
+ * observer to mount supplied — so two callers passing the same key with
+ * different functions is a bug that shows up only in whichever order they
+ * happen to mount. Handing both the same object removes the chance.
+ *
+ * `limit` is the hearts' 100 rather than the tab's old 24: neither screen
+ * paginates, so the larger page is strictly more of the list, and the tab's
+ * "ติดตามอยู่ N รายการ" reads `meta.total` from the server either way.
+ */
+export function productWatchlistQueryOptions() {
+  return {
+    queryKey: productWatchlistQueryKey,
+    queryFn: () => listProductWatchlist({ limit: 100 }),
+    // A 401 will not fix itself by trying again
+    retry: false,
+  }
+}

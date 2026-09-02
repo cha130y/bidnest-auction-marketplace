@@ -57,10 +57,15 @@ const WatchlistContext = createContext<WatchlistContextValue | null>(null)
  * button having to know this exists. `productWatchlistCountQueryKey` is
  * `["product-watchlist", "count"]` — the list key with a segment appended — and
  * `invalidateQueries` matches by prefix, so the `invalidateQueries({ queryKey:
- * productWatchlistQueryKey })` each button already runs invalidates the count
+ * productWatchlistQueryKey })` each button runs on settle invalidates the count
  * too. The auction side works the same way. Anything that invalidates the list
  * invalidates the number derived from it, which is the only relationship worth
  * guaranteeing between them.
+ *
+ * Un-following is the one case that does not wait for that refetch: the buttons
+ * write this count down by one in `onMutate`, alongside the list, so the badge
+ * and the card it opens onto move together instead of the number lagging a
+ * round trip behind the card that vanished.
  */
 export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { token, ready } = useAuthToken()

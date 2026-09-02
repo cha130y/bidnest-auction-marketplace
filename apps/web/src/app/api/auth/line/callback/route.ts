@@ -39,6 +39,10 @@ export async function GET(request: Request) {
 
   const jar = await cookies()
   const rawState = jar.get(LINE_STATE_COOKIE)?.value
+  // Counted before the delete below, because "our cookie is missing" and "this
+  // request carries no cookies at all" are different diagnoses and only the
+  // second one means this is not the browser the flow started in.
+  const cookiesOnRequest = jar.getAll().length
   // One shot either way — a state that has been answered is spent.
   jar.delete(LINE_STATE_COOKIE)
 
@@ -50,6 +54,19 @@ export async function GET(request: Request) {
   const code = params.get("code")
   const state = params.get("state")
   if (!code || !state || !rawState) {
+    // Three unrelated failures wearing one message, and the person reading it
+    // on screen cannot tell us which one they hit. The interesting one is a
+    // missing state cookie on a request that carries other cookies — or none
+    // at all — because that is a browser finishing a login another browser
+    // started, which is what a phone does when the Line app takes the flow
+    // over and opens the way back somewhere else. Whether things are present,
+    // never what they contain.
+    console.warn(
+      `[line/callback] incomplete return: code=${Boolean(code)} ` +
+        `state=${Boolean(state)} stateCookie=${Boolean(rawState)} ` +
+        `cookiesOnRequest=${cookiesOnRequest} ` +
+        `ua=${request.headers.get("user-agent") ?? "unknown"}`
+    )
     return fail(origin, "เซสชันหมดอายุ กรุณาลองใหม่")
   }
 
@@ -106,6 +123,15 @@ export async function GET(request: Request) {
   if (!result.ok) {
     return fail(origin, result.message)
   }
+
+  // The pair to the warning above. A completed callback followed moments later
+  // by an incomplete one is one browser asking twice — the second arriving
+  // after the first spent the state — rather than a cookie that never existed.
+  // Without this line the two look identical in the log.
+  console.log(
+    `[line/callback] completed: ` +
+      `${"accessToken" in result.body ? "TRUSTED_DEVICE" : result.body.status}`
+  )
 
   const verify = new URL("/login/oauth", origin)
 
