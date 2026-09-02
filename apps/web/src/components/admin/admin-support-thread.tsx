@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Bot, Send } from 'lucide-react';
@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/admin';
 import { useAuthToken } from '@/lib/api/auth/use-auth-token';
 import { useSupportSessionRoom } from '@/lib/use-support-session-room';
+import { getSeenMessageId, markSessionSeen } from '@/lib/support-inbox-seen';
 import { formatDateTime } from '@/lib/format';
 import { ApiError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -126,6 +127,41 @@ export function AdminSupportThread({ sessionId }: { sessionId: string }) {
     },
   });
 
+  // The list is re-fetched after every mutation, so `bridgingMessages` only
+  // ever bridges the gap between "the reply just landed over the socket" and
+  // the next refetch settling — not a second source of truth. Dedupe by id:
+  // a reply this admin just sent lands twice otherwise (once from
+  // `invalidate()`'s refetch, once from the socket echo into the same room
+  // this admin is also joined to), which crashes React on the duplicate key.
+  // Computed with hooks (not inline in the JSX below) so it can run before
+  // the loading/error returns further down, which the mark-as-seen effect
+  // right after needs — hooks can't follow a conditional return.
+  const existingIds = useMemo(
+    () => new Set((data?.messages ?? []).map((message) => message.id)),
+    [data],
+  );
+  const bridgingMessages = useMemo(
+    () => liveMessages.filter((message) => !existingIds.has(message.id)),
+    [liveMessages, existingIds],
+  );
+  const messages = useMemo(
+    () => [...(data?.messages ?? []), ...bridgingMessages],
+    [data, bridgingMessages],
+  );
+
+  // Marks this session "read" the moment its newest message is on screen —
+  // covers both opening a session with unread messages and one more arriving
+  // live while already open. Feeds the sidebar's unread badge (admin/layout.tsx),
+  // which used to count every ESCALATED session regardless of whether an
+  // admin had already seen it, so it never cleared until the case was
+  // resolved outright.
+  useEffect(() => {
+    const latest = messages.at(-1);
+    if (!latest || getSeenMessageId(sessionId) === latest.id) return;
+    markSessionSeen(sessionId, latest.id);
+    void queryClient.invalidateQueries({ queryKey: ['admin-support-sessions'] });
+  }, [messages, sessionId, queryClient]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2">
@@ -145,15 +181,6 @@ export function AdminSupportThread({ sessionId }: { sessionId: string }) {
     );
   }
 
-  // The list is re-fetched after every mutation, so this only ever bridges
-  // the gap between "the reply just landed over the socket" and "the next
-  // refetch settles" — not a second source of truth. Dedupe by id: a reply
-  // this admin just sent lands twice otherwise (once from `invalidate()`'s
-  // refetch, once from the socket echo into the same room this admin is
-  // also joined to), which crashes React on the duplicate key.
-  const seenIds = new Set(data.messages.map((message) => message.id));
-  const bridgingMessages = liveMessages.filter((message) => !seenIds.has(message.id));
-  const messages = [...data.messages, ...bridgingMessages];
   const customerLabel = data.user?.displayName ?? data.user?.email ?? '?';
 
   return (
