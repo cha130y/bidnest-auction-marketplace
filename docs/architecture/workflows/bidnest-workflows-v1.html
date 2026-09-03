@@ -103,6 +103,15 @@
   h1 span { color: var(--accent); }
   .standfirst { max-width: var(--read); font-size: 17px; color: var(--ink-soft); margin: 0; }
 
+  /* language switch */
+  .langs {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em;
+    color: var(--muted); margin: -8px 0 0;
+  }
+  .langs b { color: var(--ink); font-weight: 500; }
+  .langs a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .langs a:hover { border-bottom-color: var(--accent); }
+
   /* legend */
   .legend {
     display: flex; flex-wrap: wrap; gap: 10px 22px;
@@ -270,6 +279,7 @@
   <header class="masthead">
     <div class="eyebrow">System overview &amp; workflows · SRS v7 · 5 devs / 14 days</div>
     <h1>BidNest <span>Blueprints</span></h1>
+    <p class="langs"><b>ภาษาไทย</b> · <a href="bidnest-workflows-v1-en.html" lang="en">English</a></p>
     <p class="standfirst">
       แพลตฟอร์มเดียวที่ทำสองอย่าง — <strong>ประมูลแบบเรียลไทม์</strong> กับ <strong>ร้านค้าซื้อทันที</strong>
       โดยใช้บัญชีผู้ใช้ ตะกร้า การชำระเงิน และการจัดส่งชุดเดียวกัน
@@ -545,7 +555,7 @@
         <line x1="192" y1="155" x2="244" y2="122" class="e"></line>
 
         <path d="M 190 249 L 620 249 L 620 200" class="e dash"></path>
-        <text x="400" y="242" class="t s dim">ตั้งรหัสใหม่ผ่านลิงก์ที่มีอายุ แล้วกลับมาล็อกอิน</text>
+        <text x="405" y="242" text-anchor="middle" class="t s dim">ตั้งรหัสใหม่ผ่านลิงก์ที่มีอายุ แล้วกลับมาล็อกอิน</text>
 
         <rect x="470" y="34" width="176" height="50" rx="3" class="b sunk"></rect>
         <text x="558" y="55" text-anchor="middle" class="t s">เครื่องนี้เคยกดจำไว้?</text>
@@ -637,14 +647,14 @@
 
         <line x1="168" y1="155" x2="232" y2="155" class="e"></line>
         <text x="200" y="146" text-anchor="middle" class="t s">เผยแพร่</text>
-        <text x="200" y="130" text-anchor="middle" class="m dim">ผ่าน validation</text>
+        <text x="200" y="112" text-anchor="middle" class="m dim">ผ่าน validation</text>
 
         <line x1="392" y1="155" x2="462" y2="155" class="e hot"></line>
         <text x="427" y="146" text-anchor="middle" class="t s hot-t">ถึงเวลาเริ่ม</text>
-        <text x="427" y="130" text-anchor="middle" class="m hot-t dim">งานเบื้องหลัง</text>
+        <text x="427" y="112" text-anchor="middle" class="m hot-t dim">งานเบื้องหลัง</text>
 
         <line x1="632" y1="136" x2="738" y2="100" class="e hot"></line>
-        <text x="686" y="106" text-anchor="middle" class="t s hot-t">หมดเวลา · มีบิด</text>
+        <text x="686" y="96" text-anchor="middle" class="t s hot-t">หมดเวลา · มีบิด</text>
 
         <line x1="632" y1="170" x2="738" y2="170" class="e hot"></line>
         <text x="686" y="162" text-anchor="middle" class="t s hot-t">หมดเวลา · ไม่มีบิด</text>
@@ -896,10 +906,10 @@
 
         <line x1="406" y1="176" x2="576" y2="210" class="e"></line>
         <line x1="406" y1="270" x2="576" y2="236" class="e"></line>
-        <text x="492" y="196" text-anchor="middle" class="t s stop-t">แอดมิน + เหตุผล</text>
+        <text x="556" y="186" text-anchor="middle" class="t s stop-t">แอดมิน + เหตุผล</text>
 
         <path d="M 662 192 L 662 120 L 322 120 L 322 136" class="e dash"></path>
-        <text x="500" y="112" text-anchor="middle" class="t s dim">ปลดได้โดยแอดมินเท่านั้น</text>
+        <text x="615" y="112" text-anchor="middle" class="t s dim">ปลดได้โดยแอดมินเท่านั้น</text>
 
         <rect x="580" y="272" width="344" height="46" rx="3" class="b sunk"></rect>
         <text x="752" y="292" text-anchor="middle" class="t s">ระหว่างถูกระงับ ผู้ขายแตะอะไรไม่ได้เลย</text>
@@ -1080,7 +1090,7 @@
         <path d="M 700 126 L 700 163 L 726 163" class="e dash"></path>
         <text x="700" y="216" text-anchor="middle" class="t s dim">ไม่ได้ตั้งคีย์ / เรียกไม่สำเร็จ → ตอบชัดว่าใช้ไม่ได้ ไม่เดาราคาให้</text>
 
-        <text x="98" y="176" text-anchor="middle" class="m dim">POST /auctions/drafts/:id/price-estimate</text>
+        <text x="10" y="176" class="m dim">POST /auctions/drafts/:id/price-estimate</text>
       </svg>
       <figcaption>
         ทุกคำขอถูกบันทึกไว้ในตารางคำขอ AI — ใช้ตรวจย้อนหลังได้ว่าเคยเสนอราคาอะไรไป
@@ -1205,11 +1215,11 @@
       <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="ผังแชทผู้ซื้อผู้ขาย: เปิดห้องได้จากหน้าประมูลหรือหน้าสินค้า เข้าสู่ห้องสนทนาที่ผูกกับรายการนั้น ส่งข้อความแล้วอีกฝ่ายเห็นสดผ่าน WebSocket พร้อมแจ้งเตือนข้อความใหม่ ผู้ขายตั้งข้อความตอบรับอัตโนมัติได้">
         <rect x="10" y="46" width="190" height="56" rx="3" class="b"></rect>
         <text x="105" y="70" text-anchor="middle" class="t b6">จากหน้าประมูล</text>
-        <text x="105" y="88" text-anchor="middle" class="m dim">POST /auctions/:id/conversations</text>
+        <text x="105" y="88" text-anchor="middle" class="m dim">POST …/conversations</text>
 
         <rect x="10" y="136" width="190" height="56" rx="3" class="b"></rect>
         <text x="105" y="160" text-anchor="middle" class="t b6">จากหน้าสินค้า</text>
-        <text x="105" y="178" text-anchor="middle" class="m dim">POST /products/:id/conversations</text>
+        <text x="105" y="178" text-anchor="middle" class="m dim">POST …/conversations</text>
 
         <rect x="272" y="88" width="196" height="62" rx="3" class="b"></rect>
         <text x="370" y="114" text-anchor="middle" class="t b6">ห้องสนทนา</text>
@@ -1218,11 +1228,11 @@
         <line x1="202" y1="82" x2="268" y2="108" class="e"></line>
         <line x1="202" y1="156" x2="268" y2="130" class="e"></line>
 
-        <rect x="540" y="88" width="180" height="62" rx="3" class="b hot"></rect>
+        <rect x="530" y="88" width="200" height="62" rx="3" class="b hot"></rect>
         <text x="630" y="114" text-anchor="middle" class="t b6 hot-t">ส่งข้อความ</text>
         <text x="630" y="133" text-anchor="middle" class="m dim">ws /user · conversation:join</text>
 
-        <line x1="470" y1="119" x2="536" y2="119" class="e"></line>
+        <line x1="470" y1="119" x2="526" y2="119" class="e"></line>
 
         <rect x="778" y="46" width="152" height="56" rx="3" class="b"></rect>
         <text x="854" y="70" text-anchor="middle" class="t b6">อีกฝ่ายเห็นสด</text>
@@ -1232,7 +1242,7 @@
         <text x="854" y="160" text-anchor="middle" class="t b6">ตอบรับอัตโนมัติ</text>
         <text x="854" y="178" text-anchor="middle" class="t s dim">ผู้ขายเปิด/ปิดเองได้</text>
 
-        <path d="M 722 106 L 750 106 L 750 74 L 774 74" class="e"></path>
+        <path d="M 732 106 L 750 106 L 750 74 L 774 74" class="e"></path>
         <path d="M 750 132 L 750 164 L 774 164" class="e dash"></path>
 
         <rect x="272" y="190" width="448" height="46" rx="3" class="b sunk"></rect>
