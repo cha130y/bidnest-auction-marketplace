@@ -1,0 +1,1471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BidNest Blueprints · EN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}svg{display:block}</style>
+</head>
+<body>
+
+<style>
+  :root {
+    --ground: #F1F5F4;
+    --surface: #FFFFFF;
+    --surface-sunk: #E7EEED;
+    --ink: #0F2429;
+    --ink-soft: #375156;
+    --muted: #62797E;
+    --line: #CBD9D8;
+    --line-soft: #DEE8E7;
+    --accent: #0E5F6B;
+    --accent-soft: #DCEDEE;
+    --signal: #A85F16;
+    --signal-soft: #F7E9D8;
+    --good: #2C6A4C;
+    --good-soft: #DCEBE2;
+    --stop: #9A3B33;
+    --stop-soft: #F5E1DF;
+
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "Courier New", monospace;
+
+    --wrap: 1080px;
+    --read: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0B1618;
+      --surface: #122327;
+      --surface-sunk: #0E1D20;
+      --ink: #E3EDEC;
+      --ink-soft: #B6C9C9;
+      --muted: #8AA2A5;
+      --line: #24403F;
+      --line-soft: #1B3234;
+      --accent: #5BBECD;
+      --accent-soft: #14343A;
+      --signal: #E0A25C;
+      --signal-soft: #33261A;
+      --good: #6FBF93;
+      --good-soft: #16301F;
+      --stop: #DE8A80;
+      --stop-soft: #331C1B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0B1618;
+    --surface: #122327;
+    --surface-sunk: #0E1D20;
+    --ink: #E3EDEC;
+    --ink-soft: #B6C9C9;
+    --muted: #8AA2A5;
+    --line: #24403F;
+    --line-soft: #1B3234;
+    --accent: #5BBECD;
+    --accent-soft: #14343A;
+    --signal: #E0A25C;
+    --signal-soft: #33261A;
+    --good: #6FBF93;
+    --good-soft: #16301F;
+    --stop: #DE8A80;
+    --stop-soft: #331C1B;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: var(--wrap); margin: 0 auto; padding: 0 24px 96px; }
+
+  .masthead {
+    display: flex; flex-direction: column; gap: 18px;
+    padding: 60px 0 32px; border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--f-mono); font-size: 12px; font-weight: 500;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    font-weight: 700; font-size: clamp(34px, 6vw, 58px); line-height: 1.06;
+    letter-spacing: -.035em; margin: 0; text-wrap: balance;
+  }
+  h1 span { color: var(--accent); }
+  .standfirst { max-width: var(--read); font-size: 17px; color: var(--ink-soft); margin: 0; }
+
+  /* language switch */
+  .langs {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em;
+    color: var(--muted); margin: -8px 0 0;
+  }
+  .langs b { color: var(--ink); font-weight: 500; }
+  .langs a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .langs a:hover { border-bottom-color: var(--accent); }
+
+  /* legend */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 22px;
+    padding: 16px 20px; margin-top: 4px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink-soft); }
+  .legend-item svg { flex: none; }
+
+  /* toc */
+  .toc {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 2px 20px; padding: 28px 0 8px;
+  }
+  .toc a {
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 5px 0; font-size: 14.5px; color: var(--ink-soft);
+    text-decoration: none; border-bottom: 1px solid transparent;
+  }
+  .toc a:hover { color: var(--accent); border-bottom-color: var(--line); }
+  .toc a .num {
+    font-family: var(--f-mono); font-size: 11.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* sections */
+  .dgm { padding: 52px 0 8px; border-bottom: 1px solid var(--line-soft); scroll-margin-top: 16px; }
+  .dgm:last-of-type { border-bottom: 0; }
+  .dgm-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .dgm-head .kicker {
+    font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .dgm-head h2 {
+    font-weight: 700; font-size: clamp(21px, 2.6vw, 27px); line-height: 1.3;
+    letter-spacing: -.01em; margin: 0; text-wrap: balance;
+  }
+  .dgm-head p { max-width: var(--read); margin: 0; color: var(--ink-soft); font-size: 15.5px; }
+
+  figure {
+    margin: 0; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 22px 18px 14px; overflow-x: auto;
+  }
+  figcaption {
+    margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line-soft);
+    font-size: 13.5px; color: var(--muted); max-width: var(--read);
+  }
+  .paths {
+    display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px;
+    font-family: var(--f-mono); font-size: 12.5px; color: var(--muted);
+  }
+  .paths span { overflow-wrap: anywhere; }
+
+  /* svg diagram language */
+  .dg { display: block; width: 100%; height: auto; color: var(--ink); }
+  .dg .b { fill: var(--surface); stroke: currentColor; stroke-width: 1.5; }
+  .dg .b.hot { stroke: var(--signal); stroke-width: 2.2; }
+  .dg .b.dash { stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .dg .b.sunk { fill: var(--surface-sunk); stroke-width: 1.2; }
+  .dg .e { fill: none; stroke: currentColor; stroke-width: 1.4; marker-end: url(#a); }
+  .dg .e.hot { stroke: var(--signal); stroke-width: 1.6; }
+  .dg .e.dash { stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .dg .e.plain { marker-end: none; }
+  .dg .lane { fill: none; stroke: currentColor; stroke-width: 1; opacity: .2; }
+  .dg text { fill: currentColor; }
+  .dg .t { font-family: var(--f-body); font-size: 12.5px; }
+  .dg .t.b6 { font-weight: 600; font-size: 13px; }
+  .dg .t.s { font-size: 11px; }
+  .dg .m { font-family: var(--f-mono); font-size: 11px; }
+  .dg .dim { opacity: .68; }
+  .dg .hot-t { fill: var(--signal); }
+  .dg .good-t { fill: var(--good); }
+  .dg .stop-t { fill: var(--stop); }
+  .dg .b.good { stroke: var(--good); }
+  .dg .b.stop { stroke: var(--stop); }
+  #markers path { fill: context-stroke; }
+
+  /* cards */
+  .cards {
+    display: grid; gap: 16px; margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+  }
+  .cards.tight { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 18px 0 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .card h3 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.4; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .card-label {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-family: var(--f-mono); font-size: 12px; padding: 4px 10px;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+
+  /* tables */
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); font-weight: 500;
+    border-bottom: 1px solid var(--line);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody td:first-child { white-space: nowrap; }
+  td .pill { margin: 2px 2px 2px 0; }
+  .mono { font-family: var(--f-mono); font-size: .86em; }
+
+  /* state pills */
+  .pill {
+    font-family: var(--f-mono); font-size: 11.5px; font-weight: 500;
+    padding: 2px 8px; border-radius: 2px; white-space: nowrap;
+    border: 1px solid transparent; display: inline-block;
+  }
+  .pill-idle { background: var(--surface-sunk); color: var(--ink-soft); border-color: var(--line); }
+  .pill-live { background: var(--signal-soft); color: var(--signal); border-color: var(--signal); }
+  .pill-good { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+  .pill-stop { background: var(--stop-soft); color: var(--stop); border-color: var(--stop); }
+  .pill-key  { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  .note {
+    background: var(--accent-soft); border-left: 3px solid var(--accent);
+    padding: 14px 18px; border-radius: 0 3px 3px 0; margin-top: 18px;
+  }
+  .note p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  .note b { color: var(--ink); }
+
+  code {
+    font-family: var(--f-mono); font-size: .86em;
+    background: var(--surface-sunk); border: 1px solid var(--line-soft);
+    border-radius: 2px; padding: 1px 5px; overflow-wrap: anywhere;
+  }
+
+  footer {
+    margin-top: 56px; padding-top: 22px; border-top: 2px solid var(--ink);
+    display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: space-between;
+    font-family: var(--f-mono); font-size: 12px; color: var(--muted);
+  }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  @media (max-width: 640px) {
+    .page { padding: 0 16px 72px; }
+    .masthead { padding: 40px 0 28px; }
+  }
+</style>
+
+<svg id="markers" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+    </marker>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">System overview &amp; workflows · SRS v7 · 5 devs / 14 days</div>
+    <h1>BidNest <span>Blueprints</span></h1>
+    <p class="langs"><a href="bidnest-workflows-v1.html" lang="th">ภาษาไทย</a> · <b>English</b></p>
+    <p class="standfirst">
+      One platform doing two things — <strong>real-time auctions</strong> and a <strong>buy-now marketplace</strong> —
+      on one set of accounts, one cart, one checkout and one shipping flow.
+      This page collects the system overview and every per-feature workflow in a single place.
+      Every diagram is drawn from the actual code in <code>apps/api</code> and <code>apps/web</code>, not from the documents alone.
+    </p>
+
+    <div class="chips">
+      <span class="chip">Next.js 16 · App Router</span>
+      <span class="chip">NestJS 11</span>
+      <span class="chip">Prisma 7 + PostgreSQL 17</span>
+      <span class="chip">Socket.IO</span>
+      <span class="chip">Gemini</span>
+      <span class="chip">pnpm monorepo</span>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item">
+        <svg width="38" height="16" viewBox="0 0 38 16" class="dg" aria-hidden="true" style="width:38px">
+          <rect x="1" y="2" width="36" height="12" rx="2" class="b"></rect>
+        </svg>
+        Step / state
+      </span>
+      <span class="legend-item">
+        <svg width="38" height="16" viewBox="0 0 38 16" class="dg" aria-hidden="true" style="width:38px">
+          <rect x="1" y="2" width="36" height="12" rx="2" class="b hot"></rect>
+        </svg>
+        System-driven / real-time
+      </span>
+      <span class="legend-item">
+        <svg width="38" height="16" viewBox="0 0 38 16" class="dg" aria-hidden="true" style="width:38px">
+          <rect x="1" y="2" width="36" height="12" rx="2" class="b dash"></rect>
+        </svg>
+        Alternative / rejected path
+      </span>
+      <span class="legend-item">
+        <svg width="42" height="16" viewBox="0 0 42 16" class="dg" aria-hidden="true" style="width:42px">
+          <line x1="2" y1="8" x2="36" y2="8" class="e"></line>
+        </svg>
+        Sequence
+      </span>
+    </div>
+
+    <nav class="toc" aria-label="Diagram contents">
+      <a href="#stack"><span class="num">··</span> System parts</a>
+      <a href="#overall"><span class="num">00</span> Whole-system overview</a>
+      <a href="#auth"><span class="num">01</span> Sign up / sign in</a>
+      <a href="#auction"><span class="num">02</span> Auction lifecycle</a>
+      <a href="#bid"><span class="num">03</span> Placing a bid</a>
+      <a href="#live"><span class="num">04</span> Live auction room</a>
+      <a href="#watch"><span class="num">05</span> Watchlist + notifications</a>
+      <a href="#product"><span class="num">06</span> Product status</a>
+      <a href="#checkout"><span class="num">07</span> Cart → checkout</a>
+      <a href="#ship"><span class="num">08</span> Shipment</a>
+      <a href="#estimate"><span class="num">09</span> AI price estimate</a>
+      <a href="#offer"><span class="num">10</span> AI negotiation</a>
+      <a href="#support"><span class="num">11</span> Support chat</a>
+      <a href="#chat"><span class="num">12</span> Buyer–seller chat</a>
+      <a href="#admin"><span class="num">13</span> Admin actions</a>
+      <a href="#states"><span class="num">··</span> State reference</a>
+      <a href="#owners"><span class="num">··</span> Who owns what</a>
+    </nav>
+  </header>
+
+  <!-- ===================== CONTEXT / STACK ===================== -->
+  <section class="dgm" id="stack">
+    <div class="dgm-head">
+      <div class="kicker">Before the diagrams — context</div>
+      <h2>What this system does, and what it is made of</h2>
+      <p>
+        One person is both buyer and seller on a single account. The only difference between the two modes
+        is how the price gets decided.
+      </p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Track A — Auction</div>
+        <h3>The price is settled by competing bids</h3>
+        <p>
+          The seller schedules an auction, the system opens and closes it on time, buyers compete in a
+          real-time room, and late bids extend the clock automatically. When time is up, the highest bidder wins.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-label">Track B — Marketplace</div>
+        <h3>The price is set, buy it now</h3>
+        <p>
+          The seller lists an item with stock and a price. Buyers fill one cart from several shops, negotiate
+          with the AI if the seller allows it, then pay once.
+        </p>
+      </div>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 430" class="dg" role="img" aria-label="BidNest system map: the browser talks to Next.js, which calls the NestJS API over REST and WebSocket; the API reads and writes PostgreSQL through Prisma and calls three external services — Gemini, Cloudinary and SMTP">
+        <rect x="20" y="150" width="150" height="86" rx="3" class="b"></rect>
+        <text x="95" y="184" text-anchor="middle" class="t b6">Browser</text>
+        <text x="95" y="205" text-anchor="middle" class="t s dim">buyer · seller · admin</text>
+
+        <rect x="240" y="120" width="180" height="146" rx="3" class="b"></rect>
+        <text x="330" y="150" text-anchor="middle" class="t b6">apps/web</text>
+        <text x="330" y="170" text-anchor="middle" class="m dim">Next.js 16 · :3000</text>
+        <line x1="256" y1="184" x2="404" y2="184" class="lane"></line>
+        <text x="330" y="204" text-anchor="middle" class="m">NextAuth session</text>
+        <text x="330" y="222" text-anchor="middle" class="m">React Query</text>
+        <text x="330" y="240" text-anchor="middle" class="m">socket.io-client</text>
+
+        <rect x="500" y="100" width="190" height="186" rx="3" class="b" stroke-width="2"></rect>
+        <text x="595" y="130" text-anchor="middle" class="t b6">apps/api</text>
+        <text x="595" y="150" text-anchor="middle" class="m dim">NestJS 11 · :4000</text>
+        <line x1="516" y1="164" x2="674" y2="164" class="lane"></line>
+        <text x="595" y="184" text-anchor="middle" class="m">JWT guard + throttler</text>
+        <text x="595" y="202" text-anchor="middle" class="m">24 modules</text>
+        <text x="595" y="220" text-anchor="middle" class="m hot-t">lifecycle tick · 10s</text>
+        <text x="595" y="238" text-anchor="middle" class="m">ws /auctions · /user</text>
+        <text x="595" y="262" text-anchor="middle" class="t s dim">every rule lives here</text>
+
+        <rect x="770" y="150" width="150" height="86" rx="3" class="b"></rect>
+        <text x="845" y="180" text-anchor="middle" class="t b6">PostgreSQL 17</text>
+        <text x="845" y="201" text-anchor="middle" class="m dim">Prisma · 33 models</text>
+
+        <rect x="500" y="330" width="190" height="72" rx="3" class="b dash"></rect>
+        <text x="595" y="356" text-anchor="middle" class="t b6">External services</text>
+        <text x="595" y="378" text-anchor="middle" class="m dim">Gemini · Cloudinary</text>
+        <text x="595" y="394" text-anchor="middle" class="m dim">SMTP (maildev in dev)</text>
+
+        <line x1="172" y1="180" x2="236" y2="180" class="e"></line>
+        <text x="204" y="172" text-anchor="middle" class="m dim">HTTP</text>
+
+        <line x1="422" y1="160" x2="496" y2="160" class="e"></line>
+        <text x="459" y="152" text-anchor="middle" class="m dim">REST + JWT</text>
+
+        <line x1="422" y1="232" x2="496" y2="232" class="e hot" marker-start="url(#a)"></line>
+        <text x="459" y="252" text-anchor="middle" class="m hot-t">WebSocket</text>
+
+        <line x1="692" y1="186" x2="766" y2="186" class="e" marker-start="url(#a)"></line>
+        <text x="729" y="178" text-anchor="middle" class="m dim">SQL</text>
+
+        <line x1="595" y1="290" x2="595" y2="326" class="e"></line>
+      </svg>
+      <figcaption>
+        The browser never talks to the database or an external service directly — everything goes through
+        one API layer. The orange line is the real-time channel that pushes new bid prices back without a page refresh.
+      </figcaption>
+    </figure>
+
+    <div class="cards tight">
+      <div class="card">
+        <div class="card-label">Day to day</div>
+        <p><code>pnpm dev</code> brings up both web (:3000) and api (:4000) together</p>
+      </div>
+      <div class="card">
+        <div class="card-label">Docker deps</div>
+        <p><code>infra/docker/compose.dev.yml</code> — postgres 17 + maildev for reading OTPs</p>
+      </div>
+      <div class="card">
+        <div class="card-label">Before you push</div>
+        <p><code>pnpm check</code> = typecheck both apps + test + lint in one command</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 00 OVERALL ===================== -->
+  <section class="dgm" id="overall">
+    <div class="dgm-head">
+      <div class="kicker">00 — Overall</div>
+      <h2>Whole-system overview: two ways to reach a price, one place to pay</h2>
+      <p>
+        The top row is the auction, the middle row is the buy-now marketplace. They differ only in how the
+        price is reached — once there is a price, both walk exactly the same path.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 470" class="dg" role="img" aria-label="BidNest overview: the auction track has four steps — the seller creates an auction, the system opens it on time, buyers compete, the system closes it and picks a winner. The marketplace track has three steps — the seller lists a product, the buyer searches and negotiates, the buyer adds to cart. Both tracks flow into the same checkout, then on to per-seller orders and shipping until the buyer receives the item">
+        <text x="10" y="28" class="m hot-t">TRACK A · AUCTION</text>
+        <rect x="10" y="42" width="196" height="62" rx="3" class="b"></rect>
+        <text x="108" y="68" text-anchor="middle" class="t b6">Seller creates auction</text>
+        <text x="108" y="88" text-anchor="middle" class="t s dim">draft → validate → publish</text>
+
+        <rect x="252" y="42" width="196" height="62" rx="3" class="b hot"></rect>
+        <text x="350" y="68" text-anchor="middle" class="t b6 hot-t">System opens on time</text>
+        <text x="350" y="88" text-anchor="middle" class="t s dim">background job every 10s</text>
+
+        <rect x="494" y="42" width="196" height="62" rx="3" class="b"></rect>
+        <text x="592" y="68" text-anchor="middle" class="t b6">Buyers compete</text>
+        <text x="592" y="88" text-anchor="middle" class="t s dim">live room + auto-extension</text>
+
+        <rect x="736" y="42" width="196" height="62" rx="3" class="b hot"></rect>
+        <text x="834" y="68" text-anchor="middle" class="t b6 hot-t">System closes it</text>
+        <text x="834" y="88" text-anchor="middle" class="t s dim">picks winner · SOLD / UNSOLD</text>
+
+        <line x1="208" y1="73" x2="248" y2="73" class="e"></line>
+        <line x1="450" y1="73" x2="490" y2="73" class="e"></line>
+        <line x1="692" y1="73" x2="732" y2="73" class="e"></line>
+
+        <text x="10" y="152" class="m dim">TRACK B · MARKETPLACE</text>
+        <rect x="10" y="166" width="196" height="62" rx="3" class="b"></rect>
+        <text x="108" y="192" text-anchor="middle" class="t b6">Seller lists a product</text>
+        <text x="108" y="212" text-anchor="middle" class="t s dim">price + stock + category</text>
+
+        <rect x="252" y="166" width="196" height="62" rx="3" class="b"></rect>
+        <text x="350" y="192" text-anchor="middle" class="t b6">Buyer searches / offers</text>
+        <text x="350" y="212" text-anchor="middle" class="t s dim">filters · AI negotiation</text>
+
+        <rect x="494" y="166" width="196" height="62" rx="3" class="b"></rect>
+        <text x="592" y="192" text-anchor="middle" class="t b6">Add to cart</text>
+        <text x="592" y="212" text-anchor="middle" class="t s dim">several shops, one cart</text>
+
+        <line x1="208" y1="197" x2="248" y2="197" class="e"></line>
+        <line x1="450" y1="197" x2="490" y2="197" class="e"></line>
+
+        <path d="M 834 108 L 834 288 L 300 288 L 300 322" class="e"></path>
+        <path d="M 592 232 L 592 288" class="e plain"></path>
+        <text x="620" y="280" class="t s dim">auction won → go and pay</text>
+
+        <rect x="180" y="326" width="240" height="70" rx="3" class="b hot"></rect>
+        <text x="300" y="352" text-anchor="middle" class="t b6 hot-t">Checkout (simulated)</text>
+        <text x="300" y="372" text-anchor="middle" class="t s dim">charged once · address frozen</text>
+        <text x="300" y="388" text-anchor="middle" class="m dim">POST /orders/checkout</text>
+
+        <rect x="466" y="326" width="212" height="70" rx="3" class="b"></rect>
+        <text x="572" y="352" text-anchor="middle" class="t b6">One order per seller</text>
+        <text x="572" y="372" text-anchor="middle" class="t s dim">stock cut · sellers notified</text>
+
+        <rect x="724" y="326" width="208" height="70" rx="3" class="b"></rect>
+        <text x="828" y="352" text-anchor="middle" class="t b6">Ship → delivered</text>
+        <text x="828" y="372" text-anchor="middle" class="t s dim">seller updates the timeline</text>
+
+        <line x1="422" y1="361" x2="462" y2="361" class="e"></line>
+        <line x1="680" y1="361" x2="720" y2="361" class="e"></line>
+
+        <rect x="466" y="424" width="466" height="34" rx="3" class="b sunk"></rect>
+        <text x="699" y="446" text-anchor="middle" class="t s dim">V1 scope stops here — no refunds or cancellations after payment</text>
+      </svg>
+      <figcaption>
+        The orange boxes are the steps nobody clicks — the system runs them on a timer or from a computed result.
+        Note that the two tracks meet <em>before</em> the checkout box, not after it.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 01 AUTH ===================== -->
+  <section class="dgm" id="auth">
+    <div class="dgm-head">
+      <div class="kicker">01 — Identity</div>
+      <h2>Sign up / sign in: always in two beats</h2>
+      <p>
+        Password or Google/LINE, it makes no difference: the first beat only proves who you are, and the token
+        is issued after the second beat, the OTP — unless the device was ticked as remembered.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 320" class="dg" role="img" aria-label="Sign-in flow: email and password, or Google and LINE, enter identity verification; a remembered device gets tokens straight away, otherwise an OTP is emailed and has to be confirmed before tokens are issued; from there the session runs with token refresh and logout">
+        <rect x="10" y="34" width="180" height="54" rx="3" class="b"></rect>
+        <text x="100" y="58" text-anchor="middle" class="t b6">Email + password</text>
+        <text x="100" y="76" text-anchor="middle" class="m dim">/auth/login</text>
+
+        <rect x="10" y="128" width="180" height="54" rx="3" class="b"></rect>
+        <text x="100" y="152" text-anchor="middle" class="t b6">Google / LINE</text>
+        <text x="100" y="170" text-anchor="middle" class="m dim">/auth/*/callback</text>
+
+        <rect x="10" y="222" width="180" height="54" rx="3" class="b dash"></rect>
+        <text x="100" y="246" text-anchor="middle" class="t b6">Forgot password</text>
+        <text x="100" y="264" text-anchor="middle" class="m dim">/auth/forgot-password</text>
+
+        <rect x="248" y="82" width="176" height="54" rx="3" class="b"></rect>
+        <text x="336" y="106" text-anchor="middle" class="t b6">Verify identity</text>
+        <text x="336" y="124" text-anchor="middle" class="t s dim">bcrypt / provider</text>
+
+        <line x1="192" y1="61" x2="244" y2="97" class="e"></line>
+        <line x1="192" y1="155" x2="244" y2="122" class="e"></line>
+
+        <path d="M 190 249 L 620 249 L 620 200" class="e dash"></path>
+        <text x="405" y="242" text-anchor="middle" class="t s dim">set a new password via a link that expires, then log in as usual</text>
+
+        <rect x="470" y="34" width="176" height="50" rx="3" class="b sunk"></rect>
+        <text x="558" y="55" text-anchor="middle" class="t s">Device remembered?</text>
+        <text x="558" y="73" text-anchor="middle" class="m dim">trusted device</text>
+
+        <line x1="426" y1="100" x2="466" y2="70" class="e"></line>
+
+        <rect x="470" y="112" width="176" height="54" rx="3" class="b hot"></rect>
+        <text x="558" y="136" text-anchor="middle" class="t b6 hot-t">Email an OTP</text>
+        <text x="558" y="154" text-anchor="middle" class="t s dim">awaiting 2FA · no token yet</text>
+
+        <line x1="426" y1="115" x2="466" y2="132" class="e"></line>
+        <text x="452" y="182" text-anchor="middle" class="t s dim">no</text>
+
+        <rect x="698" y="112" width="176" height="54" rx="3" class="b"></rect>
+        <text x="786" y="136" text-anchor="middle" class="t b6">Confirm OTP</text>
+        <text x="786" y="154" text-anchor="middle" class="m dim">/auth/2fa/verify</text>
+
+        <line x1="648" y1="139" x2="694" y2="139" class="e"></line>
+
+        <rect x="698" y="34" width="176" height="54" rx="3" class="b good"></rect>
+        <text x="786" y="58" text-anchor="middle" class="t b6 good-t">Issue tokens</text>
+        <text x="786" y="76" text-anchor="middle" class="t s dim">access + refresh</text>
+
+        <line x1="648" y1="59" x2="694" y2="59" class="e"></line>
+        <text x="670" y="50" text-anchor="middle" class="t s dim">yes</text>
+        <path d="M 786 108 L 786 92" class="e"></path>
+
+        <rect x="698" y="214" width="176" height="62" rx="3" class="b"></rect>
+        <text x="786" y="238" text-anchor="middle" class="t b6">Signed in</text>
+        <text x="786" y="256" text-anchor="middle" class="t s dim">refresh / logout</text>
+        <text x="786" y="270" text-anchor="middle" class="m dim">JWT guard, every request</text>
+
+        <path d="M 874 88 L 900 88 L 900 245 L 878 245" class="e"></path>
+      </svg>
+      <figcaption>
+        The forgot-password path (dashed) does not issue tokens by itself — after setting a new password you
+        still walk through the normal login, OTP included.
+      </figcaption>
+      <div class="paths">
+        <span>POST /auth/register</span><span>/auth/login</span><span>/auth/2fa/verify</span>
+        <span>/auth/2fa/resend</span><span>/auth/refresh</span><span>/auth/logout</span>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ===================== 02 AUCTION ===================== -->
+  <section class="dgm" id="auction">
+    <div class="dgm-head">
+      <div class="kicker">02 — Auction lifecycle</div>
+      <h2>Auction lifecycle: the seller presses two buttons, the clock does the rest</h2>
+      <p>
+        The only buttons the seller presses are “publish” and “cancel”. Opening the auction at its start time,
+        and closing it with a winner when time is up, are background work that sweeps every 10 seconds.
+        While it is still <code>ACTIVE</code>, the end time can keep moving out from late bids.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 336" class="dg" role="img" aria-label="Auction state chart: DRAFT goes to SCHEDULED on a validated publish, SCHEDULED goes to ACTIVE at the start time, ACTIVE can extend its own end time when a bid lands in the last two minutes, then ends as SOLD if there were bids or UNSOLD if there were none; CANCELLED comes from the seller or an admin for as long as it has not closed">
+        <path d="M 500 116 C 490 66, 606 66, 596 116" class="e hot"></path>
+        <text x="548" y="54" text-anchor="middle" class="t hot-t" style="font-weight:600">a bid in the last 2 minutes → 2 more minutes</text>
+        <text x="548" y="36" text-anchor="middle" class="m hot-t dim">up to 5 times · each one recorded</text>
+
+        <rect x="16" y="126" width="150" height="58" rx="3" class="b"></rect>
+        <text x="91" y="152" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">DRAFT</text>
+        <text x="91" y="170" text-anchor="middle" class="t s dim">everything editable</text>
+
+        <rect x="236" y="126" width="154" height="58" rx="3" class="b"></rect>
+        <text x="313" y="152" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">SCHEDULED</text>
+        <text x="313" y="170" text-anchor="middle" class="t s dim">timed, not open yet</text>
+
+        <rect x="466" y="118" width="164" height="74" rx="3" class="b hot"></rect>
+        <text x="548" y="144" text-anchor="middle" class="m hot-t" style="font-weight:600;font-size:13px">ACTIVE</text>
+        <text x="548" y="162" text-anchor="middle" class="t s dim">taking bids · room open</text>
+        <text x="548" y="178" text-anchor="middle" class="t s dim">end time can move</text>
+
+        <rect x="742" y="66" width="182" height="54" rx="3" class="b good"></rect>
+        <text x="833" y="90" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">SOLD</text>
+        <text x="833" y="108" text-anchor="middle" class="t s dim">has a winner → checkout</text>
+
+        <rect x="742" y="140" width="182" height="54" rx="3" class="b"></rect>
+        <text x="833" y="164" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">UNSOLD</text>
+        <text x="833" y="182" text-anchor="middle" class="t s dim">nobody bid</text>
+
+        <rect x="742" y="240" width="182" height="54" rx="3" class="b stop dash"></rect>
+        <text x="833" y="264" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">CANCELLED</text>
+        <text x="833" y="282" text-anchor="middle" class="t s dim">seller / admin + reason</text>
+
+        <line x1="168" y1="155" x2="232" y2="155" class="e"></line>
+        <text x="200" y="146" text-anchor="middle" class="t s">publish</text>
+        <text x="200" y="112" text-anchor="middle" class="m dim">validation passed</text>
+
+        <line x1="392" y1="155" x2="462" y2="155" class="e hot"></line>
+        <text x="427" y="146" text-anchor="middle" class="t s hot-t">start time hits</text>
+        <text x="427" y="112" text-anchor="middle" class="m hot-t dim">background job</text>
+
+        <line x1="632" y1="136" x2="738" y2="100" class="e hot"></line>
+        <text x="686" y="96" text-anchor="middle" class="t s hot-t">time up · had bids</text>
+
+        <line x1="632" y1="170" x2="738" y2="170" class="e hot"></line>
+        <text x="686" y="162" text-anchor="middle" class="t s hot-t">time up · no bids</text>
+
+        <path d="M 313 188 L 313 266 L 738 266" class="e dash"></path>
+        <path d="M 548 196 L 548 266" class="e dash plain"></path>
+        <text x="470" y="286" text-anchor="middle" class="t s dim">can be cancelled until it closes · every bidder is notified</text>
+      </svg>
+      <figcaption>
+        SOLD / UNSOLD / CANCELLED are terminal, with no way back — a finished auction never reopens.
+        You have to create a new listing.
+      </figcaption>
+      <div class="paths">
+        <span>POST /auctions/drafts</span><span>GET drafts/:id/validation</span>
+        <span>POST drafts/:id/publish</span><span>POST /auctions/:id/cancel</span>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ===================== 03 BID ===================== -->
+  <section class="dgm" id="bid">
+    <div class="dgm-head">
+      <div class="kicker">03 — Place a bid</div>
+      <h2>Placing a bid: check everything, write once, announce afterwards</h2>
+      <p>
+        Every check and the write itself live in one transaction, and the broadcast to the room always happens
+        after the commit — because a price that has been announced cannot be taken back.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 340" class="dg" role="img" aria-label="Bid flow: the buyer places a bid and it passes checks that the auction is still open, that the amount clears the minimum and that it is not a duplicate; failures are rejected or return the earlier result; on success the bid and the extension are written in one transaction, and only after the commit is the new price broadcast to the room and the outbid leader notified">
+        <rect x="10" y="126" width="150" height="58" rx="3" class="b"></rect>
+        <text x="85" y="152" text-anchor="middle" class="t b6">Buyer bids</text>
+        <text x="85" y="170" text-anchor="middle" class="m dim">POST …/bids</text>
+
+        <rect x="204" y="118" width="196" height="74" rx="3" class="b"></rect>
+        <text x="302" y="142" text-anchor="middle" class="t b6">Checks</text>
+        <text x="302" y="160" text-anchor="middle" class="t s dim">auction still open?</text>
+        <text x="302" y="176" text-anchor="middle" class="t s dim">amount clears minimum?</text>
+
+        <line x1="162" y1="155" x2="200" y2="155" class="e"></line>
+
+        <rect x="204" y="240" width="196" height="58" rx="3" class="b dash stop"></rect>
+        <text x="302" y="264" text-anchor="middle" class="t b6 stop-t">Rejected, with a reason</text>
+        <text x="302" y="282" text-anchor="middle" class="t s dim">closed / amount too low</text>
+        <path d="M 302 196 L 302 236" class="e dash"></path>
+
+        <rect x="444" y="118" width="200" height="74" rx="3" class="b"></rect>
+        <text x="544" y="142" text-anchor="middle" class="t b6">Write in a transaction</text>
+        <text x="544" y="160" text-anchor="middle" class="t s dim">save bid + current price</text>
+        <text x="544" y="176" text-anchor="middle" class="t s dim">settle the extension too</text>
+
+        <line x1="402" y1="155" x2="440" y2="155" class="e"></line>
+
+        <rect x="444" y="30" width="200" height="56" rx="3" class="b sunk"></rect>
+        <text x="544" y="53" text-anchor="middle" class="t s">Duplicate from a double tap?</text>
+        <text x="544" y="72" text-anchor="middle" class="t s dim">→ returns the first result</text>
+        <path d="M 544 114 L 544 90" class="e"></path>
+
+        <rect x="688" y="86" width="240" height="58" rx="3" class="b hot"></rect>
+        <text x="808" y="110" text-anchor="middle" class="t b6 hot-t">Broadcast to the room</text>
+        <text x="808" y="128" text-anchor="middle" class="m dim">ws /auctions · price + extension</text>
+
+        <rect x="688" y="166" width="240" height="58" rx="3" class="b hot"></rect>
+        <text x="808" y="190" text-anchor="middle" class="t b6 hot-t">Notify whoever lost the lead</text>
+        <text x="808" y="208" text-anchor="middle" class="m dim">ws /user · OUTBID</text>
+
+        <path d="M 646 145 L 668 145 L 668 115 L 684 115" class="e"></path>
+        <path d="M 668 145 L 668 195 L 684 195" class="e"></path>
+        <text x="666" y="252" text-anchor="middle" class="t s dim">both of these happen only after the commit</text>
+      </svg>
+      <figcaption>
+        A bid retried after a dropped connection does not become two bids — the system returns the result of
+        the original one. The extension is settled before the write, so the new end time ships with the same broadcast.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 04 LIVE ===================== -->
+  <section class="dgm" id="live">
+    <div class="dgm-head">
+      <div class="kicker">04 — Live arena</div>
+      <h2>Live auction room: lobby → arena → closing window → result</h2>
+      <p>
+        Everything on screen — the leader, the time left, the urgency — is computed on the server side,
+        with the same rules that decide the real winner.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 300" class="dg" role="img" aria-label="Live auction room: the lobby shows who is waiting, joining moves you into the arena with the current price, the leader and a countdown; inside the last two minutes it becomes the closing window where a bid stretches the clock; when time runs out the system closes it and shows the result page">
+        <rect x="10" y="110" width="190" height="66" rx="3" class="b"></rect>
+        <text x="105" y="136" text-anchor="middle" class="t b6">Lobby</text>
+        <text x="105" y="154" text-anchor="middle" class="t s dim">who is waiting · start time</text>
+        <text x="105" y="169" text-anchor="middle" class="m dim">GET …/lobby</text>
+
+        <rect x="256" y="110" width="200" height="66" rx="3" class="b"></rect>
+        <text x="356" y="136" text-anchor="middle" class="t b6">Arena</text>
+        <text x="356" y="154" text-anchor="middle" class="t s dim">price · leader · latest bid</text>
+        <text x="356" y="169" text-anchor="middle" class="m dim">GET …/arena</text>
+
+        <line x1="202" y1="143" x2="252" y2="143" class="e"></line>
+        <text x="227" y="134" text-anchor="middle" class="t s dim">join</text>
+
+        <rect x="512" y="102" width="200" height="82" rx="3" class="b hot"></rect>
+        <text x="612" y="128" text-anchor="middle" class="t b6 hot-t">Closing window</text>
+        <text x="612" y="146" text-anchor="middle" class="t s dim">≤ 2 minutes left</text>
+        <text x="612" y="162" text-anchor="middle" class="t s dim">one bid = more time</text>
+        <text x="612" y="177" text-anchor="middle" class="m dim">extensions left are shown</text>
+
+        <line x1="458" y1="143" x2="508" y2="143" class="e hot"></line>
+
+        <rect x="768" y="110" width="164" height="66" rx="3" class="b good"></rect>
+        <text x="850" y="136" text-anchor="middle" class="t b6 good-t">Result page</text>
+        <text x="850" y="154" text-anchor="middle" class="t s dim">winner + closing price</text>
+        <text x="850" y="169" text-anchor="middle" class="m dim">/auctions/[id]/result</text>
+
+        <line x1="714" y1="143" x2="764" y2="143" class="e hot"></line>
+        <text x="739" y="134" text-anchor="middle" class="t s hot-t">time up</text>
+
+        <path d="M 612 90 C 600 46, 700 46, 690 90" class="e hot"></path>
+        <text x="660" y="36" text-anchor="middle" class="t s hot-t">every bid in here pushes the clock out</text>
+
+        <rect x="256" y="216" width="456" height="46" rx="3" class="b sunk"></rect>
+        <text x="484" y="236" text-anchor="middle" class="t s">the leader on screen is whoever would win if time ran out now</text>
+        <text x="484" y="253" text-anchor="middle" class="t s dim">highest amount first, ties go to the earlier bid — same test used at close</text>
+        <path d="M 356 180 L 356 212" class="e dash"></path>
+        <path d="M 612 188 L 612 212" class="e dash"></path>
+      </svg>
+      <figcaption>
+        The closing window is not a new screen — it is a state of the same arena, and the server is the one
+        that says whether you are in it. The page never has to run its own clock.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 05 WATCH + NOTIFY ===================== -->
+  <section class="dgm" id="watch">
+    <div class="dgm-head">
+      <div class="kicker">05 — Watchlist &amp; notifications</div>
+      <h2>Watchlist and notifications: one event, two destinations</h2>
+      <p>
+        Every notification is written to the database first and only then pushed over WebSocket — so someone
+        who had the tab closed still sees it afterwards, rather than a message that vanished with the connection.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 320" class="dg" role="img" aria-label="Notification flow: eight kinds of event from auctions, orders and chat are written as a notification row in the database, then fan out two ways — pushed live over WebSocket into the user's private room, and kept for later reading on the notifications page. The watchlist is the aid that keeps users from missing auctions they care about">
+        <rect x="10" y="34" width="228" height="106" rx="3" class="b"></rect>
+        <text x="124" y="58" text-anchor="middle" class="t b6">Auction-side events</text>
+        <text x="124" y="79" text-anchor="middle" class="m dim">OUTBID · AUCTION_WON</text>
+        <text x="124" y="97" text-anchor="middle" class="m dim">AUCTION_ENDED</text>
+        <text x="124" y="115" text-anchor="middle" class="m dim">AUCTION_CANCELLED</text>
+        <text x="124" y="132" text-anchor="middle" class="t s dim">Dev 4</text>
+
+        <rect x="10" y="158" width="228" height="106" rx="3" class="b"></rect>
+        <text x="124" y="182" text-anchor="middle" class="t b6">Commerce-side events</text>
+        <text x="124" y="203" text-anchor="middle" class="m dim">ORDER_PLACED</text>
+        <text x="124" y="221" text-anchor="middle" class="m dim">SHIPMENT_UPDATE · DELIVERED</text>
+        <text x="124" y="239" text-anchor="middle" class="m dim">NEW_MESSAGE</text>
+        <text x="124" y="256" text-anchor="middle" class="t s dim">Dev 3</text>
+
+        <rect x="322" y="112" width="220" height="76" rx="3" class="b"></rect>
+        <text x="432" y="138" text-anchor="middle" class="t b6">Write a notification row</text>
+        <text x="432" y="156" text-anchor="middle" class="t s dim">bound to a recipient + a link</text>
+        <text x="432" y="174" text-anchor="middle" class="m dim">table notifications</text>
+
+        <line x1="240" y1="98" x2="318" y2="135" class="e"></line>
+        <line x1="240" y1="200" x2="318" y2="166" class="e"></line>
+
+        <rect x="646" y="70" width="284" height="62" rx="3" class="b hot"></rect>
+        <text x="788" y="94" text-anchor="middle" class="t b6 hot-t">Push into the private room</text>
+        <text x="788" y="112" text-anchor="middle" class="m dim">ws /user · the bell rings at once</text>
+
+        <rect x="646" y="168" width="284" height="62" rx="3" class="b"></rect>
+        <text x="788" y="192" text-anchor="middle" class="t b6">Kept for reading later</text>
+        <text x="788" y="210" text-anchor="middle" class="m dim">GET /notifications · mark as read</text>
+
+        <path d="M 544 140 L 600 140 L 600 100 L 642 100" class="e hot"></path>
+        <path d="M 600 140 L 600 198 L 642 198" class="e"></path>
+
+        <rect x="322" y="234" width="220" height="62" rx="3" class="b sunk"></rect>
+        <text x="432" y="258" text-anchor="middle" class="t b6">Watchlist</text>
+        <text x="432" y="276" text-anchor="middle" class="t s dim">hearted = told before it closes</text>
+        <path d="M 432 192 L 432 230" class="e dash"></path>
+      </svg>
+      <figcaption>
+        The live push and the history you scroll back through are the same row — there is no way for the bell
+        to ring and then for the list to have nothing in it.
+      </figcaption>
+      <div class="paths">
+        <span>POST /auctions/:id/watchlist</span><span>GET /watchlist</span>
+        <span>POST /products/:id/watchlist</span><span>GET /notifications</span>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ===================== 06 PRODUCT ===================== -->
+  <section class="dgm" id="product">
+    <div class="dgm-head">
+      <div class="kicker">06 — Product status</div>
+      <h2>Product status: a seller pausing a listing and an admin suspending it are separate states</h2>
+      <p>
+        Sellers can pause their own listings whenever they like, and running out of stock flips the status
+        automatically. But a product an admin suspends lands in a different state that the seller cannot lift —
+        and cannot dodge by deleting the listing and posting it again either (ADR-0002).
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 340" class="dg" role="img" aria-label="Product state chart: listing it makes it ACTIVE; the seller can toggle to INACTIVE and back; zero stock flips it to OUT_OF_STOCK automatically and back when restocked; the seller can delete from ACTIVE or INACTIVE into REMOVED; an admin can SUSPEND from any state that is still on sale, and only an admin can lift it">
+        <rect x="14" y="140" width="150" height="52" rx="3" class="b sunk"></rect>
+        <text x="89" y="163" text-anchor="middle" class="t b6">List it</text>
+        <text x="89" y="181" text-anchor="middle" class="m dim">POST /products</text>
+
+        <rect x="240" y="140" width="164" height="52" rx="3" class="b good"></rect>
+        <text x="322" y="163" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">ACTIVE</text>
+        <text x="322" y="181" text-anchor="middle" class="t s dim">buyable</text>
+
+        <line x1="166" y1="166" x2="236" y2="166" class="e"></line>
+
+        <rect x="240" y="36" width="164" height="52" rx="3" class="b"></rect>
+        <text x="322" y="59" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">INACTIVE</text>
+        <text x="322" y="77" text-anchor="middle" class="t s dim">seller paused it</text>
+
+        <path d="M 302 136 L 302 92" class="e"></path>
+        <path d="M 342 92 L 342 136" class="e"></path>
+        <text x="416" y="116" text-anchor="middle" class="t s dim">seller toggles both ways</text>
+
+        <rect x="240" y="244" width="164" height="52" rx="3" class="b hot"></rect>
+        <text x="322" y="267" text-anchor="middle" class="m hot-t" style="font-weight:600;font-size:13px">OUT_OF_STOCK</text>
+        <text x="322" y="285" text-anchor="middle" class="t s dim">stock = 0</text>
+
+        <path d="M 302 196 L 302 240" class="e hot"></path>
+        <path d="M 342 240 L 342 196" class="e hot"></path>
+        <text x="428" y="228" text-anchor="middle" class="t s hot-t">the system flips it on stock</text>
+
+        <rect x="580" y="36" width="164" height="52" rx="3" class="b dash"></rect>
+        <text x="662" y="59" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">REMOVED</text>
+        <text x="662" y="77" text-anchor="middle" class="t s dim">soft delete, history kept</text>
+
+        <line x1="406" y1="58" x2="576" y2="58" class="e"></line>
+        <line x1="406" y1="158" x2="576" y2="74" class="e"></line>
+
+        <rect x="580" y="196" width="164" height="52" rx="3" class="b stop"></rect>
+        <text x="662" y="219" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">SUSPENDED</text>
+        <text x="662" y="237" text-anchor="middle" class="t s dim">admin suspended it</text>
+
+        <line x1="406" y1="176" x2="576" y2="210" class="e"></line>
+        <line x1="406" y1="270" x2="576" y2="236" class="e"></line>
+        <text x="556" y="186" text-anchor="middle" class="t s stop-t">admin + reason</text>
+
+        <path d="M 662 192 L 662 120 L 322 120 L 322 136" class="e dash"></path>
+        <text x="615" y="112" text-anchor="middle" class="t s dim">only an admin can lift it</text>
+
+        <rect x="580" y="272" width="344" height="46" rx="3" class="b sunk"></rect>
+        <text x="752" y="292" text-anchor="middle" class="t s">while suspended the seller cannot touch it at all</text>
+        <text x="752" y="309" text-anchor="middle" class="t s dim">delete included — otherwise it is a way back onto sale</text>
+      </svg>
+      <figcaption>
+        Taking a listing off sale does not cancel orders that were already paid for — it only blocks new ones.
+        <code>REMOVED</code> is a soft delete, so old orders can still point at the product.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 07 CHECKOUT ===================== -->
+  <section class="dgm" id="checkout">
+    <div class="dgm-head">
+      <div class="kicker">07 — Cart &amp; checkout</div>
+      <h2>Cart → checkout: pay once, one order per seller</h2>
+      <p>
+        Prices are recomputed when you press pay rather than trusting the numbers sitting in the cart, and the
+        payment record is written separately from the orders, so money that has moved always leaves a trace.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 360" class="dg" role="img" aria-label="Checkout flow: a cart from two shops and an auction win enter the same checkout, which reprices, charges the simulated payment and writes the payment record first, then opens one transaction that writes an order per seller, cuts stock, freezes the shipping address and clears only the lines actually paid for; sellers are notified after the commit">
+        <rect x="10" y="40" width="176" height="72" rx="3" class="b"></rect>
+        <text x="98" y="66" text-anchor="middle" class="t b6">Cart</text>
+        <text x="98" y="86" text-anchor="middle" class="m dim">Shop A × 2</text>
+        <text x="98" y="103" text-anchor="middle" class="m dim">Shop B × 1</text>
+
+        <rect x="10" y="164" width="176" height="62" rx="3" class="b"></rect>
+        <text x="98" y="190" text-anchor="middle" class="t b6">Auction won</text>
+        <text x="98" y="209" text-anchor="middle" class="m dim">1 item · Shop C</text>
+
+        <rect x="248" y="72" width="192" height="122" rx="3" class="b hot"></rect>
+        <text x="344" y="98" text-anchor="middle" class="t b6 hot-t">checkout</text>
+        <text x="344" y="120" text-anchor="middle" class="t s dim">1 · reprice from the source</text>
+        <text x="344" y="140" text-anchor="middle" class="t s dim">2 · charge once (simulated)</text>
+        <text x="344" y="160" text-anchor="middle" class="t s dim">3 · write the payment record</text>
+        <text x="344" y="180" text-anchor="middle" class="m dim">POST /orders/checkout</text>
+
+        <line x1="188" y1="80" x2="244" y2="108" class="e"></line>
+        <line x1="188" y1="192" x2="244" y2="160" class="e"></line>
+
+        <rect x="248" y="238" width="192" height="58" rx="3" class="b dash stop"></rect>
+        <text x="344" y="262" text-anchor="middle" class="t b6 stop-t">Charge failed</text>
+        <text x="344" y="280" text-anchor="middle" class="t s dim">no orders · cart untouched</text>
+        <path d="M 344 198 L 344 234" class="e dash"></path>
+
+        <rect x="500" y="52" width="212" height="142" rx="3" class="b"></rect>
+        <text x="606" y="78" text-anchor="middle" class="t b6">One transaction</text>
+        <text x="606" y="100" text-anchor="middle" class="t s dim">write one order per seller</text>
+        <text x="606" y="120" text-anchor="middle" class="t s dim">cut product stock</text>
+        <text x="606" y="140" text-anchor="middle" class="t s dim">freeze the shipping address</text>
+        <text x="606" y="160" text-anchor="middle" class="t s dim">clear only the lines paid for</text>
+        <text x="606" y="181" text-anchor="middle" class="m dim">any failure rolls the lot back</text>
+
+        <line x1="442" y1="126" x2="496" y2="126" class="e"></line>
+
+        <rect x="772" y="52" width="158" height="52" rx="3" class="b good"></rect>
+        <text x="851" y="75" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:12.5px">Order · Shop A</text>
+        <text x="851" y="93" text-anchor="middle" class="m dim">PAID</text>
+
+        <rect x="772" y="116" width="158" height="52" rx="3" class="b good"></rect>
+        <text x="851" y="139" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:12.5px">Order · Shop B</text>
+        <text x="851" y="157" text-anchor="middle" class="m dim">PAID</text>
+
+        <rect x="772" y="180" width="158" height="52" rx="3" class="b good"></rect>
+        <text x="851" y="203" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:12.5px">Order · Shop C</text>
+        <text x="851" y="221" text-anchor="middle" class="m dim">PAID</text>
+
+        <line x1="714" y1="100" x2="768" y2="78" class="e"></line>
+        <line x1="714" y1="126" x2="768" y2="142" class="e"></line>
+        <line x1="714" y1="152" x2="768" y2="200" class="e"></line>
+
+        <rect x="500" y="272" width="430" height="52" rx="3" class="b hot"></rect>
+        <text x="715" y="295" text-anchor="middle" class="t b6 hot-t">Sellers notified after the commit</text>
+        <text x="715" y="313" text-anchor="middle" class="t s dim">ORDER_PLACED · plus the seller’s auto-reply if they turned it on</text>
+        <path d="M 606 200 L 606 268" class="e hot"></path>
+      </svg>
+      <figcaption>
+        The payment record is always written <em>before</em> the orders, because if the money moved and the
+        orders failed there still has to be something to trace it with. Notifications go out after the commit,
+        so nobody is ever told about an order that does not exist.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 08 SHIPMENT ===================== -->
+  <section class="dgm" id="ship">
+    <div class="dgm-head">
+      <div class="kicker">08 — Shipment</div>
+      <h2>Shipment: forward only, cancellable only before it leaves the shop</h2>
+      <p>
+        The seller moves it one step at a time — no skipping, no going back. Every move is written as an event
+        on the timeline the buyer sees, along with a notification.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="Shipment state chart: PROCESSING to SHIPPED to IN_TRANSIT to DELIVERED, forward only, and only PROCESSING can go to CANCELLED; DELIVERED and CANCELLED are both terminal">
+        <rect x="16" y="80" width="176" height="58" rx="3" class="b"></rect>
+        <text x="104" y="106" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">PROCESSING</text>
+        <text x="104" y="124" text-anchor="middle" class="t s dim">order in, being prepared</text>
+
+        <rect x="252" y="80" width="176" height="58" rx="3" class="b"></rect>
+        <text x="340" y="106" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">SHIPPED</text>
+        <text x="340" y="124" text-anchor="middle" class="t s dim">left the shop</text>
+
+        <rect x="488" y="80" width="176" height="58" rx="3" class="b"></rect>
+        <text x="576" y="106" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">IN_TRANSIT</text>
+        <text x="576" y="124" text-anchor="middle" class="t s dim">with the carrier</text>
+
+        <rect x="724" y="80" width="200" height="58" rx="3" class="b good"></rect>
+        <text x="824" y="106" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">DELIVERED</text>
+        <text x="824" y="124" text-anchor="middle" class="t s dim">terminal · story over</text>
+
+        <line x1="194" y1="109" x2="248" y2="109" class="e"></line>
+        <line x1="430" y1="109" x2="484" y2="109" class="e"></line>
+        <line x1="666" y1="109" x2="720" y2="109" class="e"></line>
+
+        <rect x="16" y="190" width="176" height="54" rx="3" class="b stop dash"></rect>
+        <text x="104" y="214" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">CANCELLED</text>
+        <text x="104" y="232" text-anchor="middle" class="t s dim">terminal as well</text>
+        <path d="M 104 142 L 104 186" class="e dash"></path>
+        <text x="230" y="170" text-anchor="middle" class="t s dim">cancel only before it ships</text>
+
+        <rect x="488" y="184" width="436" height="60" rx="3" class="b sunk"></rect>
+        <text x="706" y="206" text-anchor="middle" class="t s">every move = a timeline event + a notification to the buyer</text>
+        <text x="706" y="226" text-anchor="middle" class="m dim">SHIPMENT_UPDATE · DELIVERED</text>
+        <text x="706" y="240" text-anchor="middle" class="m dim">PATCH /orders/:id/shipment</text>
+        <path d="M 576 142 L 576 180" class="e dash"></path>
+      </svg>
+      <figcaption>
+        The allowed transitions live in one table in the code, so the seller's screen only shows the buttons
+        that actually work from the current state — rather than every button and a rejection afterwards.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 09 AI ESTIMATE ===================== -->
+  <section class="dgm" id="estimate">
+    <div class="dgm-head">
+      <div class="kicker">09 — AI price estimate</div>
+      <h2>AI price estimate: a suggestion, not the price itself</h2>
+      <p>
+        It only runs against your own auction draft, and what comes back is a number to consider —
+        the seller is still the one who types the starting price.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 250" class="dg" role="img" aria-label="AI price estimate flow: the seller asks for an estimate from a draft, the system assembles the title, description, condition, category and photos into a prompt and sends it to Gemini with a timeout and limited retries, and a suggested price range comes back for the seller to decide on; if the call fails it answers that the feature is unavailable and the draft is left intact">
+        <rect x="10" y="82" width="176" height="62" rx="3" class="b"></rect>
+        <text x="98" y="108" text-anchor="middle" class="t b6">Auction draft</text>
+        <text x="98" y="127" text-anchor="middle" class="t s dim">that seller's own only</text>
+
+        <rect x="242" y="74" width="192" height="78" rx="3" class="b"></rect>
+        <text x="338" y="100" text-anchor="middle" class="t b6">Assemble the prompt</text>
+        <text x="338" y="120" text-anchor="middle" class="t s dim">title · condition</text>
+        <text x="338" y="137" text-anchor="middle" class="t s dim">category · photos</text>
+
+        <line x1="188" y1="113" x2="238" y2="113" class="e"></line>
+
+        <rect x="490" y="74" width="184" height="78" rx="3" class="b hot"></rect>
+        <text x="582" y="100" text-anchor="middle" class="t b6 hot-t">Gemini</text>
+        <text x="582" y="119" text-anchor="middle" class="t s dim">has its own timeout</text>
+        <text x="582" y="136" text-anchor="middle" class="t s dim">retries are capped</text>
+
+        <line x1="436" y1="113" x2="486" y2="113" class="e"></line>
+
+        <rect x="730" y="42" width="200" height="62" rx="3" class="b good"></rect>
+        <text x="830" y="68" text-anchor="middle" class="t b6 good-t">Suggested range</text>
+        <text x="830" y="87" text-anchor="middle" class="t s dim">the seller decides from here</text>
+
+        <rect x="730" y="132" width="200" height="62" rx="3" class="b dash stop"></rect>
+        <text x="830" y="158" text-anchor="middle" class="t b6 stop-t">Temporarily unavailable</text>
+        <text x="830" y="177" text-anchor="middle" class="t s dim">draft intact, fill it in by hand</text>
+
+        <path d="M 676 100 L 700 100 L 700 73 L 726 73" class="e"></path>
+        <path d="M 700 126 L 700 163 L 726 163" class="e dash"></path>
+        <text x="700" y="216" text-anchor="middle" class="t s dim">no key / call failed → says so plainly, never guesses a price</text>
+
+        <text x="10" y="176" class="m dim">POST /auctions/drafts/:id/price-estimate</text>
+      </svg>
+      <figcaption>
+        Every request is logged in the AI-request table — you can check afterwards what was suggested,
+        and it doubles as the built-in usage cap.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 10 AI OFFER ===================== -->
+  <section class="dgm" id="offer">
+    <div class="dgm-head">
+      <div class="kicker">10 — AI negotiation</div>
+      <h2>AI negotiation: judged against the floor price the seller set</h2>
+      <p>
+        The seller records the lowest price they will accept on the product, and the AI has no authority to go
+        below it — which leaves exactly three possible outcomes.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="AI negotiation flow: the buyer makes an offer and the system compares it with the floor price the seller set — at or above the floor it is accepted, a little below it comes back as a counter-offer, too low or negotiation turned off means rejected; every outcome is recorded">
+        <rect x="10" y="98" width="180" height="62" rx="3" class="b"></rect>
+        <text x="100" y="124" text-anchor="middle" class="t b6">Buyer makes an offer</text>
+        <text x="100" y="143" text-anchor="middle" class="m dim">POST /products/:id/offers</text>
+
+        <rect x="252" y="90" width="204" height="78" rx="3" class="b hot"></rect>
+        <text x="354" y="116" text-anchor="middle" class="t b6 hot-t">Compare with the floor</text>
+        <text x="354" y="135" text-anchor="middle" class="t s dim">lowest price the seller accepts</text>
+        <text x="354" y="152" text-anchor="middle" class="t s dim">set when listing the product</text>
+
+        <line x1="192" y1="129" x2="248" y2="129" class="e"></line>
+
+        <rect x="530" y="18" width="230" height="56" rx="3" class="b good"></rect>
+        <text x="645" y="41" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">ACCEPTED</text>
+        <text x="645" y="60" text-anchor="middle" class="t s dim">at the floor → taken as offered</text>
+
+        <rect x="530" y="100" width="230" height="56" rx="3" class="b"></rect>
+        <text x="645" y="123" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">COUNTERED</text>
+        <text x="645" y="142" text-anchor="middle" class="t s dim">a little below → counter-offer</text>
+
+        <rect x="530" y="182" width="230" height="56" rx="3" class="b stop"></rect>
+        <text x="645" y="205" text-anchor="middle" class="m stop-t" style="font-weight:600;font-size:13px">REJECTED</text>
+        <text x="645" y="224" text-anchor="middle" class="t s dim">too low / negotiation off</text>
+
+        <line x1="458" y1="112" x2="526" y2="52" class="e"></line>
+        <line x1="458" y1="129" x2="526" y2="129" class="e"></line>
+        <line x1="458" y1="148" x2="526" y2="204" class="e"></line>
+
+        <rect x="800" y="100" width="130" height="56" rx="3" class="b sunk"></rect>
+        <text x="865" y="123" text-anchor="middle" class="t s">always logged</text>
+        <text x="865" y="141" text-anchor="middle" class="t s dim">auditable later</text>
+        <path d="M 764 46 L 786 46 L 786 122 L 796 122" class="e"></path>
+        <path d="M 764 128 L 796 128" class="e"></path>
+        <path d="M 764 210 L 786 210 L 786 134 L 796 134" class="e"></path>
+      </svg>
+      <figcaption>
+        The price the AI answers with is never below the floor the seller set — that rule is decided in code,
+        not left to the prompt sent to the model.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 11 SUPPORT ===================== -->
+  <section class="dgm" id="support">
+    <div class="dgm-head">
+      <div class="kicker">11 — Support chat</div>
+      <h2>Support chat: the AI answers first, a human takes over when needed</h2>
+      <p>
+        There are two ways to hand off — the user asks for it, or the system sees the AI fail three times in a
+        row. Once it is handed off the AI stops answering immediately; the room belongs to the admin.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 280" class="dg" role="img" aria-label="Support chat flow: it starts in the AI-only state; if the user asks for a human, or the AI fails three times in a row, it moves to the escalated state, an admin answers in the same room, and it is closed as resolved">
+        <rect x="16" y="106" width="212" height="70" rx="3" class="b"></rect>
+        <text x="122" y="132" text-anchor="middle" class="m" style="font-weight:600;font-size:13px">AI_ONLY</text>
+        <text x="122" y="151" text-anchor="middle" class="t s dim">answers from the FAQ set</text>
+        <text x="122" y="167" text-anchor="middle" class="m dim">POST /support/chat</text>
+
+        <rect x="330" y="30" width="256" height="50" rx="3" class="b sunk"></rect>
+        <text x="458" y="52" text-anchor="middle" class="t s">the user asks for a human</text>
+        <text x="458" y="70" text-anchor="middle" class="m dim">POST …/escalate</text>
+
+        <rect x="330" y="200" width="256" height="52" rx="3" class="b sunk"></rect>
+        <text x="458" y="222" text-anchor="middle" class="t s">the AI fails 3 times in a row</text>
+        <text x="458" y="240" text-anchor="middle" class="t s dim">handed off automatically, no click needed</text>
+
+        <path d="M 230 128 L 280 128 L 280 55 L 326 55" class="e"></path>
+        <path d="M 280 155 L 280 226 L 326 226" class="e"></path>
+
+        <rect x="656" y="106" width="268" height="70" rx="3" class="b hot"></rect>
+        <text x="790" y="132" text-anchor="middle" class="m hot-t" style="font-weight:600;font-size:13px">ESCALATED</text>
+        <text x="790" y="151" text-anchor="middle" class="t s dim">the AI stops answering at once</text>
+        <text x="790" y="167" text-anchor="middle" class="m dim">/admin/support/sessions</text>
+
+        <path d="M 590 55 L 630 55 L 630 128 L 652 128" class="e"></path>
+        <path d="M 590 226 L 630 226 L 630 155 L 652 155" class="e"></path>
+
+        <rect x="656" y="212" width="268" height="52" rx="3" class="b good"></rect>
+        <text x="790" y="234" text-anchor="middle" class="m good-t" style="font-weight:600;font-size:13px">RESOLVED</text>
+        <text x="790" y="252" text-anchor="middle" class="t s dim">the admin closes it when done</text>
+        <path d="M 790 180 L 790 208" class="e"></path>
+      </svg>
+      <figcaption>
+        The room is not recreated at hand-off — the history with the AI is all still there, so the admin has
+        the context straight away and the user does not have to tell the story twice.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 12 CHAT ===================== -->
+  <section class="dgm" id="chat">
+    <div class="dgm-head">
+      <div class="kicker">12 — Buyer &amp; seller chat</div>
+      <h2>Buyer–seller chat: every room is tied to one product or one auction</h2>
+      <p>
+        There is no free-floating chat — you open one from an auction page or a product page, and only from
+        there. Both sides then always know which item is being discussed, without asking each time.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 260" class="dg" role="img" aria-label="Buyer and seller chat flow: a room opens from an auction page or a product page and is tied to that item; a message sent shows up live for the other side over WebSocket with a new-message notification, and the seller can set an auto-reply">
+        <rect x="10" y="46" width="190" height="56" rx="3" class="b"></rect>
+        <text x="105" y="70" text-anchor="middle" class="t b6">From an auction page</text>
+        <text x="105" y="88" text-anchor="middle" class="m dim">POST …/conversations</text>
+
+        <rect x="10" y="136" width="190" height="56" rx="3" class="b"></rect>
+        <text x="105" y="160" text-anchor="middle" class="t b6">From a product page</text>
+        <text x="105" y="178" text-anchor="middle" class="m dim">POST …/conversations</text>
+
+        <rect x="272" y="88" width="196" height="62" rx="3" class="b"></rect>
+        <text x="370" y="114" text-anchor="middle" class="t b6">Conversation</text>
+        <text x="370" y="133" text-anchor="middle" class="t s dim">tied to the item discussed</text>
+
+        <line x1="202" y1="82" x2="268" y2="108" class="e"></line>
+        <line x1="202" y1="156" x2="268" y2="130" class="e"></line>
+
+        <rect x="530" y="88" width="200" height="62" rx="3" class="b hot"></rect>
+        <text x="630" y="114" text-anchor="middle" class="t b6 hot-t">Send a message</text>
+        <text x="630" y="133" text-anchor="middle" class="m dim">ws /user · conversation:join</text>
+
+        <line x1="470" y1="119" x2="526" y2="119" class="e"></line>
+
+        <rect x="778" y="46" width="152" height="56" rx="3" class="b"></rect>
+        <text x="854" y="70" text-anchor="middle" class="t b6">Other side sees it</text>
+        <text x="854" y="88" text-anchor="middle" class="m dim">NEW_MESSAGE</text>
+
+        <rect x="778" y="136" width="152" height="56" rx="3" class="b dash"></rect>
+        <text x="854" y="160" text-anchor="middle" class="t b6">Auto-reply</text>
+        <text x="854" y="178" text-anchor="middle" class="t s dim">seller toggles it</text>
+
+        <path d="M 732 106 L 750 106 L 750 74 L 774 74" class="e"></path>
+        <path d="M 750 132 L 750 164 L 774 164" class="e dash"></path>
+
+        <rect x="272" y="190" width="448" height="46" rx="3" class="b sunk"></rect>
+        <text x="496" y="210" text-anchor="middle" class="t s">a purchase with an auto-reply set opens a room automatically</text>
+        <text x="496" y="227" text-anchor="middle" class="t s dim">purchases only — auctions get a room from the first bid</text>
+        <path d="M 370 156 L 370 186" class="e dash"></path>
+      </svg>
+      <figcaption>
+        The seller's auto-reply only goes out after the order commits, so there is no case where a buyer gets
+        a thank-you message for an order that never actually happened.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== 13 ADMIN ===================== -->
+  <section class="dgm" id="admin">
+    <div class="dgm-head">
+      <div class="kicker">13 — Admin action</div>
+      <h2>Admin actions: every action needs a reason, and every one is recorded</h2>
+      <p>
+        Suspending a user, cancelling an auction, taking a product off sale — every action walks the same path.
+        The status change and the log entry happen together in one transaction, and if either side fails, both
+        fail. So a status can never change without a trace of who ordered it and why.
+      </p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 300" class="dg" role="img" aria-label="Admin action flow: the admin issues an action along with a reason, it passes the admin permission check, then a single transaction changes the status and writes the audit entry together; the people affected are notified and the entry appears on the audit log page">
+        <rect x="10" y="34" width="196" height="52" rx="3" class="b"></rect>
+        <text x="108" y="57" text-anchor="middle" class="t b6">Suspend / restore a user</text>
+        <text x="108" y="75" text-anchor="middle" class="m dim">/admin/users</text>
+
+        <rect x="10" y="106" width="196" height="52" rx="3" class="b"></rect>
+        <text x="108" y="129" text-anchor="middle" class="t b6">Cancel an auction</text>
+        <text x="108" y="147" text-anchor="middle" class="m dim">/admin/auctions</text>
+
+        <rect x="10" y="178" width="196" height="52" rx="3" class="b"></rect>
+        <text x="108" y="201" text-anchor="middle" class="t b6">Suspend / relist a product</text>
+        <text x="108" y="219" text-anchor="middle" class="m dim">/admin/products</text>
+
+        <rect x="266" y="102" width="176" height="60" rx="3" class="b"></rect>
+        <text x="354" y="127" text-anchor="middle" class="t b6">Permission + reason</text>
+        <text x="354" y="146" text-anchor="middle" class="t s dim">must be ADMIN · not blank</text>
+
+        <line x1="208" y1="66" x2="262" y2="114" class="e"></line>
+        <line x1="208" y1="132" x2="262" y2="132" class="e"></line>
+        <line x1="208" y1="198" x2="262" y2="150" class="e"></line>
+
+        <rect x="502" y="94" width="212" height="76" rx="3" class="b hot"></rect>
+        <text x="608" y="120" text-anchor="middle" class="t b6 hot-t">One transaction</text>
+        <text x="608" y="139" text-anchor="middle" class="t s dim">change the status</text>
+        <text x="608" y="156" text-anchor="middle" class="t s dim">+ write the audit entry</text>
+
+        <line x1="444" y1="132" x2="498" y2="132" class="e"></line>
+
+        <rect x="774" y="46" width="156" height="60" rx="3" class="b"></rect>
+        <text x="852" y="71" text-anchor="middle" class="t b6">Notify those affected</text>
+        <text x="852" y="90" text-anchor="middle" class="t s dim">e.g. standing bidders</text>
+
+        <rect x="774" y="158" width="156" height="60" rx="3" class="b"></rect>
+        <text x="852" y="183" text-anchor="middle" class="t b6">Audit log page</text>
+        <text x="852" y="202" text-anchor="middle" class="m dim">/admin/actions</text>
+
+        <path d="M 716 118 L 746 118 L 746 76 L 770 76" class="e"></path>
+        <path d="M 746 146 L 746 188 L 770 188" class="e"></path>
+
+        <rect x="266" y="228" width="448" height="52" rx="3" class="b sunk"></rect>
+        <text x="490" y="250" text-anchor="middle" class="t s">taking a product off sale blocks new orders only</text>
+        <text x="490" y="268" text-anchor="middle" class="t s dim">orders already paid for are not cancelled retroactively</text>
+        <path d="M 608 176 L 608 224" class="e dash"></path>
+      </svg>
+      <figcaption>
+        The reason the admin types travels to two places at once — into the audit log, and attached to the
+        notification sent to whoever it affects.
+      </figcaption>
+    </figure>
+
+  </section>
+
+  <!-- ===================== STATE REFERENCE ===================== -->
+  <section class="dgm" id="states">
+    <div class="dgm-head">
+      <div class="kicker">Reference — states</div>
+      <h2>The state names worth memorising</h2>
+      <p>These names are identical across the schema, the API and the UI — use them when talking to the team.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>What</th>
+            <th>States</th>
+            <th>Who changes it</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Auction</b></td>
+            <td>
+              <span class="pill pill-idle">DRAFT</span>
+              <span class="pill pill-idle">SCHEDULED</span>
+              <span class="pill pill-live">ACTIVE</span>
+              <span class="pill pill-good">SOLD</span>
+              <span class="pill pill-idle">UNSOLD</span>
+              <span class="pill pill-stop">CANCELLED</span>
+            </td>
+            <td>Seller publishes / cancels · admin cancels · everything else is the timed background job</td>
+          </tr>
+          <tr>
+            <td><b>Product</b></td>
+            <td>
+              <span class="pill pill-good">ACTIVE</span>
+              <span class="pill pill-idle">INACTIVE</span>
+              <span class="pill pill-idle">OUT_OF_STOCK</span>
+              <span class="pill pill-idle">REMOVED</span>
+              <span class="pill pill-stop">SUSPENDED</span>
+            </td>
+            <td>The seller manages all of it except SUSPENDED, which only an admin sets and the seller cannot lift</td>
+          </tr>
+          <tr>
+            <td><b>Order</b></td>
+            <td>
+              <span class="pill pill-idle">PENDING</span>
+              <span class="pill pill-good">PAID</span>
+              <span class="pill pill-stop">CANCELLED</span>
+            </td>
+            <td>Set by the result of the charge at checkout</td>
+          </tr>
+          <tr>
+            <td><b>Shipment</b></td>
+            <td>
+              <span class="pill pill-idle">PROCESSING</span>
+              <span class="pill pill-live">SHIPPED</span>
+              <span class="pill pill-live">IN_TRANSIT</span>
+              <span class="pill pill-good">DELIVERED</span>
+              <span class="pill pill-stop">CANCELLED</span>
+            </td>
+            <td>The seller advances one step at a time; the buyer sees it as a timeline</td>
+          </tr>
+          <tr>
+            <td><b>Support chat</b></td>
+            <td>
+              <span class="pill pill-key">AI_ONLY</span>
+              <span class="pill pill-live">ESCALATED</span>
+              <span class="pill pill-good">RESOLVED</span>
+            </td>
+            <td>The user asks for a human, or the AI fails 3 times → an admin takes over</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== OWNERSHIP ===================== -->
+  <section class="dgm" id="owners">
+    <div class="dgm-head">
+      <div class="kicker">Reference — code owners</div>
+      <h2>Who owns what</h2>
+      <p>Talk to the owner before making a change across modules, especially in <code>schema.prisma</code>, which has a single owner.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Dev</th>
+            <th>Scope</th>
+            <th>Main code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Dev 1</b></td>
+            <td>Frontend &amp; UI</td>
+            <td class="mono">apps/web/src/components · design-system</td>
+          </tr>
+          <tr>
+            <td><b>Dev 2</b></td>
+            <td>Backend core &amp; security — owns the schema and the migrations</td>
+            <td class="mono">api/src/auth · users · common (guards)</td>
+          </tr>
+          <tr>
+            <td><b>Dev 3</b></td>
+            <td>E-commerce — products, cart, orders, shipping, buyer–seller chat</td>
+            <td class="mono">api/src/product · cart · order · shipment · chat</td>
+          </tr>
+          <tr>
+            <td><b>Dev 4</b></td>
+            <td>Auction &amp; real-time — auctions, bids, live room, watchlist</td>
+            <td class="mono">api/src/auction · bid · live · realtime · watchlist</td>
+          </tr>
+          <tr>
+            <td><b>Dev 5</b></td>
+            <td>AI — price estimate, negotiation, support chat</td>
+            <td class="mono">api/src/ai-tools · support-chat</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <p>
+        <b>V1 scope:</b> the story ends when the auction closes and the item is delivered — there are no refunds
+        or cancellations after that. <span class="pill pill-good">SOLD</span> and
+        <span class="pill pill-idle">UNSOLD</span> really are terminal, and payment is simulated:
+        no real payment gateway is wired up yet.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>BidNest · Auction &amp; Marketplace</span>
+    <span>Drawn from the code · SRS v7 · ADR-0001 / ADR-0002</span>
+  </footer>
+
+</div>
+</body>
+</html>
