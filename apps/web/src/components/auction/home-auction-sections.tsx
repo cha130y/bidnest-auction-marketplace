@@ -53,27 +53,48 @@ type SectionPick = {
  * the tab strip for reading a section properly, so repeating all of it here
  * would push the products below the fold for no gain.
  *
- * The reads are `allSettled` and one auction deep: a section that is empty, or
- * one whose read fails, simply drops out of the row and the remaining columns
- * spread to fill it. An empty placeholder used to hold that spot, which was
- * worth it while the catalogue was thin; now that every section normally has
- * something, a dashed box reads as a hole rather than as information. If none
- * of the four has anything, the whole row goes away. The row is one Suspense
- * boundary on the page, so the four reads go out together.
+ * The reads are `allSettled`: a section that is empty, or one whose read
+ * fails, simply drops out of the row and the remaining columns spread to fill
+ * it. An empty placeholder used to hold that spot, which was worth it while
+ * the catalogue was thin; now that every section normally has something, a
+ * dashed box reads as a hole rather than as information. If none of the four
+ * has anything, the whole row goes away. The row is one Suspense boundary on
+ * the page, so the four reads go out together.
+ *
+ * No auction appears twice across the row. The sections overlap by nature —
+ * the one with the most watchers is very often the one closing next — and a
+ * row that answered two of its four questions with the same card looked
+ * broken while telling the visitor less than it could. Each column takes the
+ * best auction its section has that no earlier column already took.
  */
 export async function HomeAuctionSections() {
+  /**
+   * One candidate per column rather than one in total: the last column may
+   * have to look past every earlier column's pick before it reaches one of
+   * its own. Adding a fifth tab widens this on its own.
+   */
   const results = await Promise.allSettled(
     AUCTION_SECTION_TABS.map((tab) =>
-      listAuctions({ section: tab.value, limit: 1 })
+      listAuctions({ section: tab.value, limit: AUCTION_SECTION_TABS.length })
     )
   )
 
-  const picks = AUCTION_SECTION_TABS.flatMap<SectionPick>((tab, index) => {
-    const result = results[index]
-    const auction =
-      result.status === "fulfilled" ? (result.value.items[0] ?? null) : null
+  // First come, first served, in the order the row is laid out — so the
+  // section that owns an auction most strongly is the one that keeps it.
+  const taken = new Set<string>()
+  const picks: SectionPick[] = []
 
-    return auction ? [{ section: tab.value, label: tab.label, auction }] : []
+  AUCTION_SECTION_TABS.forEach((tab, index) => {
+    const result = results[index]
+    const items = result.status === "fulfilled" ? result.value.items : []
+    const auction = items.find((item) => !taken.has(item.id))
+
+    // Every auction this section has is already on the row: it has nothing
+    // of its own left to say, so it drops out the same way an empty one does.
+    if (!auction) return
+
+    taken.add(auction.id)
+    picks.push({ section: tab.value, label: tab.label, auction })
   })
 
   if (picks.length === 0) return null
