@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import type { ReactNode } from "react"
 
@@ -6,7 +7,7 @@ import { cn } from "@/lib/utils"
 /**
  * AUTH-001 / AUTH-002 — the shell every account screen sits in.
  *
- * The rest of the site is white cards on `bg-n-100`, with the gavel mark,
+ * The rest of the site is white cards on `bg-n-100`, with the BidNest logo,
  * `font-display` headings and amber as the one accent. The account screens
  * were bare forms on the page background using shadcn's default palette —
  * `text-muted-foreground`, `text-destructive` — so signing in looked like a
@@ -39,19 +40,17 @@ export function AuthCard({
     >
       <Link
         href="/"
-        className="mx-auto mb-8 flex items-center gap-2 rounded-r2 font-display text-2xl font-bold text-ink outline-none focus-visible:ring-3 focus-visible:ring-amber-500/30"
+        className="mx-auto mb-8 flex items-center rounded-r2 outline-none focus-visible:ring-3 focus-visible:ring-amber-500/30"
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          className="size-8 text-amber-500"
-          aria-hidden
-        >
-          <path d="M3 6l9 12 9-12M8 6l4 5 4-5" />
-        </svg>
-        BidNest
+        {/* The file carries the wordmark, so no "BidNest" text beside it. */}
+        <Image
+          src="/logo.jpg"
+          alt="BidNest"
+          width={1160}
+          height={730}
+          priority
+          className="h-11 w-auto md:h-12"
+        />
       </Link>
 
       <div className="rounded-r4 bg-white px-6 py-8 shadow-sh2 md:px-8">
