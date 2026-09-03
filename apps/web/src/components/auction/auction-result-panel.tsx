@@ -54,10 +54,16 @@ export function AuctionResultPanel({ result }: { result: AuctionResult }) {
             {result.bidCount.toLocaleString("th-TH")} ครั้ง
           </dd>
         </div>
+        {/* Worded exactly as the live page words it, and for the same reason:
+            `reserveMet` is true for an auction that never had a reserve too,
+            so neither the label nor the true branch may talk about a threshold
+            being reached. */}
         <div className="flex justify-between gap-4">
-          <dt className="text-n-500">ถึงราคาขั้นต่ำที่ผู้ขายรับได้</dt>
+          <dt className="text-n-500">สถานะราคา</dt>
           <dd className="font-medium text-ink">
-            {result.reserveMet ? "ถึงแล้ว" : "ยังไม่ถึง"}
+            {result.reserveMet
+              ? "ผู้ขายรับราคานี้ได้"
+              : "ยังไม่ถึงราคาที่ผู้ขายรับได้"}
           </dd>
         </div>
         {result.winner && (

@@ -59,10 +59,30 @@ export default async function AuctionDetailPage({
                 <Row label="สภาพสินค้า" value={auction.condition === "NEW" ? "ของใหม่" : "มือสอง"} />
                 <Row label="ราคาเริ่มต้น" value={formatTHB(auction.startingPrice)} />
                 <Row label="เพิ่มขั้นต่ำครั้งละ" value={formatTHB(auction.minBidIncrement)} />
-                {/* AUC-003 — the computed answer, never the reserve itself */}
+                {/*
+                  AUC-003 — the computed answer, never the reserve itself, and
+                  worded so it holds whether or not there is a reserve to
+                  compute against.
+
+                  `reserveMet` is `true` both for an auction whose price has
+                  passed its reserve and for one that never had a reserve, and
+                  the API will not say which: announcing "this seller set no
+                  reserve" gives a bidder as much as the amount would. So this
+                  row cannot branch on whether a reserve exists — it can only
+                  say something true in both cases. "ถึงแล้ว" was not: it
+                  claimed a threshold had been crossed on every auction that
+                  never had one, which is most of them.
+
+                  The false branch may still name the reserve. An auction
+                  reports `false` only when it has one.
+                */}
                 <Row
-                  label="ถึงราคาขั้นต่ำที่ผู้ขายรับได้"
-                  value={auction.reserveMet ? "ถึงแล้ว" : "ยังไม่ถึง"}
+                  label="สถานะราคา"
+                  value={
+                    auction.reserveMet
+                      ? "ผู้ขายรับราคานี้ได้"
+                      : "ยังไม่ถึงราคาที่ผู้ขายรับได้"
+                  }
                 />
                 {auction.extensionCount > 0 && (
                   <Row label="ต่อเวลาแล้ว" value={`${auction.extensionCount} ครั้ง`} />
