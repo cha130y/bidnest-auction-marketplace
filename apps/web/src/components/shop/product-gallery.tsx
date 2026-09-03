@@ -23,11 +23,45 @@ export function ProductGallery({
 
   return (
     <div className="flex flex-col gap-4">
-      <ProductImage
-        src={active?.url}
-        alt={title}
-        className="aspect-square w-full rounded-r4 shadow-sh1"
-      />
+      {/*
+        Sellers upload whatever their camera handed them — a 16:9 sofa, a
+        portrait of a watch — and `object-cover` filled the square frame by
+        cutting the picture down to it, which crops away exactly what a buyer
+        opened the picture to look at. The frame stays square so nothing on the
+        page jumps as you switch between pictures of different shapes, and the
+        picture is fitted inside it whole.
+
+        Whatever the picture does not fill is filled by a blurred, over-scaled
+        copy of that same picture rather than by a flat colour. It is the same
+        URL, so it costs no second request, and it reads as a photograph lit
+        from behind instead of a photograph that failed to fill its box. The
+        over-scale is what keeps the blur's soft edge outside the frame.
+
+        The thumbnails below keep `cover`: they are targets to press, not
+        pictures to read, and a wide photo fitted into a small square would be
+        a sliver.
+
+        Kept in step with `components/auction/auction-gallery.tsx`, which
+        makes the same trade for the same reason.
+      */}
+      <div className="relative aspect-square w-full overflow-hidden rounded-r4 bg-n-100 shadow-sh1">
+        {active?.url && (
+          <ProductImage
+            src={active.url}
+            // Decorative. The picture in front of it carries the alt text.
+            alt=""
+            className="absolute inset-0 size-full scale-125 object-cover blur-xl"
+          />
+        )}
+
+        <ProductImage
+          src={active?.url}
+          alt={title}
+          // `bg-transparent` is load-bearing: ProductImage's own `bg-n-100`
+          // would otherwise paint over the blurred copy behind it.
+          className="absolute inset-0 size-full bg-transparent object-contain"
+        />
+      </div>
 
       {images.length > 1 && (
         <div className="grid grid-cols-5 gap-3">
