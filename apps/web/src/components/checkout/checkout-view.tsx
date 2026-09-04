@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react"
 
+import { UnpaidWinsBanner } from "@/components/auction/unpaid-wins-banner"
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
 import {
   FailureOverlay,
@@ -22,7 +23,7 @@ import {
   myProfileQueryKey,
   type MyProfile,
 } from "@/lib/api/users"
-import { getArena } from "@/lib/api/auctions"
+import { getArena, unpaidWinsQueryKey } from "@/lib/api/auctions"
 import {
   AUCTION_PARAM,
   SELECTION_PARAM,
@@ -109,7 +110,15 @@ export function CheckoutView() {
 
   if (auctionId) return <AuctionCheckout auctionId={auctionId} />
 
-  return <CartCheckout />
+  return (
+    <>
+      {/* CART-004 — only on the cart side. In the other branch the buyer is
+          already paying for a lot, and a banner offering them another one is
+          in the way of the payment they came here to make. */}
+      <UnpaidWinsBanner />
+      <CartCheckout />
+    </>
+  )
 }
 
 /**
@@ -508,6 +517,12 @@ function CheckoutForm({
       // staleTime from showing a buyer a list without the order they just
       // paid for.
       void queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+
+      // CART-004 — and if this was a lot, it is no longer owed for. The
+      // reminder is on the cart and the order list, both of which a buyer can
+      // reach without a remount, so it has to be told rather than left to
+      // notice on its own.
+      void queryClient.invalidateQueries({ queryKey: unpaidWinsQueryKey })
 
       onDone(result)
     },

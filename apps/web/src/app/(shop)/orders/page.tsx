@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { UnpaidWinsBanner } from "@/components/auction/unpaid-wins-banner"
 import { OrderList } from "@/components/order/order-list"
 
 export const metadata: Metadata = {
@@ -19,6 +20,11 @@ export default function OrdersPage() {
           ติดตามสถานะการจัดส่งของแต่ละคำสั่งซื้อได้ที่นี่
         </p>
       </header>
+
+      {/* CART-004 — a won lot has no order until it is paid for, so this list
+          is precisely where one goes missing. The reminder is what stands in
+          for the row that does not exist yet. */}
+      <UnpaidWinsBanner />
 
       <OrderList />
     </div>

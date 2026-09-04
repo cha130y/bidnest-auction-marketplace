@@ -350,6 +350,107 @@ describe('Auction checkout (e2e)', () => {
     });
   });
 
+  /**
+   * CART-004 — the list the reminder is built from.
+   *
+   * The route exists because paying for a lot had exactly one way in: the
+   * button on the auction's own result screen. Close that tab and there was
+   * nothing left that led back to it — `/orders` has no row until the payment
+   * creates one, and the cart holds products, never lots.
+   *
+   * Every assertion below finds its own lot in the response rather than
+   * counting rows: this suite settles auctions for the same winner throughout,
+   * so a length check here would depend on which tests ran before it.
+   */
+  describe('the lots still owed for', () => {
+    type WonBody = {
+      items: {
+        auction: { id: string; soldPrice: string | null };
+        paid: boolean;
+      }[];
+      meta: { total: number };
+    };
+
+    const wonList = (userId: string, query = '') =>
+      request(app.getHttpServer())
+        .get(`/auctions/won${query}`)
+        .set('Authorization', authOf(userId));
+
+    const rowFor = (body: unknown, auctionId: string) =>
+      (body as WonBody).items.find((item) => item.auction.id === auctionId);
+
+    it('lists a lot the winner has not paid for', async () => {
+      const auctionId = await settledAuction();
+
+      const response = await wonList(winnerId, '?unpaid=true').expect(200);
+
+      expect(rowFor(response.body, auctionId)).toMatchObject({
+        paid: false,
+        auction: { id: auctionId, soldPrice: '2500' }
+      });
+    });
+
+    it('drops it once it has been paid for', async () => {
+      const auctionId = await settledAuction();
+      await pay(winnerId, { auctionId }).expect(201);
+
+      const response = await wonList(winnerId, '?unpaid=true').expect(200);
+
+      expect(rowFor(response.body, auctionId)).toBeUndefined();
+    });
+
+    it('still lists it, marked paid, with the filter off', async () => {
+      const auctionId = await settledAuction();
+      await pay(winnerId, { auctionId }).expect(201);
+
+      const response = await wonList(winnerId).expect(200);
+
+      expect(rowFor(response.body, auctionId)).toMatchObject({ paid: true });
+    });
+
+    it('does not list a lot somebody else won', async () => {
+      const auctionId = await settledAuction();
+
+      const response = await wonList(strangerId).expect(200);
+
+      expect(rowFor(response.body, auctionId)).toBeUndefined();
+    });
+
+    it('does not list a lot that did not sell', async () => {
+      // A checkout would refuse this one, so offering it as something to pay
+      // for is offering a button that cannot work.
+      const auctionId = await settledAuction({
+        status: 'UNSOLD',
+        soldPrice: null
+      });
+
+      const response = await wonList(winnerId).expect(200);
+
+      expect(rowFor(response.body, auctionId)).toBeUndefined();
+    });
+
+    // AUC-003 — the winner is the buyer, and the reserve is the seller's own
+    it('does not carry the seller’s reserve', async () => {
+      const auctionId = await settledAuction();
+
+      const response = await wonList(winnerId, '?unpaid=true').expect(200);
+
+      expect(rowFor(response.body, auctionId)?.auction).not.toHaveProperty(
+        'reservePrice'
+      );
+    });
+
+    it('refuses a request with no token', async () => {
+      await request(app.getHttpServer()).get('/auctions/won').expect(401);
+    });
+
+    it('refuses a filter value that is not a boolean', async () => {
+      // Rather than quietly treating it as "no filter", which would answer a
+      // question nobody asked.
+      await wonList(winnerId, '?unpaid=maybe').expect(400);
+    });
+  });
+
   describe('a cart checkout is unaffected', () => {
     it('still prices and clears the cart', async () => {
       const product = await prisma.product.create({

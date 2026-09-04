@@ -27,6 +27,7 @@ import { CancelAuctionDto } from './dtos/cancel-auction.dto';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { ListOwnAuctionsDto } from './dtos/list-own-auctions.dto';
+import { ListWonAuctionsDto } from './dtos/list-won-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import { AddAuctionImageDto } from './dtos/add-auction-image.dto';
 import {
@@ -82,6 +83,27 @@ export class AuctionController {
     @Query() dto: ListOwnAuctionsDto
   ) {
     return this.auctionService.listOwnAuctions(sellerId, dto);
+  }
+
+  /**
+   * CART-004 — the lots the caller won. `?unpaid=true` narrows it to the ones
+   * still awaiting payment, which is what the reminder on the cart, the
+   * checkout and the order list is built from.
+   *
+   * Above `GET :id` for the reason `mine` and `stats` are: `:id` would
+   * otherwise swallow the literal segment, and ParseUUIDPipe would then reject
+   * `won` as a malformed id.
+   *
+   * No `@ReturnsOwnerFields()`. A winner is the buyer — the reserve stays out
+   * of this response exactly as it does out of every other buyer-facing one.
+   */
+  @Roles('USER')
+  @Get('won')
+  listWonAuctions(
+    @CurrentUser('id') winnerId: string,
+    @Query() dto: ListWonAuctionsDto
+  ) {
+    return this.auctionService.listWonAuctions(winnerId, dto);
   }
 
   @Roles('USER')

@@ -492,6 +492,147 @@ describe('AuctionService', () => {
 
       expect(result.items[0]).toMatchObject({ reservePrice: '4500' });
     });
+
+    describe('listWonAuctions (CART-004)', () => {
+      const WINNER_ID = '00000000-0000-4000-8000-000000000009';
+
+      /** A settled lot, shaped like the select the method actually uses. */
+      const wonRow = (overrides: Record<string, unknown> = {}) => ({
+        ...draftRow({
+          status: 'SOLD',
+          soldPrice: dec(17000),
+          endedAt: new Date('2026-09-01T10:00:00.000Z'),
+          currentPrice: dec(17000)
+        }),
+        orderItems: [],
+        ...overrides
+      });
+
+      const listSucceeds = (
+        rows: ReturnType<typeof wonRow>[],
+        total = rows.length
+      ) => {
+        prisma.auction.findMany.mockResolvedValue(rows);
+        prisma.auction.count.mockResolvedValue(total);
+      };
+
+      const findManyArgs = () =>
+        (
+          prisma.auction.findMany.mock.calls as {
+            where: Record<string, unknown>;
+            orderBy: unknown;
+            skip: number;
+            take: number;
+          }[][]
+        )[0][0];
+
+      it('lists what this caller won, and only what a checkout would take', async () => {
+        listSucceeds([wonRow()]);
+
+        await service.listWonAuctions(WINNER_ID, {});
+
+        // SOLD because priceAuction refuses anything else — an UNSOLD or
+        // CANCELLED lot on this list is a payment button that cannot work.
+        expect(findManyArgs().where).toEqual({
+          winnerUserId: WINNER_ID,
+          status: 'SOLD',
+          deletedAt: null
+        });
+      });
+
+      it('narrows to the lots still owed for when asked', async () => {
+        listSucceeds([]);
+
+        await service.listWonAuctions(WINNER_ID, { unpaid: true });
+
+        expect(findManyArgs().where).toMatchObject({
+          orderItems: { none: {} }
+        });
+      });
+
+      it('leaves the list unfiltered when the flag is off', async () => {
+        listSucceeds([]);
+
+        await service.listWonAuctions(WINNER_ID, { unpaid: false });
+
+        expect(findManyArgs().where).not.toHaveProperty('orderItems');
+      });
+
+      it('keeps the winner scope whatever the filter says', async () => {
+        listSucceeds([]);
+
+        await service.listWonAuctions(WINNER_ID, { unpaid: true });
+
+        expect(findManyArgs().where).toMatchObject({ winnerUserId: WINNER_ID });
+      });
+
+      it('reports a lot with an order item as paid', async () => {
+        listSucceeds([wonRow({ orderItems: [{ id: 'order-item-1' }] })]);
+
+        const result = await service.listWonAuctions(WINNER_ID, {});
+
+        expect(result.items[0].paid).toBe(true);
+      });
+
+      it('reports a lot with no order item as still owed for', async () => {
+        listSucceeds([wonRow()]);
+
+        const result = await service.listWonAuctions(WINNER_ID, {});
+
+        expect(result.items[0]).toMatchObject({
+          paid: false,
+          auction: { id: DRAFT_ID, soldPrice: '17000' }
+        });
+      });
+
+      it('shows the most recently won first', async () => {
+        listSucceeds([]);
+
+        await service.listWonAuctions(WINNER_ID, {});
+
+        expect(findManyArgs().orderBy).toEqual([
+          { endedAt: 'desc' },
+          { id: 'asc' }
+        ]);
+      });
+
+      it('counts with exactly the same filter it lists with', async () => {
+        listSucceeds([], 3);
+
+        await service.listWonAuctions(WINNER_ID, { unpaid: true });
+
+        const countArgs = (
+          prisma.auction.count.mock.calls as WhereArgs[][]
+        )[0][0];
+        expect(countArgs.where).toEqual(findManyArgs().where);
+      });
+
+      it('pages the way every other list does', async () => {
+        listSucceeds([], 45);
+
+        const result = await service.listWonAuctions(WINNER_ID, {
+          page: 3,
+          limit: 20
+        });
+
+        expect(findManyArgs()).toMatchObject({ skip: 40, take: 20 });
+        expect(result.meta).toEqual({
+          page: 3,
+          limit: 20,
+          total: 45,
+          totalPages: 3
+        });
+      });
+
+      // AUC-003 — the winner is the buyer, and the reserve is the seller's own
+      it('does not hand the seller’s reserve to the buyer who won', async () => {
+        listSucceeds([wonRow()]);
+
+        const result = await service.listWonAuctions(WINNER_ID, {});
+
+        expect(result.items[0].auction).not.toHaveProperty('reservePrice');
+      });
+    });
   });
 
   describe('validateOwnDraft (AUC-002)', () => {

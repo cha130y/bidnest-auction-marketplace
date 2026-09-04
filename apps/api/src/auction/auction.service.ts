@@ -39,6 +39,7 @@ import { escapeLike } from '../product/utils/escape-like.util';
 import { CreateAuctionDraftDto } from './dtos/create-auction-draft.dto';
 import { ListAuctionsDto } from './dtos/list-auctions.dto';
 import { ListOwnAuctionsDto } from './dtos/list-own-auctions.dto';
+import { ListWonAuctionsDto } from './dtos/list-won-auctions.dto';
 import { UpdateAuctionDto } from './dtos/update-auction.dto';
 import {
   assertAuctionIsCancellable,
@@ -152,6 +153,66 @@ export class AuctionService {
 
     return {
       items: items.map(toOwnerAuction),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    };
+  }
+
+  /**
+   * CART-004 — the lots this buyer won, and whether each one still has to be
+   * paid for.
+   *
+   * Scoped by `winnerUserId` the way the seller's list is scoped by `sellerId`:
+   * ownership is in the query rather than checked after it, so a lot somebody
+   * else won is not hidden from the response — it was never in it.
+   *
+   * `status: 'SOLD'` is not a convenience filter. `CheckoutService.priceAuction`
+   * refuses anything else, so listing a lot it would not take is offering a
+   * payment the API is going to turn down.
+   *
+   * `orderItems` is the paid flag, and it is the same fact the checkout reads:
+   * `order_items.auction_id` is unique, so one row there means this lot has
+   * been bought and a second payment for it cannot exist. Nothing here consults
+   * the order's own status — a cancelled order is still a lot that was paid
+   * for, and the answer to "do I owe money on this" stays no.
+   *
+   * Mapped by `toPublicAuction`, not the owner mapper: a winner is the buyer,
+   * and AUC-003 keeps the seller's reserve out of a buyer's hands after the
+   * auction ends as much as during it.
+   */
+  async listWonAuctions(winnerId: string, dto: ListWonAuctionsDto) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? DEFAULT_LIST_PAGE_SIZE;
+
+    const where: Prisma.AuctionWhereInput = {
+      winnerUserId: winnerId,
+      status: 'SOLD',
+      deletedAt: null,
+      ...(dto.unpaid ? { orderItems: { none: {} } } : {})
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.auction.findMany({
+        where,
+        select: {
+          ...auctionRowSelect,
+          // Whether there is one, not how many there are.
+          orderItems: { select: { id: true }, take: 1 }
+        },
+        // Most recently won first: the lot somebody has come back to pay for is
+        // nearly always the one that just ended. `id` breaks ties so paging
+        // stays stable when two auctions settle in the same tick.
+        orderBy: [{ endedAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      this.prisma.auction.count({ where })
+    ]);
+
+    return {
+      items: rows.map(({ orderItems, ...auction }) => ({
+        auction: toPublicAuction(auction),
+        paid: orderItems.length > 0
+      })),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
     };
   }
