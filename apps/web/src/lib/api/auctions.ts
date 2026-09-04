@@ -9,6 +9,7 @@ import type {
   Paginated,
   PlacedBid,
   PublicBid,
+  WonAuction,
 } from "@/lib/api/types"
 
 /** Mirrors ListAuctionsDto in apps/api/src/auction/dtos/list-auctions.dto.ts */
@@ -152,4 +153,45 @@ export function leaveAuction(auctionId: string) {
     `/auctions/${auctionId}/participants`,
     { method: "DELETE" }
   )
+}
+
+/** Mirrors ListWonAuctionsDto in apps/api/src/auction/dtos/list-won-auctions.dto.ts */
+export type WonAuctionParams = {
+  /** Omitted is every lot the viewer won; `true` is the ones still owed for. */
+  unpaid?: boolean
+  page?: number
+  limit?: number
+}
+
+/**
+ * CART-004 — the lots the viewer won. Needs a token, so nothing calls it
+ * during SSR: `authHeader()` is empty on the server and it would 401 there.
+ */
+export function listWonAuctions(params: WonAuctionParams = {}) {
+  return apiFetch<Paginated<WonAuction>>(
+    `/auctions/won${buildQuery({ ...params })}`
+  )
+}
+
+/**
+ * The lots waiting to be paid for, under one key shared by every screen that
+ * reminds somebody about them.
+ *
+ * Declared here, beside the fetch, for the reason the watchlist's key is: the
+ * banner reads it and the checkout invalidates it after a lot is paid for, and
+ * a key owned by either component would make the two import each other.
+ *
+ * `limit: 5` because this is a reminder, not a list — a bidder with more than
+ * five lots owing still sees the five most recent, and `meta.total` says how
+ * many there really are.
+ */
+export const unpaidWinsQueryKey = ["auctions", "won", "unpaid"] as const
+
+export function unpaidWinsQueryOptions() {
+  return {
+    queryKey: unpaidWinsQueryKey,
+    queryFn: () => listWonAuctions({ unpaid: true, limit: 5 }),
+    // A 401 does not fix itself by asking again
+    retry: false,
+  }
 }
