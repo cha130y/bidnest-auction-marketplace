@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { UnpaidWinsBanner } from "@/components/auction/unpaid-wins-banner"
 import { CartView } from "@/components/cart/cart-view"
 
 export const metadata: Metadata = {
@@ -24,6 +25,11 @@ export default function CartPage() {
           ตรวจสอบรายการและจำนวนก่อนชำระเงิน
         </p>
       </header>
+
+      {/* CART-004 — above the cart rather than inside it: a winner with an
+          empty cart is exactly who needs this, and `CartView` returns its
+          empty state before it would ever get to draw one. */}
+      <UnpaidWinsBanner />
 
       <CartView />
     </div>

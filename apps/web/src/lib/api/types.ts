@@ -381,6 +381,22 @@ export type OwnerAuction = Omit<Auction, "status"> & {
   reservePrice: string | null
 }
 
+/**
+ * CART-004 — a lot the viewer won, and whether it has been paid for.
+ *
+ * `paid` comes from the order item the checkout writes, not from any order
+ * status: `order_items.auction_id` is unique, so one exists exactly when this
+ * lot has been bought and can never be bought again. A cancelled order still
+ * reads as paid, because the winner does not owe the money twice.
+ *
+ * The auction is the public shape — a winner is the buyer, so AUC-003 keeps
+ * the seller's reserve out of it.
+ */
+export type WonAuction = {
+  auction: Auction
+  paid: boolean
+}
+
 // ── src/bid/bid-history.mapper.ts → toPublicBid ─────────────────────────────
 export type PublicBid = {
   id: string
