@@ -73,6 +73,17 @@ export type Product = {
 export type OwnerProduct = Product & { negotiationFloor: string | null }
 
 /**
+ * PROD-007 — what `POST /products` and `PATCH /products/:id` answer with.
+ *
+ * The listing every other route returns, plus whatever the server wanted to
+ * say about it while saving (`ProductService.buildFloorWarnings`). Advisory
+ * only: the write has already happened by the time these arrive, and an empty
+ * array is the ordinary answer. Only these two routes carry it, which is why
+ * it is a separate type rather than a field on `OwnerProduct`.
+ */
+export type SavedProduct = OwnerProduct & { warnings: string[] }
+
+/**
  * PROD-002 — what `DELETE /products/:id` actually did.
  *
  * A delete is not always a delete: `ProductService.remove` counts the order

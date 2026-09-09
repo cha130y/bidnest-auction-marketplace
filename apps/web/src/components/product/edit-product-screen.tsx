@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 
+import { FloorWarningNote } from "@/components/product/floor-warning-note"
 import { ProductImageManager } from "@/components/product/product-image-manager"
 import { ProductManagePanel } from "@/components/product/product-manage-panel"
 import { SellerShell } from "@/components/auction/seller-shell"
@@ -20,7 +21,7 @@ import { ApiError } from "@/lib/api/client"
 import { listCategories } from "@/lib/api/categories"
 import { getProduct, updateProduct } from "@/lib/api/products"
 import { categoryLabel } from "@/lib/category-labels"
-import type { CategoryTree, OwnerProduct } from "@/lib/api/types"
+import type { CategoryTree, OwnerProduct, SavedProduct } from "@/lib/api/types"
 
 const CONDITIONS: Record<string, string> = {
   NEW: "ใหม่",
@@ -143,7 +144,12 @@ function DetailsForm({
   const [categoryId, setCategoryId] = useState(product.category.id)
   const [condition, setCondition] = useState<string>(product.condition)
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  /**
+   * The answer to the last successful save, kept rather than a bare boolean:
+   * PROD-007 advisories ride back on it, and they are about the values that
+   * were actually stored, not the ones still sitting in the inputs.
+   */
+  const [saved, setSaved] = useState<SavedProduct | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const options: Record<string, string> = {}
@@ -155,7 +161,7 @@ function DetailsForm({
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
-    setSaved(false)
+    setSaved(null)
 
     const form = new FormData(event.currentTarget)
     const number = (name: string) => {
@@ -169,20 +175,20 @@ function DetailsForm({
       // ProductImageManager below, which uses the routes that delete the file
       // alongside the row. `PATCH /products/:id` no longer accepts them at
       // all, so sending one here would be answered with a 400.
-      onSaved(
-        await updateProduct(productId, {
-          title: String(form.get("title") ?? "").trim(),
-          description: String(form.get("description") ?? "").trim(),
-          categoryId,
-          condition: condition === "NEW" ? "NEW" : "USED",
-          price: number("price"),
-          stockQty: number("stockQty"),
-          negotiationFloor: number("negotiationFloor"),
-          quantityDiscountMinQty: number("quantityDiscountMinQty"),
-          quantityDiscountPercent: number("quantityDiscountPercent"),
-        })
-      )
-      setSaved(true)
+      const updated = await updateProduct(productId, {
+        title: String(form.get("title") ?? "").trim(),
+        description: String(form.get("description") ?? "").trim(),
+        categoryId,
+        condition: condition === "NEW" ? "NEW" : "USED",
+        price: number("price"),
+        stockQty: number("stockQty"),
+        negotiationFloor: number("negotiationFloor"),
+        quantityDiscountMinQty: number("quantityDiscountMinQty"),
+        quantityDiscountPercent: number("quantityDiscountPercent"),
+      })
+
+      onSaved(updated)
+      setSaved(updated)
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "บันทึกไม่สำเร็จ")
     } finally {
@@ -295,8 +301,16 @@ function DetailsForm({
           ตัวเลือกเพิ่มเติม — ราคาต่ำสุดที่ยอมรับ และส่วนลดตามจำนวน
         </summary>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        {/*
+          Two settings, not three fields. PROD-006's floor stands on its own,
+          while PROD-007's two are refused unless both are filled — see
+          ProductService.assertDiscountRuleIsComplete. A single three-column row
+          read as three peers, so a seller who filled only "ซื้อตั้งแต่" learned
+          about the pairing from a 400 after saving.
+        */}
+        <div className="mt-4 space-y-5">
           <div className="space-y-2">
+            <p className="text-xs font-semibold text-n-500">การต่อรองราคา</p>
             <Label htmlFor="negotiationFloor">ราคาต่ำสุดที่ยอมรับ</Label>
             <Input
               id="negotiationFloor"
@@ -305,36 +319,55 @@ function DetailsForm({
               min={0}
               step="0.01"
               defaultValue={product.negotiationFloor ?? ""}
+              wrapperClassName="sm:max-w-xs"
             />
-            <p className="text-xs text-n-500">ผู้ซื้อไม่เห็นตัวเลขนี้</p>
+            <p className="text-xs text-n-500">
+              ผู้ซื้อไม่เห็นตัวเลขนี้ — ระบบใช้ตอบข้อเสนอต่อรองราคา
+            </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="quantityDiscountMinQty">ซื้อตั้งแต่ (ชิ้น)</Label>
-            <Input
-              id="quantityDiscountMinQty"
-              name="quantityDiscountMinQty"
-              type="number"
-              min={2}
-              step={1}
-              defaultValue={product.quantityDiscount?.minQty ?? ""}
-            />
-          </div>
+          <div className="space-y-2 border-t border-n-200 pt-5">
+            <p className="text-xs font-semibold text-n-500">
+              ส่วนลดเมื่อซื้อหลายชิ้น
+            </p>
 
-          <div className="space-y-2">
-            <Label htmlFor="quantityDiscountPercent">ลด (%)</Label>
-            <Input
-              id="quantityDiscountPercent"
-              name="quantityDiscountPercent"
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              defaultValue={product.quantityDiscount?.percent ?? ""}
-            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="quantityDiscountMinQty">
+                  ซื้อตั้งแต่ (ชิ้น)
+                </Label>
+                <Input
+                  id="quantityDiscountMinQty"
+                  name="quantityDiscountMinQty"
+                  type="number"
+                  min={2}
+                  step={1}
+                  defaultValue={product.quantityDiscount?.minQty ?? ""}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quantityDiscountPercent">ลด (%)</Label>
+                <Input
+                  id="quantityDiscountPercent"
+                  name="quantityDiscountPercent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  defaultValue={product.quantityDiscount?.percent ?? ""}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-n-500">
+              กรอกทั้งสองช่อง หรือเว้นว่างทั้งคู่
+            </p>
           </div>
         </div>
       </details>
+
+      {saved && <FloorWarningNote product={saved} />}
 
       {error && (
         <p role="alert" className="text-sm text-rose-600">
@@ -346,7 +379,9 @@ function DetailsForm({
         <Button type="submit" variant="primary" size="lg" disabled={submitting}>
           {submitting ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}
         </Button>
-        {saved && !error && (
+        {/* FloorWarningNote leads with "บันทึกแล้ว" of its own, so this only
+            speaks when there was nothing else to say. */}
+        {saved && !error && saved.warnings.length === 0 && (
           <p role="status" className="text-sm font-semibold text-green">
             บันทึกแล้ว
           </p>
