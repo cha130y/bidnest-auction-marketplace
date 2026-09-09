@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AIRequestType } from '../../generated/prisma/enums';
+import { Prisma } from '../../generated/prisma/client';
+import { AIRequestType, OfferDecision } from '../../generated/prisma/enums';
 import { EnvVariable } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { NegotiatorService } from './negotiator.service';
@@ -71,14 +72,30 @@ export class NegotiatorFacadeService {
       throw new BadRequestException('This listing does not accept offers');
     }
 
-    await this.assertWithinRateLimit(buyerId, productId);
+    const recentOffers = await this.readRecentOffers(buyerId, productId);
+    const outstandingCounter =
+      NegotiatorFacadeService.findOutstandingCounter(recentOffers);
+    const isMeetingCounter =
+      outstandingCounter !== null && offerAmount >= outstandingCounter;
+
+    // Meeting the price this negotiation itself proposed is an acceptance
+    // rather than another probe at the secret floor: the amount came from the
+    // server, so sending it back reveals nothing about the floor and cannot be
+    // used to search for it. Charged against the cooldown, a buyer ready to
+    // agree would have to wait five minutes to say so — and one whose third
+    // attempt produced the counter could never say so at all, because the
+    // daily cap would already be spent on the negotiation that reached it.
+    if (!isMeetingCounter) {
+      this.assertWithinRateLimit(recentOffers);
+    }
 
     const result = this.negotiator.decide(
       offerAmount,
       product.negotiationFloor.toNumber(),
       product.price.toNumber(),
       quantity,
-      product.stockQty
+      product.stockQty,
+      outstandingCounter
     );
 
     const expiresAt =
@@ -153,20 +170,30 @@ export class NegotiatorFacadeService {
     return payload;
   }
 
-  private async assertWithinRateLimit(
-    buyerId: string,
-    productId: string
-  ): Promise<void> {
-    const recentOffers = await this.prisma.offer.findMany({
+  /**
+   * This buyer's offers on this listing inside the attempt window, newest
+   * first.
+   *
+   * One read serves both the rate limit and the outstanding counter, and the
+   * window bounds how old a counter may be when it is met: a proposal from
+   * yesterday is not one the seller is still standing behind, and PROD-002
+   * lets them move the price or the floor in between. The floor is re-checked
+   * against the listing as it is now regardless, so an old counter can never
+   * carry a price below the current floor.
+   */
+  private readRecentOffers(buyerId: string, productId: string) {
+    return this.prisma.offer.findMany({
       where: {
         buyerId,
         productId,
         createdAt: { gt: new Date(Date.now() - ATTEMPT_WINDOW_MS) }
       },
-      select: { createdAt: true },
+      select: { createdAt: true, decision: true, counterAmount: true },
       orderBy: { createdAt: 'desc' }
     });
+  }
 
+  private assertWithinRateLimit(recentOffers: { createdAt: Date }[]): void {
     if (recentOffers.length > 0) {
       const sinceLastOffer = Date.now() - recentOffers[0].createdAt.getTime();
       if (sinceLastOffer < COOLDOWN_MS) {
@@ -182,6 +209,26 @@ export class NegotiatorFacadeService {
         'You have reached the maximum number of offers for this item today'
       );
     }
+  }
+
+  /**
+   * The counter still on the table, if there is one.
+   *
+   * Read from the newest countered offer rather than the newest offer of any
+   * kind: an offer below the floor is refused outright and leaves no counter
+   * behind, and it should not withdraw the one the buyer was already holding.
+   */
+  private static findOutstandingCounter(
+    recentOffers: {
+      decision: OfferDecision;
+      counterAmount: Prisma.Decimal | null;
+    }[]
+  ): number | null {
+    const countered = recentOffers.find(
+      (offer) => offer.decision === 'COUNTERED' && offer.counterAmount !== null
+    );
+
+    return countered?.counterAmount?.toNumber() ?? null;
   }
 
   private signAcceptToken(payload: AcceptTokenPayload): Promise<string> {

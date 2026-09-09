@@ -46,6 +46,15 @@ export type CheckoutInput = {
    * whole cart, which is what the route did before selection existed.
    */
   cartItemIds?: string[]
+  /** CART-004 — the won lot being paid for, instead of a cart. */
+  auctionId?: string
+  /**
+   * AI-003 — the token the negotiator handed back on ACCEPTED, instead of a
+   * cart or a lot. Single-use and good for fifteen minutes; the listing, the
+   * quantity and the price all come from the offer it names, so nothing else
+   * about the purchase is sent alongside it.
+   */
+  offerAcceptToken?: string
 }
 
 /**

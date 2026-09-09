@@ -26,6 +26,19 @@ export const SELECTION_PARAM = "items"
  */
 export const AUCTION_PARAM = "auction"
 
+/**
+ * AI-003 — the accept token, when `/checkout` is opened from a negotiation
+ * that ended in an agreed price rather than from the cart.
+ *
+ * In the URL for the same reason as the two above: a reload has to still be
+ * paying for the same offer. Only the token travels here — the price and the
+ * quantity come back from the server, and the summary the screen draws is
+ * handed over separately (see `lib/offer-checkout.ts`) so it cannot be edited
+ * into something the payment will not match. All three are mutually
+ * exclusive; the API refuses a request carrying more than one.
+ */
+export const OFFER_PARAM = "offer"
+
 /** Cart line ids from the URL, or null for "all of it". */
 export function parseSelection(raw: string | null): string[] | null {
   if (!raw) return null
