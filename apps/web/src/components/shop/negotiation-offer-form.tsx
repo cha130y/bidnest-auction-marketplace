@@ -1,13 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { createOffer, type OfferResult } from '@/lib/api/ai-tools';
 import { ApiError } from '@/lib/api/client';
+import type { Product } from '@/lib/api/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatTHB } from '@/lib/format';
+import { rememberOffer } from '@/lib/offer-checkout';
 
 /**
  * AI-003 — AI Negotiator (Optional, owner: Dev 5)
@@ -18,27 +21,34 @@ import { formatTHB } from '@/lib/format';
  * a listing with no floor set just answers "This listing does not accept
  * offers" on submit rather than the form being hidden up front.
  *
- * On ACCEPTED, `onAccepted` hands the caller the offer (with `acceptToken`)
- * so checkout (CART-004, Dev3) can use it — this component does not navigate
- * to checkout itself, and as of 2026-08-24 CART-004 does not yet call
- * `verifyAndConsumeAcceptToken()` to redeem it, so `onAccepted` is currently
- * unused here; the accepted-offer card still explains the countdown so the
- * buyer knows to check out in time.
+ * A negotiation now ends somewhere. Meeting the counter is a button rather
+ * than an instruction to retype the number — the rule that makes that an
+ * acceptance lives in NegotiatorService — and an accepted price leads to
+ * checkout carrying its token, which CheckoutService redeems (CART-004). The
+ * SRS is explicit that the two are separate steps: "การต่อรองราคาเองไม่ได้ทำให้
+ * การซื้อสำเร็จ", so nothing here buys anything on its own.
  */
-export function NegotiationOfferForm({
-  productId,
-  onAccepted
-}: {
-  productId: string;
-  onAccepted?: (offer: OfferResult) => void;
-}) {
+export function NegotiationOfferForm({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [offerAmount, setOfferAmount] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () => createOffer(productId, quantity, Number(offerAmount)),
-    onSuccess: (offer) => {
-      if (offer.decision === 'ACCEPTED') onAccepted?.(offer);
+    // The amount is an argument rather than read from state, so the accept
+    // button can send the counter without first writing it into the input the
+    // buyer is looking at.
+    mutationFn: (amount: number) => createOffer(product.id, quantity, amount),
+    onSuccess: (offer, amount) => {
+      if (offer.decision !== 'ACCEPTED' || !offer.acceptToken) return;
+
+      // Handed over before the buyer can click through to checkout, so the
+      // page they land on can draw what they agreed to.
+      rememberOffer(offer.acceptToken, {
+        productId: product.id,
+        title: product.title,
+        quantity,
+        unitPrice: amount,
+        expiresAt: offer.expiresAt
+      });
     }
   });
 
@@ -71,19 +81,39 @@ export function NegotiationOfferForm({
         type="button"
         variant="secondary"
         disabled={!offerAmount || Number(offerAmount) <= 0 || mutation.isPending}
-        onClick={() => mutation.mutate()}
+        onClick={() => mutation.mutate(Number(offerAmount))}
       >
         {mutation.isPending ? 'กำลังส่งข้อเสนอ...' : 'เสนอราคา'}
       </Button>
 
       {mutation.isError && <p className="text-xs text-red">{errorMessage}</p>}
 
-      {mutation.isSuccess && <OfferResultCard offer={mutation.data} />}
+      {mutation.isSuccess && (
+        <OfferResultCard
+          offer={mutation.data}
+          agreedAmount={mutation.variables}
+          quantity={quantity}
+          pending={mutation.isPending}
+          onAcceptCounter={(amount) => mutation.mutate(amount)}
+        />
+      )}
     </div>
   );
 }
 
-function OfferResultCard({ offer }: { offer: OfferResult }) {
+function OfferResultCard({
+  offer,
+  agreedAmount,
+  quantity,
+  pending,
+  onAcceptCounter
+}: {
+  offer: OfferResult;
+  agreedAmount: number;
+  quantity: number;
+  pending: boolean;
+  onAcceptCounter: (amount: number) => void;
+}) {
   if (offer.decision === 'REJECTED') {
     return (
       <Card>
@@ -97,14 +127,28 @@ function OfferResultCard({ offer }: { offer: OfferResult }) {
   if (offer.decision === 'COUNTERED') {
     return (
       <Card>
-        <CardContent className="flex flex-col gap-1 text-sm text-n-700">
+        <CardContent className="flex flex-col gap-2 text-sm text-n-700">
           <span>ระบบเสนอราคาต่อรองกลับมา:</span>
           <span className="text-lg font-semibold text-ink">
             {offer.counterAmount != null ? formatTHB(offer.counterAmount) : '—'}
           </span>
-          <span className="text-xs text-n-400">
-            ต้องการยอมรับราคานี้ ให้เสนอราคาใหม่ที่เท่ากับจำนวนนี้ (คูลดาวน์ 5 นาทีก่อนเสนอครั้งถัดไป)
-          </span>
+
+          {offer.counterAmount != null && (
+            <>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={pending}
+                onClick={() => onAcceptCounter(offer.counterAmount as number)}
+              >
+                {pending ? 'กำลังยืนยัน...' : 'ยอมรับราคานี้'}
+              </Button>
+              <span className="text-xs text-n-400">
+                กดยอมรับได้ทันที ไม่ติดคูลดาวน์ — หรือจะเสนอราคาใหม่ก็ได้
+                (เสนอใหม่มีคูลดาวน์ 5 นาที)
+              </span>
+            </>
+          )}
         </CardContent>
       </Card>
     );
@@ -112,11 +156,45 @@ function OfferResultCard({ offer }: { offer: OfferResult }) {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-1 text-sm text-n-700">
+      <CardContent className="flex flex-col gap-2 text-sm text-n-700">
         <span className="font-semibold text-green">ผู้ขายยอมรับข้อเสนอแล้ว 🎉</span>
+
+        <span className="text-lg font-semibold text-ink">
+          {formatTHB(agreedAmount)}
+          {quantity > 1 && (
+            <span className="ml-1 text-sm font-normal text-n-500">
+              × {quantity} ชิ้น
+            </span>
+          )}
+        </span>
+
         {offer.expiresAt && <CountdownNote expiresAt={offer.expiresAt} />}
+
+        {offer.acceptToken ? (
+          <Button
+            type="button"
+            variant="primary"
+            nativeButton={false}
+            render={
+              <Link
+                href={`/checkout?offer=${encodeURIComponent(offer.acceptToken)}`}
+              />
+            }
+          >
+            ชำระเงินในราคานี้
+          </Button>
+        ) : (
+          // The API only withholds the token when it did not accept, so this is
+          // unreachable in practice — said plainly rather than left as a button
+          // that would go nowhere.
+          <span className="text-xs text-red">
+            เปิดหน้าชำระเงินไม่ได้ กรุณาเสนอราคาใหม่อีกครั้ง
+          </span>
+        )}
+
         <span className="text-xs text-n-400">
-          กด checkout ให้เสร็จภายในเวลานี้ — ต่อรองสำเร็จไม่ได้แปลว่าซื้อสำเร็จ
+          ต่อรองสำเร็จไม่ได้แปลว่าซื้อสำเร็จ — ต้องชำระเงินให้เสร็จภายในเวลานี้
+          และสินค้าต้องยังมีอยู่
         </span>
       </CardContent>
     </Card>

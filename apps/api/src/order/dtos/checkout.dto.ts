@@ -90,4 +90,21 @@ export class CheckoutDto {
   @IsUUID('4')
   @IsOptional()
   auctionId?: string;
+
+  /**
+   * AI-003 — the token `POST /products/:id/offers` hands back on ACCEPTED,
+   * when this payment is an agreed price rather than a cart or a won lot.
+   *
+   * The token is the whole request: the listing, the quantity and the amount
+   * all come from the offer it names, and the right to pay comes from the
+   * buyer it was signed for. Nothing about the price could be influenced from
+   * here, exactly as nothing about a lot's price can.
+   *
+   * Mutually exclusive with the two above, refused in the service alongside
+   * the existing cart/auction check for the same reason.
+   */
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  offerAcceptToken?: string;
 }

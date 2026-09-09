@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -26,11 +26,17 @@ import {
 import { getArena, unpaidWinsQueryKey } from "@/lib/api/auctions"
 import {
   AUCTION_PARAM,
+  OFFER_PARAM,
   SELECTION_PARAM,
   parseSelection,
   selectedItems,
   totalsOf,
 } from "@/lib/cart-selection"
+import { forgetOffer, parseOffer, readOfferSnapshot } from "@/lib/offer-checkout"
+import { useHydrated } from "@/lib/use-hydrated"
+
+/** AI-003 — the hand-off never changes under the screen; there is nothing to subscribe to. */
+const subscribeToNothing = () => () => {}
 import { formatTHB } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CartItem, CheckoutResult, PaymentMethod } from "@/lib/api/types"
@@ -109,6 +115,13 @@ export function CheckoutView() {
   const auctionId = params.get(AUCTION_PARAM)
 
   if (auctionId) return <AuctionCheckout auctionId={auctionId} />
+
+  // AI-003 — an agreed price, arrived at from a listing. Checked before the
+  // cart for the same reason as a win: the buyer came here to pay for this one
+  // thing, and whatever is in their basket is not it.
+  const offerToken = params.get(OFFER_PARAM)
+
+  if (offerToken) return <OfferCheckout token={offerToken} />
 
   return (
     <>
@@ -374,6 +387,123 @@ function AuctionGate({
   )
 }
 
+/**
+ * AI-003 — paying the price a negotiation settled on.
+ *
+ * The overlay is hoisted for the same reason as the other two: a refused
+ * payment invalidates the offer, the gate below then has nothing to draw, and
+ * the screen explaining why must not be taken down along with it.
+ */
+function OfferCheckout({ token }: { token: string }) {
+  const [failure, setFailure] = useState<unknown>(null)
+
+  return (
+    <>
+      {failure !== null && (
+        <FailureOverlay
+          error={failure}
+          context="OFFER"
+          onRetry={() => setFailure(null)}
+        />
+      )}
+      <OfferGate token={token} onFailed={setFailure} />
+    </>
+  )
+}
+
+/**
+ * Everything shown here is display, handed over by the listing page.
+ *
+ * There is no read-back endpoint for a single offer, and inventing one would
+ * put a price the buyer negotiated on a URL anyone could edit. What guards the
+ * payment is the token: `CheckoutService.priceOffer` redeems it and prices the
+ * order from the offer row it names, so a tampered summary would change what
+ * this screen says and nothing about what is charged.
+ *
+ * Arriving without the hand-off — a fresh tab, a shared link, a cleared
+ * session — is therefore not a payment that can be drawn honestly, and it says
+ * so rather than guessing at numbers.
+ */
+function OfferGate({
+  token,
+  onFailed,
+}: {
+  token: string
+  onFailed: (error: unknown) => void
+}) {
+  const { isAuthenticated, isAuthReady } = useCart()
+  const [paid, setPaid] = useState<{
+    result: CheckoutResult
+    title: string
+  } | null>(null)
+
+  /*
+   * sessionStorage is the browser's answer, not the server's, so it reaches
+   * this screen the same way every other browser-only fact does: a server
+   * snapshot of null for the hydration render, the real one after commit.
+   * `useHydrated` keeps the skeleton up for that one render, so nobody sees
+   * "open this from the product page" flash past before the value arrives.
+   */
+  const hydrated = useHydrated()
+  const stored = useSyncExternalStore(subscribeToNothing, readOfferSnapshot, () => null)
+  const handoff = useMemo(() => parseOffer(stored, token), [stored, token])
+
+  if (paid) return <Receipt result={paid.result} lotTitle={paid.title} />
+
+  if (!isAuthReady || !hydrated) {
+    return (
+      <div
+        className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
+        aria-hidden="true"
+      />
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Notice title="เข้าสู่ระบบก่อนชำระเงิน">
+        <Button variant="primary" size="lg" nativeButton={false} render={<Link href={loginHref()} />}>
+          เข้าสู่ระบบ
+        </Button>
+      </Notice>
+    )
+  }
+
+  if (!handoff) {
+    return (
+      <Notice title="เปิดหน้าชำระเงินนี้จากหน้าสินค้า">
+        <p className="mb-6 text-base text-n-600">
+          ราคาที่ต่อรองไว้ผูกกับแท็บที่เสนอราคา — กลับไปที่หน้าสินค้าแล้วกด
+          “ชำระเงินในราคานี้” อีกครั้ง หรือเสนอราคาใหม่ถ้าเลย 15 นาทีไปแล้ว
+        </p>
+        <Button variant="primary" size="lg" nativeButton={false} render={<Link href="/shop" />}>
+          กลับไปหน้าร้าน
+        </Button>
+      </Notice>
+    )
+  }
+
+  return (
+    <CheckoutForm
+      payable={{
+        kind: "OFFER",
+        token,
+        productId: handoff.productId,
+        title: handoff.title,
+        quantity: handoff.quantity,
+        unitPrice: handoff.unitPrice,
+      }}
+      onDone={(result) => {
+        // Single-use on the server too — keeping it would only offer the buyer
+        // a second press that could never work.
+        forgetOffer()
+        setPaid({ result, title: handoff.title })
+      }}
+      onFailed={onFailed}
+    />
+  )
+}
+
 function Notice({
   title,
   children,
@@ -407,6 +537,15 @@ type Payable =
       isPartial: boolean
     }
   | { kind: "AUCTION"; auctionId: string; title: string; soldPrice: string }
+  | {
+      kind: "OFFER"
+      /** AI-003 — the only part of this the server reads. */
+      token: string
+      productId: string
+      title: string
+      quantity: number
+      unitPrice: number
+    }
 
 /**
  * The one shape the summary panel and the request are both built from.
@@ -426,6 +565,21 @@ function summarise(payable: Payable) {
       /** What the buyer is paying for, when it is not a basket. */
       lotTitle: payable.title,
       request: { auctionId: payable.auctionId },
+    }
+  }
+
+  if (payable.kind === "OFFER") {
+    return {
+      itemCount: payable.quantity,
+      // PROD-007 — an agreed price does not also take the quantity discount
+      // ("ไม่ทับซ้อนกัน"), so there is no saving to show against it. The server
+      // prices it the same way.
+      discountTotal: "0",
+      total: (payable.unitPrice * payable.quantity).toFixed(2),
+      sellerCount: 1,
+      leftInCart: 0,
+      lotTitle: payable.title,
+      request: { offerAcceptToken: payable.token },
     }
   }
 
@@ -760,12 +914,18 @@ function CheckoutForm({
               href={
                 payable.kind === "AUCTION"
                   ? `/auctions/${payable.auctionId}`
-                  : "/cart"
+                  : payable.kind === "OFFER"
+                    ? `/shop/${payable.productId}`
+                    : "/cart"
               }
             />
           }
         >
-          {payable.kind === "AUCTION" ? "กลับไปหน้าประมูล" : "กลับไปแก้ตะกร้า"}
+          {payable.kind === "AUCTION"
+            ? "กลับไปหน้าประมูล"
+            : payable.kind === "OFFER"
+              ? "กลับไปหน้าสินค้า"
+              : "กลับไปแก้ตะกร้า"}
         </Button>
       </aside>
     </form>

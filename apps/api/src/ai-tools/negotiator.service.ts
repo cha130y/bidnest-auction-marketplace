@@ -24,12 +24,30 @@ export interface NegotiationResult {
  */
 @Injectable()
 export class NegotiatorService {
+  /**
+   * `outstandingCounter` is the amount this negotiation last proposed to this
+   * buyer for this listing, or null on a first offer.
+   *
+   * Without it the negotiation had no way to end in the buyer's favour. Every
+   * counter is the midpoint between the offer and the asking price, so it is
+   * always below the asking price — and the only other route to ACCEPTED is
+   * offering the asking price or more. Meeting a counter therefore produced
+   * another counter, halfway again, and the sequence approaches the asking
+   * price without ever reaching it: a buyer could negotiate for ever and never
+   * be allowed to pay less than the sticker.
+   *
+   * Taking one's own proposal seriously is what closes it. The rule the SRS
+   * actually fixes is the floor — "จะไม่มีทางอนุมัติราคาที่ต่ำกว่าราคาต่ำสุดที่
+   * ตั้งไว้เด็ดขาด" — and that is still checked first and independently here,
+   * so an accepted counter can never fall below it either.
+   */
   decide(
     offerAmount: number,
     floor: number,
     currentPrice: number,
     quantity: number,
-    stockQty: number
+    stockQty: number,
+    outstandingCounter: number | null = null
   ): NegotiationResult {
     if (quantity > stockQty) {
       return { decision: 'REJECTED', counterAmount: null };
@@ -40,6 +58,11 @@ export class NegotiatorService {
     }
 
     if (offerAmount >= currentPrice) {
+      return { decision: 'ACCEPTED', counterAmount: null };
+    }
+
+    // Only ever reached above the floor, because that check is above this one.
+    if (outstandingCounter !== null && offerAmount >= outstandingCounter) {
       return { decision: 'ACCEPTED', counterAmount: null };
     }
 

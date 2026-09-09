@@ -6,6 +6,7 @@ import type {
   Product,
   ProductRemoval,
   ProductSort,
+  SavedProduct,
   StoredImage,
 } from "@/lib/api/types"
 
@@ -121,7 +122,7 @@ export type CreateProductInput = {
 }
 
 export function createProduct(input: CreateProductInput) {
-  return apiFetch<OwnerProduct>("/products", {
+  return apiFetch<SavedProduct>("/products", {
     method: "POST",
     body: JSON.stringify(input),
   })
@@ -131,7 +132,7 @@ export function updateProduct(
   id: string,
   input: Partial<CreateProductInput>
 ) {
-  return apiFetch<OwnerProduct>(`/products/${id}`, {
+  return apiFetch<SavedProduct>(`/products/${id}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   })

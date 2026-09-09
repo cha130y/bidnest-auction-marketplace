@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
+import { FloorWarningNote } from "@/components/product/floor-warning-note"
 import { PendingImagePicker } from "@/components/product/pending-image-picker"
 import { SellerShell } from "@/components/auction/seller-shell"
 import { Button } from "@/components/ui/button"
@@ -19,7 +21,7 @@ import { ApiError } from "@/lib/api/client"
 import { createProduct } from "@/lib/api/products"
 import { listCategories } from "@/lib/api/categories"
 import { categoryLabel } from "@/lib/category-labels"
-import type { CategoryTree } from "@/lib/api/types"
+import type { CategoryTree, SavedProduct } from "@/lib/api/types"
 
 const CONDITIONS: Record<string, string> = {
   NEW: "ใหม่",
@@ -48,6 +50,17 @@ function Form() {
   const [condition, setCondition] = useState("USED")
   const [imageUrls, setImageUrls] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  /**
+   * PROD-007 — the listing this screen just created, held only when the server
+   * had an advisory about it.
+   *
+   * This screen normally leaves for the listing page the moment it saves,
+   * which would carry a warning off the screen before anyone read it. Set,
+   * this stays put and offers the same destination as a link instead — and
+   * takes the create button away with it, because the listing already exists
+   * and pressing it again would file a second one.
+   */
+  const [saved, setSaved] = useState<SavedProduct | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -116,6 +129,12 @@ function Form() {
         quantityDiscountMinQty: number("quantityDiscountMinQty"),
         quantityDiscountPercent: number("quantityDiscountPercent"),
       })
+
+      if (product.warnings.length > 0) {
+        setSaved(product)
+        setSubmitting(false)
+        return
+      }
 
       router.push(`/shop/${product.id}`)
     } catch (caught) {
@@ -226,8 +245,16 @@ function Form() {
           ตัวเลือกเพิ่มเติม — ราคาต่ำสุดที่ยอมรับ และส่วนลดตามจำนวน
         </summary>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        {/*
+          Two settings, not three fields. PROD-006's floor stands on its own,
+          while PROD-007's two are refused unless both are filled — see
+          ProductService.assertDiscountRuleIsComplete. A single three-column row
+          read as three peers, so a seller who filled only "ซื้อตั้งแต่" learned
+          about the pairing from a 400 after saving.
+        */}
+        <div className="mt-4 space-y-5">
           <div className="space-y-2">
+            <p className="text-xs font-semibold text-n-500">การต่อรองราคา</p>
             <Label htmlFor="negotiationFloor">ราคาต่ำสุดที่ยอมรับ</Label>
             {/* PROD-006 — never leaves the server on a buyer-facing route. */}
             <Input
@@ -236,34 +263,53 @@ function Form() {
               type="number"
               min={0}
               step="0.01"
+              wrapperClassName="sm:max-w-xs"
             />
-            <p className="text-xs text-n-500">ผู้ซื้อไม่เห็นตัวเลขนี้</p>
+            <p className="text-xs text-n-500">
+              ผู้ซื้อไม่เห็นตัวเลขนี้ — ระบบใช้ตอบข้อเสนอต่อรองราคา
+            </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="quantityDiscountMinQty">ซื้อตั้งแต่ (ชิ้น)</Label>
-            <Input
-              id="quantityDiscountMinQty"
-              name="quantityDiscountMinQty"
-              type="number"
-              min={2}
-              step={1}
-            />
-          </div>
+          <div className="space-y-2 border-t border-n-200 pt-5">
+            <p className="text-xs font-semibold text-n-500">
+              ส่วนลดเมื่อซื้อหลายชิ้น
+            </p>
 
-          <div className="space-y-2">
-            <Label htmlFor="quantityDiscountPercent">ลด (%)</Label>
-            <Input
-              id="quantityDiscountPercent"
-              name="quantityDiscountPercent"
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="quantityDiscountMinQty">
+                  ซื้อตั้งแต่ (ชิ้น)
+                </Label>
+                <Input
+                  id="quantityDiscountMinQty"
+                  name="quantityDiscountMinQty"
+                  type="number"
+                  min={2}
+                  step={1}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quantityDiscountPercent">ลด (%)</Label>
+                <Input
+                  id="quantityDiscountPercent"
+                  name="quantityDiscountPercent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-n-500">
+              กรอกทั้งสองช่อง หรือเว้นว่างทั้งคู่
+            </p>
           </div>
         </div>
       </details>
+
+      {saved && <FloorWarningNote product={saved} />}
 
       {error && (
         <p role="alert" className="text-sm text-rose-600">
@@ -271,9 +317,25 @@ function Form() {
         </p>
       )}
 
-      <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-        {submitting ? "กำลังบันทึก…" : "ลงขายสินค้า"}
-      </Button>
+      {saved ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href={`/sell/products/${saved.id}`}>
+            <Button type="button" variant="primary" size="lg">
+              แก้ไขราคาอีกครั้ง
+            </Button>
+          </Link>
+          <Link
+            href={`/shop/${saved.id}`}
+            className="text-sm font-semibold text-amber-600 hover:text-ink"
+          >
+            ข้ามไปดูหน้าที่ผู้ซื้อเห็น
+          </Link>
+        </div>
+      ) : (
+        <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+          {submitting ? "กำลังบันทึก…" : "ลงขายสินค้า"}
+        </Button>
+      )}
     </form>
   )
 }
