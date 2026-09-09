@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Script from "next/script"
-import { signIn } from "next-auth/react"
 
 import { Separator } from "@/components/ui/separator"
+import type { ApiTokens } from "@/lib/auth/api-contract"
+import { signInWithTokens } from "@/lib/auth/sign-in-with-tokens"
 
 /**
  * AUTH-003 / AUTH-006 — the two provider buttons under the password form.
@@ -108,12 +109,9 @@ export function OAuthButtons({ lineEnabled }: { lineEnabled: boolean }) {
       // AUTH-007 — a browser this account has answered a code from before
       // gets the tokens here and never sees the code screen.
       if (body && typeof body === "object" && "accessToken" in body) {
-        const signedIn = await signIn("oauth-tokens", {
-          payload: JSON.stringify(body),
-          redirect: false
-        })
-        if (signedIn?.error) {
-          setFailure("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+        const failed = await signInWithTokens(body as ApiTokens)
+        if (failed) {
+          setFailure(`เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่ (${failed})`)
           return
         }
         router.push(callbackUrl ?? "/")
