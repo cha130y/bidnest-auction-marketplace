@@ -1,16 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { createOffer, type OfferResult } from '@/lib/api/ai-tools';
 import { ApiError } from '@/lib/api/client';
-import type { Product } from '@/lib/api/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatTHB } from '@/lib/format';
-import { rememberOffer } from '@/lib/offer-checkout';
+import { OFFER_PARAM } from '@/lib/cart-selection';
+import { useOfferMinutesLeft } from '@/lib/use-offer-countdown';
 
 /**
  * AI-003 — AI Negotiator (Optional, owner: Dev 5)
@@ -24,11 +24,15 @@ import { rememberOffer } from '@/lib/offer-checkout';
  * A negotiation now ends somewhere. Meeting the counter is a button rather
  * than an instruction to retype the number — the rule that makes that an
  * acceptance lives in NegotiatorService — and an accepted price leads to
- * checkout carrying its token, which CheckoutService redeems (CART-004). The
- * SRS is explicit that the two are separate steps: "การต่อรองราคาเองไม่ได้ทำให้
- * การซื้อสำเร็จ", so nothing here buys anything on its own.
+ * checkout, which redeems it (CART-004). The SRS is explicit that the two are
+ * separate steps: "การต่อรองราคาเองไม่ได้ทำให้การซื้อสำเร็จ", so nothing here
+ * buys anything on its own.
+ *
+ * Leaving this card is no longer losing the offer: `PayableOffersBanner` reads
+ * the same offers back from the server on the screens a buyer opens with money
+ * in mind, so this is a shortcut rather than the only door.
  */
-export function NegotiationOfferForm({ product }: { product: Product }) {
+export function NegotiationOfferForm({ productId }: { productId: string }) {
   const [quantity, setQuantity] = useState(1);
   const [offerAmount, setOfferAmount] = useState('');
 
@@ -36,20 +40,7 @@ export function NegotiationOfferForm({ product }: { product: Product }) {
     // The amount is an argument rather than read from state, so the accept
     // button can send the counter without first writing it into the input the
     // buyer is looking at.
-    mutationFn: (amount: number) => createOffer(product.id, quantity, amount),
-    onSuccess: (offer, amount) => {
-      if (offer.decision !== 'ACCEPTED' || !offer.acceptToken) return;
-
-      // Handed over before the buyer can click through to checkout, so the
-      // page they land on can draw what they agreed to.
-      rememberOffer(offer.acceptToken, {
-        productId: product.id,
-        title: product.title,
-        quantity,
-        unitPrice: amount,
-        expiresAt: offer.expiresAt
-      });
-    }
+    mutationFn: (amount: number) => createOffer(productId, quantity, amount)
   });
 
   const errorMessage =
@@ -170,27 +161,22 @@ function OfferResultCard({
 
         {offer.expiresAt && <CountdownNote expiresAt={offer.expiresAt} />}
 
-        {offer.acceptToken ? (
-          <Button
-            type="button"
-            variant="primary"
-            nativeButton={false}
-            render={
-              <Link
-                href={`/checkout?offer=${encodeURIComponent(offer.acceptToken)}`}
-              />
-            }
-          >
-            ชำระเงินในราคานี้
-          </Button>
-        ) : (
-          // The API only withholds the token when it did not accept, so this is
-          // unreachable in practice — said plainly rather than left as a button
-          // that would go nowhere.
-          <span className="text-xs text-red">
-            เปิดหน้าชำระเงินไม่ได้ กรุณาเสนอราคาใหม่อีกครั้ง
-          </span>
-        )}
+        {/*
+          The id rather than the token: the checkout screen reads the offer
+          back from `GET /offers/pending`, which answers only with this buyer's
+          own, so nothing here has to travel through a URL or be kept in the
+          tab. Leaving this page no longer strands the offer either — the
+          banner on the cart, the checkout and the order list all offer it
+          again until it lapses.
+        */}
+        <Button
+          type="button"
+          variant="primary"
+          nativeButton={false}
+          render={<Link href={`/checkout?${OFFER_PARAM}=${offer.id}`} />}
+        >
+          ชำระเงินในราคานี้
+        </Button>
 
         <span className="text-xs text-n-400">
           ต่อรองสำเร็จไม่ได้แปลว่าซื้อสำเร็จ — ต้องชำระเงินให้เสร็จภายในเวลานี้
@@ -201,28 +187,12 @@ function OfferResultCard({
   );
 }
 
-/**
- * `Date.now()` is impure — it cannot be called during render (see
- * react-hooks/purity). Ticks in an effect instead, which also gets a real
- * live-updating countdown instead of a number frozen at the render that
- * happened to show it.
- */
 function CountdownNote({ expiresAt }: { expiresAt: string }) {
-  const computeMinutesLeft = () =>
-    Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 60_000));
+  const minutesLeft = useOfferMinutesLeft(expiresAt);
 
-  // Lazy initializer: React's own escape hatch for reading an impure value
-  // (the current time) exactly once, to seed state rather than during render.
-  const [minutesLeft, setMinutesLeft] = useState(computeMinutesLeft);
-
-  useEffect(() => {
-    // The effect only subscribes — it never calls setState synchronously in
-    // its own body, only from the interval's callback, once external time
-    // has actually moved on.
-    const interval = setInterval(() => setMinutesLeft(computeMinutesLeft()), 30_000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expiresAt]);
-
-  return <span className="text-xs text-amber-600">เหลือเวลายืนยัน checkout: {minutesLeft} นาที</span>;
+  return (
+    <span className="text-xs text-amber-600">
+      เหลือเวลายืนยัน checkout: {minutesLeft} นาที
+    </span>
+  );
 }

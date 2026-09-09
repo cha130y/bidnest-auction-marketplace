@@ -61,3 +61,45 @@ export function createOffer(
     body: JSON.stringify({ quantity, offerAmount }),
   })
 }
+
+/** AI-003 — one agreed price the buyer has not paid for yet. */
+export type PayableOffer = {
+  offerId: string
+  quantity: number
+  /** The agreed price per unit, as the server holds it. */
+  unitPrice: string
+  total: string
+  expiresAt: string
+  /** False when the listing no longer has enough left — checkout would refuse. */
+  inStock: boolean
+  product: { id: string; title: string; imageUrl: string | null }
+  /**
+   * Signed fresh on every read. The offer row's own expiry is what decides
+   * whether it can be redeemed, so a token from an older read going stale
+   * costs nothing.
+   */
+  acceptToken: string
+}
+
+/**
+ * AI-003 — every agreed price still standing, newest expiry first.
+ *
+ * The counterpart to `listWonAuctions({ unpaid: true })`. An accepted offer
+ * used to be reachable only from the card that announced it, so leaving the
+ * page stranded it: fifteen minutes is too short to negotiate again, and the
+ * five-minute cooldown often makes that impossible anyway.
+ */
+export function listPayableOffers(): Promise<{ items: PayableOffer[] }> {
+  return apiFetch<{ items: PayableOffer[] }>("/offers/pending")
+}
+
+export const payableOffersQueryKey = ["offers", "pending"] as const
+
+export function payableOffersQueryOptions() {
+  return {
+    queryKey: payableOffersQueryKey,
+    queryFn: listPayableOffers,
+    // A 401 does not fix itself by asking again
+    retry: false,
+  }
+}

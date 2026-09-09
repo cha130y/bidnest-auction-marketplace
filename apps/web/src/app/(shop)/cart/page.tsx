@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { UnpaidWinsBanner } from "@/components/auction/unpaid-wins-banner"
+import { PayableOffersBanner } from "@/components/shop/payable-offers-banner"
 import { CartView } from "@/components/cart/cart-view"
 
 export const metadata: Metadata = {
@@ -30,6 +31,11 @@ export default function CartPage() {
           empty cart is exactly who needs this, and `CartView` returns its
           empty state before it would ever get to draw one. */}
       <UnpaidWinsBanner />
+
+      {/* AI-003 — the same reminder for a price that was negotiated rather
+          than won. It lapses in fifteen minutes, so it is the more urgent of
+          the two. */}
+      <PayableOffersBanner />
 
       <CartView />
     </div>

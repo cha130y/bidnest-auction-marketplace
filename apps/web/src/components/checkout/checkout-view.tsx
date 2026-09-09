@@ -1,12 +1,13 @@
 "use client"
 
-import { useMemo, useState, useSyncExternalStore } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react"
 
 import { UnpaidWinsBanner } from "@/components/auction/unpaid-wins-banner"
+import { PayableOffersBanner } from "@/components/shop/payable-offers-banner"
 import { cartQueryKey, useCart } from "@/components/cart/cart-provider"
 import {
   FailureOverlay,
@@ -32,11 +33,10 @@ import {
   selectedItems,
   totalsOf,
 } from "@/lib/cart-selection"
-import { forgetOffer, parseOffer, readOfferSnapshot } from "@/lib/offer-checkout"
-import { useHydrated } from "@/lib/use-hydrated"
-
-/** AI-003 — the hand-off never changes under the screen; there is nothing to subscribe to. */
-const subscribeToNothing = () => () => {}
+import {
+  payableOffersQueryKey,
+  payableOffersQueryOptions,
+} from "@/lib/api/ai-tools"
 import { formatTHB } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CartItem, CheckoutResult, PaymentMethod } from "@/lib/api/types"
@@ -119,9 +119,9 @@ export function CheckoutView() {
   // AI-003 — an agreed price, arrived at from a listing. Checked before the
   // cart for the same reason as a win: the buyer came here to pay for this one
   // thing, and whatever is in their basket is not it.
-  const offerToken = params.get(OFFER_PARAM)
+  const offerId = params.get(OFFER_PARAM)
 
-  if (offerToken) return <OfferCheckout token={offerToken} />
+  if (offerId) return <OfferCheckout offerId={offerId} />
 
   return (
     <>
@@ -129,6 +129,7 @@ export function CheckoutView() {
           already paying for a lot, and a banner offering them another one is
           in the way of the payment they came here to make. */}
       <UnpaidWinsBanner />
+      <PayableOffersBanner />
       <CartCheckout />
     </>
   )
@@ -394,7 +395,7 @@ function AuctionGate({
  * payment invalidates the offer, the gate below then has nothing to draw, and
  * the screen explaining why must not be taken down along with it.
  */
-function OfferCheckout({ token }: { token: string }) {
+function OfferCheckout({ offerId }: { offerId: string }) {
   const [failure, setFailure] = useState<unknown>(null)
 
   return (
@@ -406,29 +407,29 @@ function OfferCheckout({ token }: { token: string }) {
           onRetry={() => setFailure(null)}
         />
       )}
-      <OfferGate token={token} onFailed={setFailure} />
+      <OfferGate offerId={offerId} onFailed={setFailure} />
     </>
   )
 }
 
 /**
- * Everything shown here is display, handed over by the listing page.
+ * The offer is read back from the server rather than carried here.
  *
- * There is no read-back endpoint for a single offer, and inventing one would
- * put a price the buyer negotiated on a URL anyone could edit. What guards the
- * payment is the token: `CheckoutService.priceOffer` redeems it and prices the
- * order from the offer row it names, so a tampered summary would change what
- * this screen says and nothing about what is charged.
+ * The URL holds the offer's id and nothing else. Everything shown — the
+ * listing, the quantity, the agreed price — comes from `GET /offers/pending`,
+ * which answers only with this buyer's own offers, so there is nothing on the
+ * address bar worth editing: another person's id is simply not in the list.
+ * The accept token comes back on that same read, freshly signed, and never
+ * appears in a URL or in browser history.
  *
- * Arriving without the hand-off — a fresh tab, a shared link, a cleared
- * session — is therefore not a payment that can be drawn honestly, and it says
- * so rather than guessing at numbers.
+ * It also means the link survives what a hand-off in the tab could not: a
+ * refresh, a second tab, the phone the buyer picked up instead.
  */
 function OfferGate({
-  token,
+  offerId,
   onFailed,
 }: {
-  token: string
+  offerId: string
   onFailed: (error: unknown) => void
 }) {
   const { isAuthenticated, isAuthReady } = useCart()
@@ -437,20 +438,16 @@ function OfferGate({
     title: string
   } | null>(null)
 
-  /*
-   * sessionStorage is the browser's answer, not the server's, so it reaches
-   * this screen the same way every other browser-only fact does: a server
-   * snapshot of null for the hydration render, the real one after commit.
-   * `useHydrated` keeps the skeleton up for that one render, so nobody sees
-   * "open this from the product page" flash past before the value arrives.
-   */
-  const hydrated = useHydrated()
-  const stored = useSyncExternalStore(subscribeToNothing, readOfferSnapshot, () => null)
-  const handoff = useMemo(() => parseOffer(stored, token), [stored, token])
+  const offers = useQuery({
+    ...payableOffersQueryOptions(),
+    enabled: isAuthReady && isAuthenticated,
+  })
+
+  const offer = offers.data?.items.find((item) => item.offerId === offerId)
 
   if (paid) return <Receipt result={paid.result} lotTitle={paid.title} />
 
-  if (!isAuthReady || !hydrated) {
+  if (!isAuthReady || (isAuthenticated && offers.isPending)) {
     return (
       <div
         className="h-96 rounded-r4 bg-white shadow-sh1 motion-safe:animate-pulse"
@@ -469,12 +466,15 @@ function OfferGate({
     )
   }
 
-  if (!handoff) {
+  // Lapsed, already paid for, withdrawn by the seller, or never this buyer's.
+  // One message for all of them: telling somebody holding an id which of those
+  // it was is telling them about an offer that is not theirs.
+  if (!offer) {
     return (
-      <Notice title="เปิดหน้าชำระเงินนี้จากหน้าสินค้า">
+      <Notice title="ราคาที่ตกลงไว้ใช้ไม่ได้แล้ว">
         <p className="mb-6 text-base text-n-600">
-          ราคาที่ต่อรองไว้ผูกกับแท็บที่เสนอราคา — กลับไปที่หน้าสินค้าแล้วกด
-          “ชำระเงินในราคานี้” อีกครั้ง หรือเสนอราคาใหม่ถ้าเลย 15 นาทีไปแล้ว
+          ราคาที่ต่อรองได้ใช้ได้ครั้งเดียวภายใน 15 นาที และสินค้าต้องยังเปิดขายอยู่ —
+          เสนอราคาใหม่ได้ที่หน้าสินค้า
         </p>
         <Button variant="primary" size="lg" nativeButton={false} render={<Link href="/shop" />}>
           กลับไปหน้าร้าน
@@ -487,18 +487,13 @@ function OfferGate({
     <CheckoutForm
       payable={{
         kind: "OFFER",
-        token,
-        productId: handoff.productId,
-        title: handoff.title,
-        quantity: handoff.quantity,
-        unitPrice: handoff.unitPrice,
+        token: offer.acceptToken,
+        productId: offer.product.id,
+        title: offer.product.title,
+        quantity: offer.quantity,
+        total: offer.total,
       }}
-      onDone={(result) => {
-        // Single-use on the server too — keeping it would only offer the buyer
-        // a second press that could never work.
-        forgetOffer()
-        setPaid({ result, title: handoff.title })
-      }}
+      onDone={(result) => setPaid({ result, title: offer.product.title })}
       onFailed={onFailed}
     />
   )
@@ -544,7 +539,8 @@ type Payable =
       productId: string
       title: string
       quantity: number
-      unitPrice: number
+      /** Already totalled by the server, so this screen adds nothing up. */
+      total: string
     }
 
 /**
@@ -575,7 +571,7 @@ function summarise(payable: Payable) {
       // ("ไม่ทับซ้อนกัน"), so there is no saving to show against it. The server
       // prices it the same way.
       discountTotal: "0",
-      total: (payable.unitPrice * payable.quantity).toFixed(2),
+      total: payable.total,
       sellerCount: 1,
       leftInCart: 0,
       lotTitle: payable.title,
@@ -677,6 +673,10 @@ function CheckoutForm({
       // reach without a remount, so it has to be told rather than left to
       // notice on its own.
       void queryClient.invalidateQueries({ queryKey: unpaidWinsQueryKey })
+
+      // AI-003 — and the same for an agreed price, which is single-use: the
+      // reminder has to stop offering a payment that can no longer be made.
+      void queryClient.invalidateQueries({ queryKey: payableOffersQueryKey })
 
       onDone(result)
     },
