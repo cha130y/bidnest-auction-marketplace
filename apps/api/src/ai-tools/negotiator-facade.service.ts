@@ -137,6 +137,84 @@ export class NegotiatorFacadeService {
     };
   }
 
+  /**
+   * AI-003 — the agreed prices this buyer can still pay for.
+   *
+   * The counterpart to `GET /auctions/won`, and it exists for the same reason:
+   * an accepted offer only ever led to checkout through the button on the card
+   * that announced it, so navigating away — or closing the tab — left the offer
+   * alive in the database with nothing anywhere leading back to it. Fifteen
+   * minutes is short enough that "negotiate it again" is not an answer, and the
+   * cooldown means it often is not even possible.
+   *
+   * `expiresAt > now` is the whole filter, and it is exact: consuming a token
+   * moves `expiresAt` into the past (see `verifyAndConsumeAcceptToken`), so one
+   * comparison excludes the expired and the already-paid alike. Listings that
+   * are no longer on sale drop out too — that offer cannot be paid whatever the
+   * clock says.
+   *
+   * Each row carries a freshly signed token rather than the original, which was
+   * never stored. That is safe because the token has never been the thing that
+   * decides: the offer row's own `expiresAt` is, and it is checked again, under
+   * a conditional update, at the moment of redemption.
+   */
+  async listPayableOffers(buyerId: string) {
+    const offers = await this.prisma.offer.findMany({
+      where: {
+        buyerId,
+        decision: 'ACCEPTED',
+        expiresAt: { gt: new Date() },
+        product: { status: 'ACTIVE' }
+      },
+      select: {
+        id: true,
+        quantity: true,
+        offerAmount: true,
+        expiresAt: true,
+        product: {
+          select: {
+            id: true,
+            title: true,
+            stockQty: true,
+            images: {
+              select: { url: true },
+              where: { isPrimary: true },
+              take: 1
+            }
+          }
+        }
+      },
+      // Soonest to lapse first: the one most in danger of being lost is the one
+      // worth showing at the top.
+      orderBy: { expiresAt: 'asc' }
+    });
+
+    const items = await Promise.all(
+      offers.map(async (offer) => ({
+        offerId: offer.id,
+        quantity: offer.quantity,
+        unitPrice: offer.offerAmount.toFixed(2),
+        total: offer.offerAmount.mul(offer.quantity).toFixed(2),
+        expiresAt: offer.expiresAt,
+        // Said out loud so a screen can warn before the buyer fills in an
+        // address for something checkout is about to refuse.
+        inStock: offer.product.stockQty >= offer.quantity,
+        product: {
+          id: offer.product.id,
+          title: offer.product.title,
+          imageUrl: offer.product.images[0]?.url ?? null
+        },
+        acceptToken: await this.signAcceptToken({
+          offerId: offer.id,
+          productId: offer.product.id,
+          buyerId
+        })
+      }))
+    );
+
+    return { items };
+  }
+
   /** 🔌 Dev 3 calls this from checkout before turning an accepted offer into an order. */
   async verifyAndConsumeAcceptToken(
     token: string
