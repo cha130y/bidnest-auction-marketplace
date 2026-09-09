@@ -3,6 +3,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 
+import { PayableOffersBanner } from "@/components/shop/payable-offers-banner"
 import { ProductGallery } from "@/components/shop/product-gallery"
 import { ProductPurchasePanel } from "@/components/shop/product-purchase-panel"
 import { ProductWatchButton } from "@/components/shop/product-watch-button"
@@ -84,6 +85,11 @@ export default async function ProductDetailPage({
         <ChevronRight className="size-4" />
         <span className="line-clamp-1 text-ink">{product.title}</span>
       </nav>
+
+      {/* AI-003 — the screen a buyer comes back to after walking away from an
+          accepted offer, and so the first place the way back to paying for it
+          has to be. Draws nothing when there is nothing owing. */}
+      <PayableOffersBanner />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-8">

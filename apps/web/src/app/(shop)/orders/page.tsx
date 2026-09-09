@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { UnpaidWinsBanner } from "@/components/auction/unpaid-wins-banner"
+import { PayableOffersBanner } from "@/components/shop/payable-offers-banner"
 import { OrderList } from "@/components/order/order-list"
 
 export const metadata: Metadata = {
@@ -25,6 +26,9 @@ export default function OrdersPage() {
           is precisely where one goes missing. The reminder is what stands in
           for the row that does not exist yet. */}
       <UnpaidWinsBanner />
+
+      {/* AI-003 — an agreed price has no order until it is paid for either. */}
+      <PayableOffersBanner />
 
       <OrderList />
     </div>

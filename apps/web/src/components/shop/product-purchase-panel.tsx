@@ -144,7 +144,7 @@ export function ProductPurchasePanel({ product }: { product: Product }) {
         <span className="text-sm font-semibold text-ink">
           หรือเสนอราคากับ AI (ตอบกลับทันที)
         </span>
-        <NegotiationOfferForm product={product} />
+        <NegotiationOfferForm productId={product.id} />
       </div>
     </div>
   )

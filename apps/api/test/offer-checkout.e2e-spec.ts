@@ -20,6 +20,17 @@ import { PrismaService } from './../src/prisma/prisma.service';
  * `POST /products/:id/offers` is throttled to five calls a minute for the
  * whole suite, so this makes three and no more.
  */
+/** One row of `GET /offers/pending`, as much of it as these tests read. */
+type PendingOffer = {
+  offerId: string;
+  quantity: number;
+  unitPrice: string;
+  total: string;
+  inStock: boolean;
+  acceptToken: string;
+  product: { id: string; title: string };
+};
+
 describe('Negotiated price checkout (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -45,6 +56,7 @@ describe('Negotiated price checkout (e2e)', () => {
 
   /** Carried between the tests below — an offer is expensive to make here. */
   let acceptToken: string;
+  let reReadToken: string;
   let strangerToken: string;
 
   const address = {
@@ -212,9 +224,42 @@ describe('Negotiated price checkout (e2e)', () => {
     acceptToken = deal.acceptToken as string;
   });
 
+  it('lists the accepted offer as still payable, to its buyer only', async () => {
+    const mine = await request(app.getHttpServer())
+      .get('/offers/pending')
+      .set('Authorization', authOf(buyerId))
+      .expect(200);
+
+    const items = (mine.body as { items: PendingOffer[] }).items;
+
+    expect(items).toHaveLength(1);
+    expect(items[0].product.id).toBe(productId);
+    expect(items[0].quantity).toBe(QUANTITY);
+    expect(items[0].unitPrice).toBe('800.00');
+    expect(items[0].total).toBe('1600.00');
+    expect(items[0].inStock).toBe(true);
+    // Signed fresh on this read rather than stored. Whether the string comes
+    // out identical to the negotiation's is not worth asserting either way:
+    // JWT signing is deterministic, so two signings of the same payload in the
+    // same second produce the same bytes. What matters is that it redeems,
+    // which the next test does with this exact value.
+    expect(items[0].acceptToken).toEqual(expect.any(String));
+    reReadToken = items[0].acceptToken;
+
+    // Scoped to the caller: nobody else can see what this buyer agreed to pay.
+    const theirs = await request(app.getHttpServer())
+      .get('/offers/pending')
+      .set('Authorization', authOf(strangerId))
+      .expect(200);
+
+    expect((theirs.body as { items: PendingOffer[] }).items).toHaveLength(0);
+  });
+
   it('charges the agreed price, not the list price and not the promo', async () => {
+    // The token from the list rather than from the negotiation, because that
+    // is the one the reminder banner hands to checkout.
     const response = await pay(buyerId, {
-      offerAcceptToken: acceptToken
+      offerAcceptToken: reReadToken
     }).expect(201);
 
     const body = response.body as {
@@ -252,7 +297,11 @@ describe('Negotiated price checkout (e2e)', () => {
     expect(product.stockQty).toBe(STOCK - QUANTITY);
   });
 
-  it('refuses the same token a second time', async () => {
+  it('refuses the offer a second time', async () => {
+    // The token the negotiation handed back, which points at the offer the
+    // payment above consumed. What is single use is the offer rather than the
+    // string: redemption moves `expiresAt` into the past, so every token
+    // naming that row fails the same check afterwards.
     const response = await pay(buyerId, {
       offerAcceptToken: acceptToken
     }).expect(400);
@@ -266,6 +315,16 @@ describe('Negotiated price checkout (e2e)', () => {
       select: { stockQty: true }
     });
     expect(product.stockQty).toBe(STOCK - QUANTITY);
+  });
+
+  it('drops the offer from the payable list once it is paid for', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/offers/pending')
+      .set('Authorization', authOf(buyerId))
+      .expect(200);
+
+    // The reminder has to stop offering a payment that can no longer be made.
+    expect((response.body as { items: PendingOffer[] }).items).toHaveLength(0);
   });
 
   it('refuses a token that was issued to somebody else', async () => {

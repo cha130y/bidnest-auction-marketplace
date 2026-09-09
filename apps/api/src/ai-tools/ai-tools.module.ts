@@ -5,6 +5,7 @@ import { PromptBuilderService } from './prompt-builder.service';
 import { PriceEstimateController } from './price-estimate.controller';
 import { PriceEstimatorService } from './price-estimator.service';
 import { OffersController } from './offers.controller';
+import { PendingOffersController } from './pending-offers.controller';
 import { NegotiatorService } from './negotiator.service';
 import { NegotiatorFacadeService } from './negotiator-facade.service';
 
@@ -14,7 +15,11 @@ import { NegotiatorFacadeService } from './negotiator-facade.service';
 // import to get a JwtService instance.
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [PriceEstimateController, OffersController],
+  controllers: [
+    PriceEstimateController,
+    OffersController,
+    PendingOffersController
+  ],
   providers: [
     GeminiClientService,
     PromptBuilderService,
