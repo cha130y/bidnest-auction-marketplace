@@ -239,6 +239,8 @@ export type CheckoutErrorCode =
   | "PAYMENT_DECLINED"
   | "AUCTION_UNPAYABLE"
   | "AUCTION_ALREADY_PAID"
+  /** AI-003 — the agreed price expired, was already spent, or its listing moved on. */
+  | "OFFER_UNUSABLE"
 
 /**
  * The first two are spelled the same as `CartItemIssue` on purpose — the cart

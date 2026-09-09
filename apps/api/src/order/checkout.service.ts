@@ -5,6 +5,10 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
+import {
+  AcceptTokenPayload,
+  NegotiatorFacadeService
+} from '../ai-tools/negotiator-facade.service';
 import { calculateLineTotal } from '../cart/utils/calculate-line-total.util';
 import { ChatService } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -35,7 +39,14 @@ export const CheckoutErrorCode = {
   CART_EMPTY: 'CART_EMPTY',
   PAYMENT_DECLINED: 'PAYMENT_DECLINED',
   AUCTION_UNPAYABLE: 'AUCTION_UNPAYABLE',
-  AUCTION_ALREADY_PAID: 'AUCTION_ALREADY_PAID'
+  AUCTION_ALREADY_PAID: 'AUCTION_ALREADY_PAID',
+  /**
+   * AI-003 — the agreed price cannot be paid: the token was never valid, its
+   * fifteen minutes ran out, it was already spent, or the listing behind it
+   * has since been withdrawn or run out of stock. One code for all of them
+   * because the buyer's next step is the same in every case — negotiate again.
+   */
+  OFFER_UNUSABLE: 'OFFER_UNUSABLE'
 } as const;
 
 export type CheckoutErrorCode =
@@ -69,23 +80,30 @@ export class CheckoutService {
     private readonly prisma: PrismaService,
     private readonly payment: MockPaymentProvider,
     private readonly realtime: RealtimeService,
-    private readonly chat: ChatService
+    private readonly chat: ChatService,
+    private readonly negotiator: NegotiatorFacadeService
   ) {}
 
   async checkout(buyerId: string, dto: CheckoutDto) {
-    if (dto.auctionId && dto.cartItemIds) {
+    const named = [dto.auctionId, dto.cartItemIds, dto.offerAcceptToken].filter(
+      (value) => value !== undefined
+    );
+
+    if (named.length > 1) {
       throw new BadRequestException(
-        'Send either auctionId or cartItemIds, not both'
+        'Send one of auctionId, cartItemIds or offerAcceptToken, not several'
       );
     }
 
     // The only fork in this method. Everything past it — the charge, the
     // payment row, the order, the address snapshot, the notifications — is one
-    // path, because paying for a won lot and paying for a basket differ in
-    // what is being bought and in nothing else.
+    // path, because paying for a won lot, an agreed price and a basket differ
+    // in what is being bought and in nothing else.
     const lines = dto.auctionId
       ? await this.priceAuction(buyerId, dto.auctionId)
-      : await this.priceCart(buyerId, dto.cartItemIds);
+      : dto.offerAcceptToken
+        ? await this.priceOffer(buyerId, dto.offerAcceptToken)
+        : await this.priceCart(buyerId, dto.cartItemIds);
 
     const grandTotal = lines.reduce(
       (sum, line) => sum.plus(line.subtotal),
@@ -447,6 +465,112 @@ export class CheckoutService {
         quantity: 1,
         unitPrice: auction.soldPrice,
         subtotal: auction.soldPrice
+      }
+    ];
+  }
+
+  /**
+   * AI-003 — prices an offer the negotiator accepted. The third counterpart to
+   * `priceCart`, and it trusts the client with exactly one thing: a token this
+   * server signed.
+   *
+   * The amount is the offer's own `offerAmount`, which `NegotiatorService`
+   * already refused to accept below the listing's secret floor, and the
+   * quantity is the one that was negotiated — a buyer cannot agree a price for
+   * one and then collect five. There is no field on the request that could
+   * influence either.
+   */
+  private async priceOffer(
+    buyerId: string,
+    offerAcceptToken: string
+  ): Promise<PricedLine[]> {
+    // Redeeming is what makes the token single-use, and it deliberately
+    // happens first: NegotiatorFacadeService owns that rule and offers no way
+    // to ask "is this still good" without spending it. The cost is that a
+    // payment refused further down — a declined card, a listing that sold out
+    // in between — spends the offer with it. The SRS allows for exactly that
+    // ("ข้อเสนอที่ accept แล้วก็ยังอาจล้มเหลวได้หากสินค้าหมดไปก่อน"); splitting
+    // verify from consume belongs in that service rather than being worked
+    // around here.
+    let payload: AcceptTokenPayload;
+
+    try {
+      payload =
+        await this.negotiator.verifyAndConsumeAcceptToken(offerAcceptToken);
+    } catch {
+      throw new BadRequestException({
+        message: 'That agreed price is no longer available',
+        code: CheckoutErrorCode.OFFER_UNUSABLE
+      });
+    }
+
+    // The token names its buyer, so somebody else's cannot be paid with even
+    // if it were somehow obtained. It can be spent by the line above before we
+    // get here, which is a nuisance to its owner rather than a way in: there
+    // is no path from holding this token to owning the goods.
+    if (payload.buyerId !== buyerId) {
+      throw new BadRequestException({
+        message: 'That agreed price is no longer available',
+        code: CheckoutErrorCode.OFFER_UNUSABLE
+      });
+    }
+
+    const offer = await this.prisma.offer.findUnique({
+      where: { id: payload.offerId },
+      select: {
+        quantity: true,
+        offerAmount: true,
+        product: {
+          select: {
+            id: true,
+            title: true,
+            sellerId: true,
+            status: true,
+            stockQty: true
+          }
+        }
+      }
+    });
+
+    if (!offer) {
+      throw new BadRequestException({
+        message: 'That agreed price is no longer available',
+        code: CheckoutErrorCode.OFFER_UNUSABLE
+      });
+    }
+
+    // PROD-002 / PROD-005 — the listing can have been paused, withdrawn or
+    // sold out in the fifteen minutes the offer was good for. `decrementStock`
+    // is still the real guarantee against overselling; this is the refusal
+    // that happens before any money moves, as it is on the cart side.
+    if (offer.product.status !== 'ACTIVE') {
+      throw new BadRequestException({
+        message: `"${offer.product.title}" is no longer on sale`,
+        code: CheckoutErrorCode.OFFER_UNUSABLE
+      });
+    }
+
+    if (offer.product.stockQty < offer.quantity) {
+      throw new BadRequestException({
+        message: `"${offer.product.title}" no longer has ${offer.quantity} in stock`,
+        code: CheckoutErrorCode.OFFER_UNUSABLE
+      });
+    }
+
+    return [
+      {
+        cartItemId: null,
+        productId: offer.product.id,
+        auctionId: null,
+        title: offer.product.title,
+        sellerId: offer.product.sellerId,
+        quantity: offer.quantity,
+        unitPrice: offer.offerAmount,
+        // PROD-007 — a negotiated price does not also collect the quantity
+        // discount ("กรณีที่ใช้ AI ต่อรองราคา จะไม่ได้ส่วนลดเพิ่มเติม...
+        // ไม่ทับซ้อนกัน"), so this multiplies rather than going through
+        // `calculateLineTotal`, which is where that discount is applied.
+        subtotal: offer.offerAmount.mul(offer.quantity)
       }
     ];
   }

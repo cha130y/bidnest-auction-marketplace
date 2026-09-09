@@ -132,6 +132,18 @@ export function checkoutFailure(error: unknown): CheckoutFailure {
         primary: { label: "กลับไปหน้าประมูล", href: "/auctions" },
       }
 
+    case "OFFER_UNUSABLE":
+      return {
+        ...base,
+        kind: "UNAVAILABLE",
+        title: "ราคาที่ตกลงไว้ใช้ไม่ได้แล้ว",
+        // The four causes the API deliberately does not separate, said as the
+        // one thing the buyer can do about any of them.
+        detail:
+          "ราคาที่ต่อรองได้ใช้ได้ครั้งเดียวภายใน 15 นาที และสินค้าต้องยังมีอยู่ — เสนอราคาใหม่ได้ที่หน้าสินค้า",
+        primary: { label: "กลับไปหน้าร้าน", href: "/shop" },
+      }
+
     case "PAYMENT_DECLINED":
       return {
         ...base,
@@ -181,7 +193,7 @@ export function FailureOverlay({
    * cart to promise is still intact, and where the last-resort button goes —
    * but both would be wrong for a winner, who never had a cart.
    */
-  context: "CART" | "AUCTION"
+  context: "CART" | "AUCTION" | "OFFER"
   onRetry: () => void
 }) {
   const failure = checkoutFailure(error)
@@ -189,7 +201,9 @@ export function FailureOverlay({
   const fallback =
     context === "CART"
       ? BACK_TO_CART
-      : { label: "กลับไปหน้าประมูล", href: "/auctions" }
+      : context === "AUCTION"
+        ? { label: "กลับไปหน้าประมูล", href: "/auctions" }
+        : { label: "กลับไปหน้าร้าน", href: "/shop" }
 
   return (
     <div
