@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { signIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,6 +13,7 @@ import { AuthCard, AuthLink } from "@/components/auth/auth-card"
 import { Field, FormError } from "@/components/auth/field"
 import { resendLoginCode } from "@/lib/api/auth/auth-api"
 import { ApiError } from "@/lib/api/client"
+import { signInWithTokens } from "@/lib/auth/sign-in-with-tokens"
 import type { ApiTokens, PendingResponse } from "@/lib/auth/api-contract"
 import {
   loginSchema,
@@ -108,13 +108,10 @@ export function LoginForm({ oauth }: { oauth?: ReactNode }) {
 
   /** Hands the already-issued tokens to NextAuth and leaves. */
   async function finish(tokens: ApiTokens) {
-    const signedIn = await signIn("oauth-tokens", {
-      payload: JSON.stringify(tokens),
-      redirect: false
-    })
+    const failed = await signInWithTokens(tokens)
 
-    if (signedIn?.error) {
-      setFailure("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+    if (failed) {
+      setFailure(`เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่ (${failed})`)
       return
     }
     router.push(callbackUrl)

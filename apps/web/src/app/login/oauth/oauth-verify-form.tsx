@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { signIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { ApiTokens, PendingResponse } from "@/lib/auth/api-contract"
+import { signInWithTokens } from "@/lib/auth/sign-in-with-tokens"
 import {
   oauthEmailSchema,
   otpSchema,
@@ -135,13 +135,10 @@ export function OAuthVerifyForm({
 
     // The tokens are already issued; the provider gets no further say. All
     // that is left is turning them into a NextAuth session.
-    const signedIn = await signIn("oauth-tokens", {
-      payload: JSON.stringify(result.body as ApiTokens),
-      redirect: false
-    })
+    const failed = await signInWithTokens(result.body as ApiTokens)
 
-    if (signedIn?.error) {
-      setFailure(NOT_MY_FAULT)
+    if (failed) {
+      setFailure(`${NOT_MY_FAULT} (${failed})`)
       return
     }
     router.push(callbackUrl)
