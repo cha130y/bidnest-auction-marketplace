@@ -82,8 +82,47 @@ const webExample = readEnv(join(root, "apps", "web", ".env.example"))
 
 console.log(bold("\nBidNest — setup check\n"))
 
+// ---------------------------------------------------------------- toolchain
+console.log(bold("Toolchain"))
+
+/**
+ * The major the repo runs on, read out of package.json rather than written
+ * here, so `engines.node` stays the single place it is declared — the same
+ * field Vercel reads when it picks a runtime for apps/web.
+ *
+ * Worth checking because nothing else stops a mismatch: pnpm only warns, and
+ * the Dockerfile pins its own base image, so a teammate on the wrong major
+ * finds out through failures that read like broken code. Production and CI
+ * both run this major, so a machine that differs is the only one in the team
+ * exercising a runtime nobody deploys.
+ *
+ * Older than expected fails; newer only warns — it still runs, but nothing
+ * else in the pipeline has been tried there.
+ */
+const wantedNode = JSON.parse(
+  readFileSync(join(root, "package.json"), "utf8")
+).engines?.node
+const wantedMajor = Number(wantedNode?.match(/\d+/)?.[0])
+
+if (Number.isNaN(wantedMajor)) {
+  report("package.json declares engines.node", false, "cannot check Node")
+} else {
+  const running = process.versions.node
+  const currentMajor = Number(running.split(".")[0])
+  const matches = currentMajor === wantedMajor
+
+  report(
+    `Node ${wantedMajor}.x`,
+    matches,
+    matches
+      ? `running ${running}`
+      : `running ${running} — CI and production run ${wantedMajor}.x`,
+    { fatal: currentMajor < wantedMajor }
+  )
+}
+
 // ---------------------------------------------------------------- env files
-console.log(bold("Env files"))
+console.log(bold("\nEnv files"))
 
 const api = readEnv(apiEnvPath)
 const web = readEnv(webEnvPath)
