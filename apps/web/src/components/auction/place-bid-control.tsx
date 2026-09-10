@@ -147,7 +147,17 @@ export function PlaceBidControl({
   }
 
   return (
-    <form onSubmit={submit} className={className}>
+    <form
+      onSubmit={submit}
+      // The field carries `min={minimumNextBid}`, and the browser's own check
+      // on it refuses the submit before `submit` runs at all — so the refusal
+      // below never appeared, and a Thai buyer got the browser's native
+      // tooltip, in the browser's language, instead of the sentence naming the
+      // amount. `min` stays for the stepper and for assistive technology; how
+      // a refusal reads is ours.
+      noValidate
+      className={className}
+    >
       <label
         htmlFor="bid-amount"
         className="block text-sm font-medium text-ink"

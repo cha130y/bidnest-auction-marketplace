@@ -36,7 +36,8 @@
 | เรียลไทม์ | Socket.IO — namespace `/auctions` (ห้องประมูล) และ `/user` (แจ้งเตือน + แชท) |
 | AI | Google Gemini (`@google/generative-ai`) |
 | บริการภายนอก | Cloudinary (รูปภาพ), SMTP ผ่าน Nodemailer (dev ใช้ Maildev) |
-| เครื่องมือ | pnpm 11 workspace, Node 22, Docker Compose, ESLint + Prettier, Jest, Husky + lint-staged |
+| เครื่องมือ | pnpm 11 workspace, Node 24, Docker Compose, ESLint + Prettier, Husky + lint-staged |
+| การเทส | **web:** Vitest + Testing Library (jsdom) · **api unit:** Jest + ts-jest (mock Prisma) · **api e2e:** Jest + Supertest (Postgres + Maildev จริง) |
 
 **อย่าเปลี่ยน tech stack และอย่าแก้ `schema.prisma` โดยไม่ถามทีมก่อน** — ดู [CLAUDE.md](CLAUDE.md)
 
@@ -78,7 +79,7 @@ pnpm --dir apps/api exec prisma migrate deploy
 pnpm dev
 ```
 
-ต้องมี **Node 22**, **pnpm 11** และ **Docker Desktop** ก่อน · ไฟล์ `.env` ไม่ขึ้น git ต้องกรอกค่าเองในเครื่อง
+ต้องมี **Node 24**, **pnpm 11** และ **Docker Desktop** ก่อน · ไฟล์ `.env` ไม่ขึ้น git ต้องกรอกค่าเองในเครื่อง
 ตรวจว่าเครื่องพร้อมหรือยังด้วย `pnpm check:setup`
 
 ### ทุกวันที่เริ่มงาน
@@ -282,6 +283,7 @@ node apps/api/dist/prisma/seed.js
 
 | เอกสาร | เนื้อหา |
 | --- | --- |
+| **[Handbook](docs/BIDNEST_HANDBOOK.html)** | **คู่มือทั้งโปรเจกต์ 9 บท — เริ่มที่นี่ถ้าเพิ่งเข้าทีม** ตั้งเครื่อง · งานประจำวัน · ฟีเจอร์ต่อกันยังไง · การเทส · ทำไมถึงเลือก stack นี้ · ขึ้น production (เปิดไฟล์ในเบราว์เซอร์ได้เลย ไม่ต้องรันอะไร) |
 | [SRS](docs/requirements/) | ข้อกำหนดและเกณฑ์การยอมรับของทุก requirement — **ยึดเป็นหลักเวลาตัดสินว่างานผ่านหรือไม่** |
 | [ผัง Workflow](docs/architecture/workflows/) | ผังการทำงานทั้งระบบ 14 ผัง วาดจากโค้ดจริง |
 | [ERD](docs/architecture/erd/bidnest-erd-v1.dbml) | โครงสร้างฐานข้อมูล ([ดูออนไลน์](https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff)) |
@@ -304,7 +306,7 @@ type ที่ใช้: `feat` `fix` `refactor` `test` `docs` `chore` `ci` — 
 
 **Pull Request:** base branch เป็น `dev` เสมอ (ไม่ merge เข้า `main` โดยตรง) · title และ description เป็นภาษาอังกฤษ
 
-**CI:** ทุก PR เข้า `dev` หรือ `main` จะรัน lint → test → build ฝั่ง web และ build Docker image ของ api อัตโนมัติ ([ci.yml](.github/workflows/ci.yml))
+**CI:** ทุก PR เข้า `dev` หรือ `main` รัน 3 job อัตโนมัติ ([ci.yml](.github/workflows/ci.yml)) — `lint-and-test` (lint → unit test ทั้งสองแอป → `next build` ฝั่ง web) · `docker-build` (build image ของ api) · `e2e` (ยก Postgres + Maildev แล้ว migrate → seed → e2e)
 
 **ไฟล์ที่ต้องให้เจ้าของ approve ก่อน merge** (ดู [CODEOWNERS](.github/CODEOWNERS)): `CLAUDE.md`, `docs/requirements/`, `docs/architecture/`, `docs/team-role/`, `apps/api/prisma/`, `.github/`, `package.json`
 

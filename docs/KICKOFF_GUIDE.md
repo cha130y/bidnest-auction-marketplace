@@ -276,7 +276,7 @@ jobs:
           version: 11
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -290,6 +290,12 @@ git push origin dev
 ```
 
 ตั้งค่าเพิ่ม (GitHub Settings → Branches → `main`): Require status checks to pass → เลือก `lint-and-test`
+
+> **หมายเหตุ — CI ตอนนี้โตกว่านี้แล้ว** yaml ข้างบนคือฉบับตั้งต้นของวัน kickoff ปัจจุบัน [ci.yml](../.github/workflows/ci.yml) มี 3 job: `lint-and-test` · `docker-build` · `e2e` (ยก Postgres + Maildev แล้ว migrate → seed → รัน e2e) และ branch protection บังคับให้เขียวครบทั้งสาม
+>
+> `pnpm test` ที่รากเป็น `pnpm -r --if-present test` จึงรันทั้ง **Jest ของ `apps/api`** และ **Vitest ของ `apps/web`** ให้เอง — เพิ่มเทสในแอปไหนก็เข้า CI เองโดยไม่ต้องแก้ ci.yml
+>
+> หลักการเลือกเครื่องมือเทส (Vitest / Jest / RTL / Supertest) อยู่ในบทที่ 06 ของ [BidNest Handbook](https://claude.ai/code/artifact/a3409b5b-ceac-4725-8161-8c0c66042d4a)
 
 **✅ เสร็จเมื่อ:** เปิด PR ทดสอบ 1 อัน แล้วเห็นสถานะ CI ขึ้นจริง (เขียว/แดง) ที่ท้าย PR
 
