@@ -1,0 +1,2192 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>BidNest Handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground: #F1F5F4;
+    --surface: #FFFFFF;
+    --surface-sunk: #E7EEED;
+    --ink: #0F2429;
+    --ink-soft: #375156;
+    --muted: #62797E;
+    --line: #CBD9D8;
+    --line-soft: #DEE8E7;
+    --accent: #0E5F6B;
+    --accent-soft: #DCEDEE;
+    --signal: #A85F16;
+    --signal-soft: #F7E9D8;
+    --good: #2C6A4C;
+    --good-soft: #DCEBE2;
+    --stop: #9A3B33;
+    --stop-soft: #F5E1DF;
+
+    --f-body: "IBM Plex Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, Consolas, "Courier New", monospace;
+
+    --wrap: 1180px;
+    --read: 70ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0B1618;
+      --surface: #122327;
+      --surface-sunk: #0E1D20;
+      --ink: #E3EDEC;
+      --ink-soft: #B6C9C9;
+      --muted: #8AA2A5;
+      --line: #24403F;
+      --line-soft: #1B3234;
+      --accent: #5BBECD;
+      --accent-soft: #14343A;
+      --signal: #E0A25C;
+      --signal-soft: #33261A;
+      --good: #6FBF93;
+      --good-soft: #16301F;
+      --stop: #DE8A80;
+      --stop-soft: #331C1B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0B1618;
+    --surface: #122327;
+    --surface-sunk: #0E1D20;
+    --ink: #E3EDEC;
+    --ink-soft: #B6C9C9;
+    --muted: #8AA2A5;
+    --line: #24403F;
+    --line-soft: #1B3234;
+    --accent: #5BBECD;
+    --accent-soft: #14343A;
+    --signal: #E0A25C;
+    --signal-soft: #33261A;
+    --good: #6FBF93;
+    --good-soft: #16301F;
+    --stop: #DE8A80;
+    --stop-soft: #331C1B;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .masthead {
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .masthead__inner {
+    max-width: var(--wrap);
+    margin: 0 auto;
+    padding: 56px 24px 40px;
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 4.4vw, 46px);
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .masthead p { max-width: var(--read); margin: 0 0 12px; color: var(--ink-soft); }
+  .masthead__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+
+  .shell {
+    max-width: var(--wrap);
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+
+  .toc { position: sticky; top: 24px; padding-top: 48px; font-size: 14px; }
+  .toc__title {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .toc a {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: var(--ink-soft);
+    border-left: 2px solid transparent;
+  }
+  .toc a:hover { background: var(--ground); color: var(--ink); }
+  .toc a[aria-current="true"] {
+    background: var(--accent-soft);
+    color: var(--ink);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .toc .num { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+  main { padding-top: 48px; min-width: 0; }
+
+  section { padding-top: 40px; margin-bottom: 20px; scroll-margin-top: 20px; }
+  section + section { border-top: 1px solid var(--line-soft); }
+
+  h2 {
+    font-size: clamp(23px, 2.6vw, 29px);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  h2 .num {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 6px;
+  }
+  h3 { font-size: 18px; margin: 36px 0 8px; letter-spacing: -0.005em; }
+  h4 { font-size: 15px; margin: 24px 0 6px; color: var(--ink-soft); }
+  p { max-width: var(--read); margin: 0 0 14px; }
+  .lede { font-size: 17px; color: var(--ink-soft); max-width: var(--read); }
+  ul, ol { max-width: var(--read); padding-left: 22px; margin: 0 0 14px; }
+  li { margin-bottom: 5px; }
+  strong { font-weight: 600; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.875em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    padding: 1px 5px;
+    word-break: break-word;
+  }
+
+  .code {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin: 0 0 18px;
+    overflow: hidden;
+  }
+  .code__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 10px 7px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--surface-sunk);
+  }
+  .code__label {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .code__copy {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 9px;
+    cursor: pointer;
+  }
+  .code__copy:hover { border-color: var(--accent); color: var(--accent); }
+  .code pre {
+    margin: 0;
+    padding: 14px;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: 13.5px;
+    line-height: 1.75;
+    tab-size: 2;
+    color: var(--ink);
+  }
+  .code pre .c { color: var(--muted); }
+
+  .tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    margin: 0 0 18px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    background: var(--surface-sunk);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td code { background: transparent; border: 0; padding: 0; color: var(--ink-soft); }
+  .nowrap { white-space: nowrap; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .chip--accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  .chip--signal { background: var(--signal-soft); border-color: transparent; color: var(--signal); }
+  .chip--good { background: var(--good-soft); border-color: transparent; color: var(--good); }
+  .chip--stop { background: var(--stop-soft); border-color: transparent; color: var(--stop); }
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 0 0 18px;
+    max-width: var(--read);
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note ul { margin-bottom: 0; }
+  .note--signal { border-left-color: var(--signal); }
+  .note--stop { border-left-color: var(--stop); }
+  .note__tag {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .steps { list-style: none; padding: 0; margin: 0 0 8px; counter-reset: step; max-width: none; }
+  .steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 26px 44px;
+    margin: 0 0 0 13px;
+    border-left: 1px solid var(--line);
+  }
+  .steps > li:last-child { border-left-color: transparent; padding-bottom: 4px; }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: -13px;
+    top: 1px;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--ground);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .steps h4 { margin: 2px 0 8px; font-size: 16px; color: var(--ink); }
+  .steps p { max-width: var(--read); }
+
+  .feature {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 20px 22px;
+    margin: 0 0 20px;
+  }
+  .feature__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .feature__head h3 { margin: 0; font-size: 19px; }
+  .feature p { max-width: none; }
+  .feature .tablewrap { border-radius: 6px; background: var(--ground); }
+  .feature .tablewrap th { background: var(--surface-sunk); }
+  .path {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    color: var(--ink-soft);
+    background: var(--surface-sunk);
+    border-radius: 6px;
+    padding: 9px 12px;
+    margin: 0 0 14px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .path b { color: var(--signal); font-weight: 600; }
+
+  figure { margin: 0 0 20px; }
+  figure svg { width: 100%; height: auto; display: block; min-width: 640px; }
+  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; max-width: var(--read); }
+  .frame {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 18px;
+    overflow-x: auto;
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+    gap: 14px;
+    margin: 0 0 18px;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 14px 16px;
+  }
+  .card h4 { margin: 0 0 6px; color: var(--ink); font-size: 15px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--ink-soft); max-width: none; }
+
+  footer.end {
+    max-width: var(--wrap);
+    margin: 0 auto;
+    padding: 26px 24px 64px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer.end p { max-width: var(--read); }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; gap: 0; }
+    .toc { position: static; padding: 32px 0 20px; border-bottom: 1px solid var(--line-soft); }
+    .toc ol { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    main { padding-top: 8px; }
+  }
+
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <p class="eyebrow">BidNest · Auction &amp; Marketplace · คู่มือทีม</p>
+    <h1>คู่มือทั้งโปรเจกต์ อ่านจบแล้วเล่าต่อได้</h1>
+    <p class="lede">
+      เอกสารเล่มเดียวสำหรับคนที่เพิ่งเข้าโปรเจกต์ และสำหรับคนในทีมที่อยากเข้าใจส่วนที่ตัวเองไม่ได้ทำ —
+      ตั้งเครื่องตั้งแต่ศูนย์ · คำสั่งที่ใช้ทุกวัน · ฟีเจอร์แต่ละตัวต่อกันยังไงทั้งฝั่งหน้าเว็บและฝั่งเซิร์ฟเวอร์ ·
+      เทสยังไงให้มั่นใจ · <strong>ทำไมถึงเลือก stack นี้</strong> · ปล่อยขึ้น production ยังไง
+    </p>
+    <p class="lede">
+      ทุกเส้นทางในเล่มนี้อ่านจากโค้ดจริงใน <code>apps/api</code> และ <code>apps/web</code> ไม่ได้เขียนจากเอกสารอย่างเดียว
+      เวลาเนื้อหาไม่ตรงกัน ให้ยึด <strong>SRS เป็นข้อกำหนด</strong> แล้วแจ้งทีมว่าโค้ดหรือเอกสารจุดไหนหลุด
+    </p>
+    <div class="masthead__meta">
+      <span class="chip chip--accent">pnpm monorepo</span>
+      <span class="chip">Next.js 16 + NestJS 11</span>
+      <span class="chip">PostgreSQL 17 · Prisma 7</span>
+      <span class="chip">Socket.IO 2 namespace</span>
+      <span class="chip">5 devs · 14 วัน</span>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="toc" aria-label="สารบัญ">
+    <p class="toc__title">สารบัญ</p>
+    <ol>
+      <li><a href="#ch1"><span class="num">01</span><span>ระบบนี้คืออะไร</span></a></li>
+      <li><a href="#ch2"><span class="num">02</span><span>ชิ้นส่วนและเจ้าของ</span></a></li>
+      <li><a href="#ch3"><span class="num">03</span><span>ตั้งเครื่องครั้งแรก</span></a></li>
+      <li><a href="#ch4"><span class="num">04</span><span>ทำงานประจำวัน</span></a></li>
+      <li><a href="#ch5"><span class="num">05</span><span>ฟีเจอร์ต่อกันยังไง</span></a></li>
+      <li><a href="#ch6"><span class="num">06</span><span>การเทส</span></a></li>
+      <li><a href="#ch7"><span class="num">07</span><span>ทำไมถึงเลือกแบบนี้</span></a></li>
+      <li><a href="#ch8"><span class="num">08</span><span>ขึ้น production</span></a></li>
+      <li><a href="#ch9"><span class="num">09</span><span>อ้างอิงเร็ว</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="ch1">
+      <h2><span class="num">บทที่ 01</span>ระบบนี้คืออะไร</h2>
+      <p class="lede">
+        BidNest คือแพลตฟอร์มซื้อขายที่รวม <strong>สองวิธีหาราคา</strong> ไว้ในระบบเดียว —
+        <strong>ประมูลแบบเรียลไทม์</strong> กับ <strong>ร้านค้าซื้อทันที</strong> —
+        โดยใช้บัญชีผู้ใช้ ตะกร้า การชำระเงิน และการจัดส่งชุดเดียวกัน
+      </p>
+      <p>
+        ผู้ใช้หนึ่งคนเป็นได้ทั้งผู้ซื้อและผู้ขายในบัญชีเดียว ไม่มีการสมัครแยกร้าน
+        และไม่ว่าของชิ้นนั้นจะมาจากการประมูลหรือจากร้านค้า
+        <strong>ปลายทางเดียวกันหมด</strong> คือ ออเดอร์ → จ่ายเงิน → จัดส่ง → ได้รับของ
+      </p>
+
+      <h3>สองเส้นทางบรรจบกันตรงไหน</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>เส้นทางประมูล</h4>
+          <p>ผู้ขายสร้างร่าง → เผยแพร่ → ระบบเปิดตามเวลา → คนบิดแข่งกัน → ระบบปิดตามเวลา → ได้ผู้ชนะ → <strong>ผู้ชนะไปจ่ายเงินที่หน้า checkout</strong></p>
+        </div>
+        <div class="card">
+          <h4>เส้นทางร้านค้า</h4>
+          <p>ผู้ขายลงสินค้าพร้อมสต็อกและราคา → ผู้ซื้อหยิบใส่ตะกร้า → <strong>ไปจ่ายเงินที่หน้า checkout เดียวกัน</strong></p>
+        </div>
+      </div>
+      <p>
+        จุดบรรจบคือ <code>POST /orders/checkout</code> ตัวเดียว ที่รับได้ทั้งของในตะกร้า ล็อตที่ชนะประมูล และราคาที่ต่อรองกับ AI สำเร็จ
+        แล้วเขียนเป็นออเดอร์ในรูปแบบเดียวกัน — นี่คือเหตุผลที่ตาราง <code>order_items</code>
+        มีทั้งคอลัมน์ <code>product_id</code> และ <code>auction_id</code> โดยมีค่าได้ทีละอันเท่านั้น
+      </p>
+
+      <h3>ขอบเขต V1 (สำคัญมากเวลาตอบคำถาม)</h3>
+      <div class="note note--stop">
+        <span class="note__tag">เรื่องราวจบตรงไหน</span>
+        <p>
+          V1 จบที่ <strong>ประมูลปิดและของถูกส่ง</strong> — ยังไม่มีการคืนเงินหรือยกเลิกหลังจ่ายเงินแล้ว
+          สถานะ <code>SOLD</code> และ <code>UNSOLD</code> เป็นปลายทางจริง ไม่ย้อนกลับ
+          และการชำระเงินเป็น <strong>การจำลอง</strong> ยังไม่ได้ต่อ payment gateway จริง
+          (จ่ายยอด <code>666.00</code> พอดีจะถูกปฏิเสธเสมอ ไว้เทสทาง FAILED)
+        </p>
+      </div>
+
+      <h3>ความสามารถทั้งหมดแบบย่อ</h3>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>โมดูล</th><th>ทำอะไรได้</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="nowrap">ยืนยันตัวตน</td><td>สมัคร/เข้าสู่ระบบด้วยอีเมล · เข้าผ่าน Google และ LINE · OTP ทางอีเมลบังคับทุกทางเข้า · จำอุปกรณ์ที่เชื่อถือ · รีเซ็ตรหัสผ่าน</td></tr>
+            <tr><td class="nowrap">ประมูล</td><td>ร่าง → ตรวจความครบ → ดูตัวอย่าง → เผยแพร่ · ระบบเปิด-ปิดตามเวลาเอง · หน้าแรกแบ่ง 4 มุมมอง (กำลังฮิต / ใกล้ปิด / ใกล้เริ่ม / เพิ่งจบ)</td></tr>
+            <tr><td class="nowrap">บิดและห้องสด</td><td>บิดเรียลไทม์ผ่าน WebSocket · กันบิดซ้ำจากการกดย้ำ · กันยิงท้าย (ต่อเวลาอัตโนมัติ) · ล็อบบี้ + สนามประมูล + หน้าประกาศผล</td></tr>
+            <tr><td class="nowrap">ร้านค้า</td><td>ลงสินค้าพร้อมสต็อก · ค้นหาและกรอง · ตะกร้าหลายร้าน · จ่ายครั้งเดียวแตกออเดอร์ตามผู้ขาย · ติดตามสถานะจัดส่งเป็น timeline</td></tr>
+            <tr><td class="nowrap">AI (Gemini)</td><td>ประเมินราคาเริ่มต้นให้ร่างประมูล · ตอบข้อเสนอต่อรองราคาเทียบกับพื้นราคาที่ผู้ขายตั้งไว้ · แชทช่วยเหลือที่ส่งต่อให้แอดมินเมื่อตอบไม่ได้</td></tr>
+            <tr><td class="nowrap">แจ้งเตือน + แชท</td><td>แจ้งเตือนในแอป 8 เหตุการณ์ · แชทผู้ซื้อ–ผู้ขายผูกกับสินค้า/ประมูลที่กำลังคุยถึง · ตอบอัตโนมัติของผู้ขาย</td></tr>
+            <tr><td class="nowrap">หลังบ้าน</td><td>ระงับผู้ใช้ · จัดการหมวดหมู่ · ยกเลิกประมูล · ปิด/เปิดการขายสินค้า · ดูภาพรวมออเดอร์ · รับช่วงแชทช่วยเหลือ · ทุกคำสั่งลง audit log พร้อมเหตุผล</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ch2">
+      <h2><span class="num">บทที่ 02</span>ชิ้นส่วนและเจ้าของ</h2>
+      <p class="lede">
+        กฎข้อเดียวที่อธิบายทั้งระบบได้: <strong>เบราว์เซอร์ไม่คุยกับฐานข้อมูลหรือบริการภายนอกโดยตรง</strong>
+        ทุกอย่างผ่าน <code>apps/api</code> ชั้นเดียว
+      </p>
+
+      <figure>
+        <div class="frame">
+          <svg viewBox="0 0 880 300" role="img" aria-label="ผังชิ้นส่วนของระบบ: เบราว์เซอร์ คุยกับ apps/web ซึ่งคุยกับ apps/api ซึ่งคุยกับ PostgreSQL และบริการภายนอก โดยมี Socket.IO เชื่อมเบราว์เซอร์กับ apps/api โดยตรง">
+            <defs>
+              <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-soft)"></path>
+              </marker>
+              <marker id="ar-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--signal)"></path>
+              </marker>
+            </defs>
+
+            <path d="M100 60 L100 30 L560 30 L560 60" fill="none" stroke="var(--signal)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar-sig)"></path>
+            <text x="330" y="22" text-anchor="middle" font-family="var(--f-mono)" font-size="12" fill="var(--signal)">Socket.IO — /auctions · /user</text>
+
+            <rect x="20" y="60" width="160" height="64" rx="8" fill="var(--surface-sunk)" stroke="var(--line)"></rect>
+            <text x="100" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">เบราว์เซอร์</text>
+            <text x="100" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">React 19</text>
+
+            <rect x="240" y="60" width="180" height="64" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"></rect>
+            <text x="330" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">apps/web · Next.js</text>
+            <text x="330" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">:3000 · NextAuth v5</text>
+
+            <rect x="470" y="60" width="180" height="64" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"></rect>
+            <text x="560" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">apps/api · NestJS</text>
+            <text x="560" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">:4000 · กติกาทั้งหมดอยู่ที่นี่</text>
+
+            <rect x="700" y="60" width="160" height="64" rx="8" fill="var(--surface-sunk)" stroke="var(--line)"></rect>
+            <text x="780" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">PostgreSQL 17</text>
+            <text x="780" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">:5433 · Prisma</text>
+
+            <line x1="182" y1="92" x2="236" y2="92" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+            <line x1="422" y1="92" x2="466" y2="92" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+            <line x1="652" y1="92" x2="696" y2="92" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+            <text x="209" y="50" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">HTTPS</text>
+            <text x="444" y="50" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">REST</text>
+            <text x="674" y="50" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">SQL</text>
+
+            <line x1="560" y1="126" x2="560" y2="186" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+
+            <rect x="400" y="190" width="320" height="72" rx="8" fill="var(--surface-sunk)" stroke="var(--line)" stroke-dasharray="4 4"></rect>
+            <text x="560" y="216" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">บริการภายนอก</text>
+            <text x="560" y="238" text-anchor="middle" font-family="var(--f-mono)" font-size="11.5" fill="var(--muted)">Cloudinary (รูป) · Gemini (AI) · SMTP (อีเมล OTP)</text>
+            <text x="560" y="255" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">ทั้งสามตัวไม่ใส่ key ก็รันได้ · route ที่ใช้จะตอบ 503</text>
+          </svg>
+        </div>
+        <figcaption>
+          เส้นประสีส้มคือช่องทางเรียลไทม์ — เบราว์เซอร์ต่อ Socket.IO ตรงเข้า <code>apps/api</code> ไม่ผ่าน Next.js
+          กติกาสีเดียวกับผัง Workflow: <strong>สีส้ม = ระบบทำเอง ไม่มีคนกด</strong>
+        </figcaption>
+      </figure>
+
+      <h3>โครงสร้างโฟลเดอร์</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">โครงสร้าง repo</span></div>
+        <pre>apps/
+  web/                    Next.js — หน้าเว็บทั้งหมด (ผู้ซื้อ ผู้ขาย แอดมิน)
+    src/app/              App Router — 1 โฟลเดอร์ = 1 หน้า
+    src/components/       ชิ้นส่วน UI แยกตามโมดูล
+    src/lib/api/          ตัวเรียก apps/api ทุกตัวรวมอยู่ที่นี่
+  api/                    NestJS — กติกาทั้งหมดของระบบอยู่ที่นี่
+    prisma/               schema.prisma + migrations + seed
+    src/                  24 โมดูล (auth, auction, bid, live, cart, order, ai-tools, admin, ...)
+    test/                 e2e specs + ไฟล์ .http + Postman collection
+packages/
+  config/                 config ที่ใช้ร่วมกัน
+  contracts/              type ที่ใช้ร่วมกันระหว่าง web กับ api
+infra/docker/             compose.dev.yml — Postgres + Maildev สำหรับเครื่อง dev
+scripts/                  dev.mjs, dev-preflight.mjs, check-setup.mjs
+docs/                     SRS, ERD, ADR, ผัง workflow, คู่มือทีม
+Dockerfile                image ของ apps/api สำหรับ deploy — build จากรากของ repo</pre>
+      </div>
+
+      <h3>ใครดูแลส่วนไหน</h3>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Dev</th><th>ขอบเขต</th><th>โค้ดหลัก</th><th>branch</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 1</span></td>
+              <td>Frontend &amp; UI — design system, layout, ชิ้นส่วนที่ใช้ร่วมกัน</td>
+              <td><code>apps/web/src/components</code><br><code>apps/web/src/app/design-system</code></td>
+              <td><code>feat/frontend-dev1</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 2</span></td>
+              <td>Backend core &amp; security — <strong>เจ้าของ schema และ migration</strong></td>
+              <td><code>api/src/auth</code> · <code>users</code> · <code>common</code> (guards)</td>
+              <td><code>feat/auth-dev2</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 3</span></td>
+              <td>E-commerce — สินค้า ตะกร้า ออเดอร์ จัดส่ง แชทผู้ซื้อ-ผู้ขาย</td>
+              <td><code>api/src/product</code> · <code>cart</code> · <code>order</code> · <code>shipment</code> · <code>chat</code></td>
+              <td><code>feat/ecommerce-dev3</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 4</span></td>
+              <td>Auction &amp; real-time — ประมูล บิด ห้องสด รายการติดตาม</td>
+              <td><code>api/src/auction</code> · <code>bid</code> · <code>live</code> · <code>realtime</code> · <code>watchlist</code></td>
+              <td><code>feat/auction-dev4</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 5</span></td>
+              <td>AI — ประเมินราคา ต่อรอง แชทช่วยเหลือ + โครงหลังบ้าน</td>
+              <td><code>api/src/ai-tools</code> · <code>support-chat</code></td>
+              <td><code>feat/ai-dev5</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="note__tag">กติกาข้ามขอบเขต</span>
+        <p>
+          ถ้างานของเราต้องใช้โค้ดที่เป็นความรับผิดชอบของคนอื่นและเขายังทำไม่เสร็จ ให้ <strong>mock ไว้ก่อนแล้วรอ</strong>
+          อย่าเขียนแทนเขา — merge จะชนกันและคนที่ต้องส่งงานจะเสียงาน
+          ส่วนโมดูล <code>api/src/admin</code> รวมคำสั่งของทุกฟีเจอร์ไว้ที่เดียว จึงเป็นจุดที่แตะข้ามโมดูลบ่อยที่สุด — คุยก่อนแก้
+        </p>
+      </div>
+    </section>
+
+    <section id="ch3">
+      <h2><span class="num">บทที่ 03</span>ตั้งเครื่องครั้งแรก</h2>
+      <p class="lede">
+        ทำครบชุดนี้ <strong>ครั้งเดียวต่อเครื่อง</strong> จากนั้นใช้แค่คำสั่งในบทที่ 04
+      </p>
+
+      <h3>ต้องมีก่อน</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ของที่ต้องมี</th><th>เวอร์ชัน</th><th>ใช้ทำอะไร</th></tr></thead>
+          <tbody>
+            <tr><td>Node.js</td><td class="nowrap"><strong>24</strong></td><td>รันทั้ง web และ api — <strong>ตรงกันทั้ง 4 ที่</strong>: เครื่อง dev · CI · Railway (<code>Dockerfile</code> ใช้ <code>node:24</code>) · Vercel · ประกาศไว้ที่ <code>engines.node</code> ใน <code>package.json</code> ที่ราก และ <code>pnpm check:setup</code> จะเตือนถ้าเครื่องไม่ตรง</td></tr>
+            <tr><td>pnpm</td><td class="nowrap">11</td><td>ตัวจัดการ package ของ monorepo — <strong>ห้ามใช้ npm/yarn</strong></td></tr>
+            <tr><td>Docker Desktop</td><td class="nowrap">—</td><td>ยก Postgres + Maildev ในเครื่อง</td></tr>
+            <tr><td>Git</td><td class="nowrap">—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <h4>Clone แล้วติดตั้ง dependency</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre>git clone https://github.com/&lt;org&gt;/bidnest-auction-marketplace.git
+cd bidnest-auction-marketplace
+pnpm install</pre>
+          </div>
+        </li>
+        <li>
+          <h4>สร้างไฟล์ .env ของทั้งสองแอป</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre>cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local</pre>
+          </div>
+          <p>
+            ต้อง copy ทีละแอปเพราะ <code>apps/api</code> อ่าน <code>.env</code> จากโฟลเดอร์ตัวเองเท่านั้น
+            ส่วน Next.js อ่าน <code>.env.local</code> จากโฟลเดอร์ตัวเองเท่านั้น — วางไฟล์เดียวที่ root ไม่มีผลกับทั้งคู่
+          </p>
+          <p>
+            แล้วเปิด <code>apps/web/.env.local</code> ใส่ <code>AUTH_SECRET</code> ของตัวเอง (ไม่ใส่ = Next.js ไม่ยอมรัน)
+          </p>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">สร้าง AUTH_SECRET</span><button class="code__copy" type="button">copy</button></div>
+            <pre>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"</pre>
+          </div>
+        </li>
+        <li>
+          <h4>ยก Postgres + Maildev แล้วสร้างตาราง</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre>docker compose -f infra/docker/compose.dev.yml up -d
+pnpm --dir apps/api exec prisma migrate deploy</pre>
+          </div>
+          <p>
+            <code>docker compose up</code> แค่เปิด Postgres มาเปล่าๆ ไม่ได้สร้างตารางให้
+            ต้อง apply migration เอง — ทำครั้งเดียวพอ เพราะ compose ตั้ง <code>restart: unless-stopped</code>
+            และข้อมูลอยู่ใน volume ไม่หาย
+          </p>
+        </li>
+        <li>
+          <h4>ใส่ข้อมูลตั้งต้น</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre><span class="c"># บัญชีทดสอบ + หมวดหมู่ + สินค้าตั้งต้น (จำเป็นสำหรับ e2e ด้วย)</span>
+pnpm --dir apps/api exec prisma db seed
+
+<span class="c"># อยากได้ข้อมูลตัวอย่างเยอะๆ ไว้ดูหน้าเว็บให้เหมือนของจริง</span>
+pnpm --dir apps/api seed:mock</pre>
+          </div>
+        </li>
+        <li>
+          <h4>เข้า branch ของตัวเอง</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">เลือกบรรทัดของตัวเองบรรทัดเดียว</span><button class="code__copy" type="button">copy</button></div>
+            <pre>git switch feat/frontend-dev1
+git switch feat/auth-dev2
+git switch feat/ecommerce-dev3
+git switch feat/auction-dev4
+git switch feat/ai-dev5</pre>
+          </div>
+        </li>
+        <li>
+          <h4>รันแล้วเช็คว่าขึ้นครบ</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre><span class="c"># ตรวจว่าเครื่องมีของครบก่อน (Node, pnpm, Docker, .env)</span>
+pnpm check:setup
+
+<span class="c"># รัน web + api พร้อมกัน</span>
+pnpm dev</pre>
+          </div>
+          <p><strong>เสร็จเมื่อ:</strong> เปิด <code>http://localhost:3000</code> เห็นหน้าแรก และ <code>http://localhost:4000/docs</code> เห็น Swagger</p>
+        </li>
+      </ol>
+
+      <h3>พอร์ตและหน้าจอที่ต้องรู้จัก</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>เปิดที่</th><th>คืออะไร</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>localhost:3000</code></td><td>เว็บ (Next.js)</td></tr>
+            <tr><td class="nowrap"><code>localhost:4000</code></td><td>API (NestJS)</td></tr>
+            <tr><td class="nowrap"><code>localhost:4000/docs</code></td><td>Swagger — รายการ endpoint ทั้งหมดพร้อมลองยิงได้</td></tr>
+            <tr><td class="nowrap"><code>localhost:4000/health</code></td><td>health check ที่ Railway ใช้</td></tr>
+            <tr><td class="nowrap"><code>localhost:1080</code></td><td><strong>Maildev — อ่าน OTP และอีเมลรีเซ็ตรหัสผ่านที่นี่</strong> เครื่อง dev ไม่ส่งเมลออกจริง</td></tr>
+            <tr><td class="nowrap"><code>localhost:5433</code></td><td>PostgreSQL (ไม่ใช่ 5432 — เลี่ยงชนกับ Postgres ที่ลงไว้ในเครื่อง)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>บัญชีทดสอบจาก seed</h3>
+      <p>ทุกบัญชีใช้รหัสผ่านเดียวกันคือ <code>Test1234</code> เข้าผ่านหน้า <code>/login</code> จริง แล้วอ่าน OTP ที่ Maildev</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>อีเมล</th><th>role</th><th>ไว้ทำอะไร</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>admin@bidnest.test</code></td><td class="nowrap"><span class="chip chip--stop">ADMIN</span></td><td>หลังบ้านทั้งหมด — <strong>ซื้อขายเองไม่ได้</strong></td></tr>
+            <tr><td class="nowrap"><code>seller-a@bidnest.test</code></td><td class="nowrap"><span class="chip">USER</span></td><td>ผู้ขาย A — เจ้าของสินค้าตั้งต้น 2 ชิ้น</td></tr>
+            <tr><td class="nowrap"><code>seller-b@bidnest.test</code></td><td class="nowrap"><span class="chip">USER</span></td><td>ผู้ขาย B — เจ้าของสินค้าตั้งต้นอีก 2 ชิ้น</td></tr>
+            <tr><td class="nowrap"><code>buyer@bidnest.test</code></td><td class="nowrap"><span class="chip">USER</span></td><td>ผู้ซื้อหลักที่ใช้ในเทสส่วนใหญ่</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">ทางลัดเฉพาะเครื่อง dev</span>
+        <p>
+          <code>apps/api/.env.example</code> ตั้ง <code>ADMIN_SKIP_2FA=true</code> ไว้ แอดมินจึงเข้าได้ด้วยรหัสผ่านอย่างเดียวไม่ต้องรอ OTP
+          — <strong>สำหรับ production ห้ามเปิด</strong> เพราะรหัสผ่านของ seed อ่านได้จากโค้ด
+        </p>
+      </div>
+
+      <h3>key ที่ไม่ใส่ก็รันได้</h3>
+      <p>ระบบบังคับจริงแค่ <code>DATABASE_URL</code> กับ JWT secret สองตัว ที่เหลือมี default หมด ส่วนสามตัวนี้เป็น optional — ไม่ใส่ก็บูตได้ แค่ route ที่ใช้มันจะตอบ 503</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ตัวแปร</th><th>ไม่ใส่แล้วเป็นยังไง</th><th>เอามาจากไหน</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>CLOUDINARY_*</code></td><td>อัปโหลดรูปไม่ได้ (ฟีเจอร์อื่นปกติ)</td><td>cloudinary.com — <strong>ต่างคนต่างสมัคร key ของตัวเอง</strong></td></tr>
+            <tr><td class="nowrap"><code>GEMINI_API_KEY</code></td><td>แชทช่วยเหลือ / ประเมินราคาตอบ 503</td><td>aistudio.google.com/apikey (ฟรี)</td></tr>
+            <tr><td class="nowrap"><code>GOOGLE_CLIENT_ID</code><br><code>LINE_CHANNEL_ID</code></td><td>ปุ่มล็อกอินโซเชียลไม่ขึ้น (ล็อกอินด้วยรหัสผ่านปกติ)</td><td>Google Cloud Console / LINE Developers</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ch4">
+      <h2><span class="num">บทที่ 04</span>ทำงานประจำวัน</h2>
+
+      <h3>เริ่มงานทุกครั้ง</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+        <pre>git switch dev &amp;&amp; git pull
+git switch feat/auction-dev4   <span class="c"># เปลี่ยนเป็น branch ของตัวเอง</span>
+git merge dev
+pnpm check
+pnpm dev</pre>
+      </div>
+      <p>
+        ต้อง <code>git merge dev</code> ทุกวันเพราะ branch ของแต่ละคนแตกไว้ตั้งแต่วัน kickoff —
+        ถ้าไม่ merge จะทำงานอยู่บนโค้ดเก่าและต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+        และต้อง <code>pnpm check</code> หลัง merge เพราะ merge ผ่านแปลว่าไม่มี conflict ระดับบรรทัดเท่านั้น
+        ไม่ได้แปลว่าโค้ดยังทำงานถูก (CI รันเฉพาะตอนเปิด PR ไม่ได้รันให้ตอน merge ในเครื่อง)
+      </p>
+
+      <h3>รันเพิ่มเฉพาะตอนเข้าเงื่อนไข</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">เช็คว่า merge เมื่อกี้มีอะไรเข้ามาบ้าง</span><button class="code__copy" type="button">copy</button></div>
+        <pre>git diff --name-only HEAD@{1} HEAD -- pnpm-lock.yaml apps/api/prisma/migrations</pre>
+      </div>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">มีชื่อไฟล์ขึ้น = รันบรรทัดที่ตรงกับไฟล์นั้น</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># เห็น pnpm-lock.yaml = มีคนเพิ่ม/อัปเดต package</span>
+pnpm install
+
+<span class="c"># เห็นไฟล์ใน apps/api/prisma/migrations/ = มี migration ใหม่จากคนอื่น</span>
+pnpm --dir apps/api exec prisma migrate deploy
+
+<span class="c"># ต่อ database ไม่ได้ / เพิ่งรีสตาร์ทเครื่องแล้ว Docker ยังไม่ขึ้น</span>
+docker compose -f infra/docker/compose.dev.yml up -d</pre>
+      </div>
+
+      <h3>คำสั่งที่ใช้บ่อย</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>คำสั่ง</th><th>ทำอะไร</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>pnpm dev</code></td><td>รัน web (:3000) + api (:4000) พร้อมกัน</td></tr>
+            <tr><td class="nowrap"><code>pnpm dev:web</code> / <code>pnpm dev:api</code></td><td>รันแยกทีละฝั่ง</td></tr>
+            <tr><td class="nowrap"><code>pnpm check</code></td><td><strong>typecheck ทั้งสองแอป + test + lint — รันก่อนส่งงานทุกครั้ง</strong></td></tr>
+            <tr><td class="nowrap"><code>pnpm test</code> / <code>pnpm lint</code></td><td>รันเฉพาะ test หรือเฉพาะ lint</td></tr>
+            <tr><td class="nowrap"><code>pnpm check:setup</code></td><td>ตรวจว่าเครื่องมีของครบ</td></tr>
+            <tr><td class="nowrap"><code>pnpm --dir apps/api exec prisma studio</code></td><td>เปิดหน้าจอดูข้อมูลในฐานข้อมูล</td></tr>
+            <tr><td class="nowrap"><code>pnpm --dir apps/api seed:mock</code></td><td>ใส่ข้อมูลตัวอย่างสำหรับทดสอบ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>กติกา commit / branch / PR</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>เรื่อง</th><th>รูปแบบ</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">branch</td><td><code>feat/&lt;module&gt;-dev&lt;เลข&gt;</code> เช่น <code>feat/auction-dev4</code></td></tr>
+            <tr><td class="nowrap">commit</td><td><code>&lt;type&gt;(&lt;requirement-id&gt;): คำอธิบายภาษาอังกฤษสั้นๆ</code><br>เช่น <code>feat(AUTH-001): add local registration endpoint</code><br>type ที่ใช้: <code>feat</code> <code>fix</code> <code>refactor</code> <code>test</code> <code>docs</code> <code>chore</code> <code>ci</code><br>งาน infra ที่ไม่ผูกกับ requirement ไหน ข้าม requirement-id ได้</td></tr>
+            <tr><td class="nowrap">PR</td><td>base branch ต้องเป็น <code>dev</code> เสมอ (ไม่ merge เข้า <code>main</code> ตรงๆ) · title และ description เป็นภาษาอังกฤษ</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">ห้ามเด็ดขาด</span>
+        <p>ห้าม commit ไฟล์ <code>.env</code> และห้าม hardcode secret / API key ลงในโค้ด</p>
+      </div>
+      <p>
+        ไฟล์ที่ต้องให้เจ้าของ approve ก่อน merge (ตาม CODEOWNERS):
+        <code>CLAUDE.md</code> · <code>docs/requirements/</code> · <code>docs/architecture/</code> ·
+        <code>docs/team-role/</code> · <code>apps/api/prisma/</code> · <code>.github/</code> · <code>package.json</code>
+      </p>
+    </section>
+
+    <section id="ch5">
+      <h2><span class="num">บทที่ 05</span>ฟีเจอร์ต่อกันยังไง</h2>
+      <p class="lede">
+        บทนี้คือหัวใจของเอกสาร — ตอบว่า <strong>หน้าจอที่เห็น</strong> เรียกอะไร
+        <strong>เซิร์ฟเวอร์</strong> ทำอะไรต่อ และ <strong>ข้อมูล</strong> ไปลงตารางไหน
+        อ่านจบแล้วจะเล่าเส้นทางของฟีเจอร์ที่ตัวเองไม่ได้ทำได้
+      </p>
+
+      <h3>ฝั่งหน้าเว็บกับฝั่งเซิร์ฟเวอร์ต่อกันด้วย 4 ช่องทาง</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>1 · REST ผ่าน apiFetch ตัวเดียว</h4>
+          <p>
+            ทุกการเรียก API ของเว็บผ่าน <code>apps/web/src/lib/api/client.ts</code> จุดเดียว
+            มันแนบ bearer token ให้เอง แปลง error ของ NestJS เป็นข้อความที่ UI แสดงได้
+            และตั้ง <code>cache: "no-store"</code> เพราะไม่มีอะไรใน API นี้ที่ cache ตาม URL ได้
+          </p>
+        </div>
+        <div class="card">
+          <h4>2 · session cookie ↔ bearer token</h4>
+          <p>
+            NextAuth ถือ session ของเบราว์เซอร์ (cookie httpOnly) ส่วน <code>apps/api</code> เป็นเจ้าของ token จริง
+            ไม่มีการเก็บ token ใน localStorage เลย · access token หมดอายุ apiFetch จะอ่าน session ใหม่แล้วลองซ้ำ<strong>ครั้งเดียว</strong>
+          </p>
+        </div>
+        <div class="card">
+          <h4>3 · Socket.IO 2 namespace</h4>
+          <p>
+            <code>/auctions</code> = ห้องประมูล เปิดให้อ่านสาธารณะ ไม่ต้องมี token ·
+            <code>/user</code> = ของส่วนตัวรายคน ต้องพิสูจน์ตัวตนตั้งแต่ตอนเชื่อมต่อ ไม่งั้นถูกตัดทันที
+          </p>
+        </div>
+        <div class="card">
+          <h4>4 · Prisma schema ชุดเดียว</h4>
+          <p>
+            <code>apps/api/prisma/schema.prisma</code> เป็นแหล่งความจริงเดียวของโครงสร้างข้อมูล
+            ทุกโมดูลอ่าน-เขียนผ่าน Prisma · <strong>Dev 2 เป็นเจ้าของ schema และ migration</strong> ห้ามแก้โดยไม่ถาม
+          </p>
+        </div>
+      </div>
+
+      <div class="note note--signal">
+        <span class="note__tag">จุดที่คนใหม่สับสนบ่อยที่สุด</span>
+        <p>
+          โฟลเดอร์ <code>apps/web/src/app/api/</code> <strong>ไม่ใช่</strong> API ของระบบ —
+          มันคือ route handler ของ Next.js ที่มีไว้เพื่อจับ cookie เท่านั้น
+          (แลก token กับ LINE, เก็บ pending token ของ OAuth, เก็บ trusted-device token)
+          กติกาธุรกิจทั้งหมดอยู่ใน <code>apps/api</code> ที่พอร์ต 4000 เสมอ
+        </p>
+      </div>
+
+      <h3>วิธีอ่านตารางในบทนี้</h3>
+      <p>
+        แต่ละแถวคือหนึ่งเส้นทาง อ่านจากซ้ายไปขวาว่า
+        <strong>หน้าจอไหน</strong> → <strong>ยิง endpoint อะไร</strong> → <strong>ข้อมูลลงตารางไหน</strong>
+        เส้นทางที่ไม่มีคนกดแต่ระบบทำเอง จะทำเครื่องหมาย <span class="chip chip--signal">ระบบทำเอง</span> ไว้
+      </p>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>ยืนยันตัวตน</h3>
+          <span class="chip chip--accent">Dev 2</span>
+          <span class="chip">AUTH-001 … AUTH-008</span>
+        </div>
+        <p>
+          ทุกทางเข้า — รหัสผ่าน, Google, LINE — <strong>จบที่ OTP ทางอีเมลเสมอ</strong> (AUTH-007)
+          จึงไม่มีทางไหนที่ข้ามการยืนยันสองชั้นได้ ผลข้างเคียงที่ต้องจำ:
+          <strong>เมลส่งไม่ออก = ล็อกอินไม่ได้ทั้งระบบ</strong>
+        </p>
+        <p class="path">/login → POST /auth/login → <b>ส่ง OTP</b> → กรอกรหัส → POST /auth/2fa/verify → ได้ token คู่ → NextAuth สร้าง session</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>หน้าจอ</th><th>เรียกอะไร</th><th>ลงตารางไหน</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/register</code></td><td><code>POST /auth/register</code></td><td><code>users</code>, <code>user_profiles</code></td></tr>
+              <tr><td class="nowrap"><code>/login</code> จังหวะ 1</td><td><code>POST /auth/login</code> · <code>POST /auth/2fa/resend</code></td><td><code>two_factor_codes</code> + ส่งอีเมล</td></tr>
+              <tr><td class="nowrap"><code>/login</code> จังหวะ 2</td><td><code>POST /auth/2fa/verify</code></td><td><code>user_sessions</code>, <code>trusted_devices</code></td></tr>
+              <tr><td class="nowrap"><code>/login/oauth</code></td><td><code>POST /auth/google/callback</code> · <code>/auth/line/callback</code> แล้วตามด้วย <code>/verify</code></td><td><code>auth_accounts</code> + ตารางชุดเดียวกับข้างบน</td></tr>
+              <tr><td class="nowrap"><code>/forgot-password</code></td><td><code>POST /auth/forgot-password</code></td><td><code>password_reset_tokens</code></td></tr>
+              <tr><td class="nowrap"><code>/reset-password</code></td><td><code>POST /auth/reset-password</code></td><td>เพิกถอน <code>user_sessions</code> ทุกเครื่อง</td></tr>
+              <tr><td class="nowrap"><code>/profile</code></td><td><code>GET /users/me</code> · <code>PATCH /users/me</code></td><td><code>user_profiles</code></td></tr>
+              <tr><td class="nowrap">ทุกหน้า <span class="chip chip--signal">ระบบทำเอง</span></td><td><code>POST /auth/refresh</code></td><td><code>user_sessions</code> — token เก่าถูกใช้ทิ้งใน transaction เดียวกัน</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>สามอย่างที่โมดูลนี้ส่งผลกับทุกโมดูลอื่น</h4>
+        <ul>
+          <li><strong>guard อ่านบัญชีจาก DB ใหม่ทุก request</strong> — บัญชีที่เพิ่งโดนระงับใช้ token เดิมต่อไม่ได้ทันที (ADM-002)</li>
+          <li><strong>trusted device</strong> — เบราว์เซอร์ที่เคยกรอกรหัสแล้วจะข้าม OTP ได้จนกว่าจะหมดอายุ (ค่าเริ่มต้น 30 วัน) การรีเซ็ตรหัสผ่านล้างทุกเครื่อง</li>
+          <li><strong>ADMIN ซื้อขายไม่ได้</strong> — endpoint ฝั่งซื้อขายกัน role ADMIN ออกด้วย <code>@Roles</code> โดยตั้งใจ</li>
+        </ul>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>ประมูล · การบิด · ห้องสด · รายการติดตาม</h3>
+          <span class="chip chip--accent">Dev 4</span>
+          <span class="chip">AUC · BID · LIV · WAT</span>
+        </div>
+        <p>
+          โมดูลนี้ต่างจากที่อื่นตรงที่ <strong>เวลาเป็นตัวสั่ง ไม่ใช่คน</strong> —
+          มีตัวจับเวลาใน <code>auction-lifecycle.service.ts</code> เดินทุก 10 วินาที
+          คอยเปิดประมูลที่ถึงเวลาเริ่ม และปิดประมูลที่หมดเวลาแล้ว ครั้งละไม่เกิน 50 รายการ
+        </p>
+        <p class="path">DRAFT → เผยแพร่ → SCHEDULED → <b>ระบบเปิดตามเวลา</b> → ACTIVE → <b>ระบบปิดตามเวลา</b> → SOLD / UNSOLD</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>หน้าจอ</th><th>เรียกอะไร</th><th>ลงตารางไหน</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/sell</code> · <code>/sell/[id]/edit</code></td><td><code>POST /auctions/drafts</code> · <code>PATCH /auctions/:id</code> · <code>POST /auctions/:id/images</code></td><td><code>auctions</code>, <code>auction_images</code></td></tr>
+              <tr><td class="nowrap"><code>/sell/[id]</code></td><td><code>GET /auctions/drafts/:id/validation</code> · <code>/preview</code> · <code>POST /auctions/drafts/:id/publish</code></td><td><code>auctions</code>, <code>auction_events</code></td></tr>
+              <tr><td class="nowrap"><code>/sell/auctions</code></td><td><code>GET /auctions/mine</code> · <code>POST /auctions/:id/cancel</code></td><td><code>auctions</code></td></tr>
+              <tr><td class="nowrap"><code>/auctions</code></td><td><code>GET /auctions</code> · <code>GET /auctions/stats</code> · <code>GET /categories</code></td><td>อ่านอย่างเดียว</td></tr>
+              <tr><td class="nowrap"><code>/auctions/[id]</code></td><td><code>GET /auctions/:id</code> · <code>/lobby</code> · <code>/arena</code> · <code>POST /auctions/:id/participants</code></td><td><code>auction_participants</code></td></tr>
+              <tr><td class="nowrap">ปุ่มบิด</td><td><code>POST /auctions/:id/bids</code> · <code>GET /auctions/:id/bids</code></td><td><code>bids</code>, <code>auction_extensions</code>, <code>notifications</code></td></tr>
+              <tr><td class="nowrap"><code>/auctions/[id]/result</code></td><td><code>GET /auctions/:id/arena</code></td><td>อ่านผลหลังปิด</td></tr>
+              <tr><td class="nowrap"><code>/watchlist</code> · ปุ่มหัวใจ</td><td><code>POST</code>/<code>DELETE /auctions/:id/watchlist</code> · <code>GET /watchlist</code></td><td><code>watchlists</code></td></tr>
+              <tr><td class="nowrap"><span class="chip chip--signal">ระบบทำเอง</span> ทุก 10 วิ</td><td>—</td><td><code>auctions.status</code>, <code>auction_events</code>, <code>notifications</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>กติกาสามข้อที่ต้องอธิบายให้ถูก</h4>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>กติกา</th><th>รายละเอียดจริงในโค้ด</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="nowrap">บิดขั้นต่ำ<br><span class="chip">BID-001</span></td>
+                <td>บิดแรกต้อง <strong>≥ ราคาเริ่มต้น</strong> · บิดที่สองเป็นต้นไปต้อง <strong>≥ ราคาปัจจุบัน + ขั้นการบิด</strong></td>
+              </tr>
+              <tr>
+                <td class="nowrap">กันยิงท้าย<br><span class="chip">BID-004</span></td>
+                <td>บิดใน <strong>2 นาทีสุดท้าย</strong> ดันเวลาปิดออกไปอีก <strong>2 นาที</strong> ได้สูงสุด <strong>5 ครั้ง</strong> — ครบแล้วปิดตามเวลาแม้จะยังมีคนบิด</td>
+              </tr>
+              <tr>
+                <td class="nowrap">ราคาขั้นต่ำที่ยอมขาย<br><span class="chip">AUC-003</span></td>
+                <td>ตัวเลข reserve <strong>ไม่เคยออกจากเซิร์ฟเวอร์</strong> ผู้ซื้อเห็นแค่ว่า "ถึงหรือยัง" · ไม่ถึงตอนปิด = <code>UNSOLD</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>เรียลไทม์ทำงานยังไง</h4>
+        <p>
+          เบราว์เซอร์เข้าห้อง <code>auction:&lt;id&gt;</code> ผ่าน namespace <code>/auctions</code>
+          เซิร์ฟเวอร์ broadcast 6 เหตุการณ์เข้าห้องนั้น และฝั่งเว็บ (<code>use-auction-room.ts</code>)
+          <strong>ไม่เอา payload มาแปะหน้าจอตรงๆ แต่ยิง <code>GET /arena</code> อ่านใหม่ทั้งชุด</strong>
+          เพราะราคา ผู้นำ บิดขั้นต่ำถัดไป เวลาปิด และโควตาต่อเวลา ต้องสอดคล้องกันทั้งก้อน
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>event</th><th>เกิดตอนไหน</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>auction:bid</code></td><td>มีคนบิดสำเร็จ</td></tr>
+              <tr><td class="nowrap"><code>auction:extension</code></td><td>กันยิงท้ายดันเวลาปิดออกไป</td></tr>
+              <tr><td class="nowrap"><code>auction:presence</code></td><td>มีคนเข้า/ออกห้อง</td></tr>
+              <tr><td class="nowrap"><code>auction:started</code></td><td>ตัวจับเวลาเปิดประมูล</td></tr>
+              <tr><td class="nowrap"><code>auction:ended</code></td><td>ตัวจับเวลาปิดและตัดสินผล</td></tr>
+              <tr><td class="nowrap"><code>auction:cancelled</code></td><td>ผู้ขายหรือแอดมินยกเลิก</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <span class="note__tag">ทำไม socket ห้องประมูลไม่ต้องล็อกอิน</span>
+          <p>
+            เพราะประมูลที่เผยแพร่แล้วเป็นข้อมูลสาธารณะอยู่แล้ว (AUC-005) และห้องนี้ส่งข้อมูลชุดเดียวกับที่ <code>GET</code> สาธารณะส่ง
+            ส่ง token มาด้วยก็ได้ แต่มันไม่ได้เปลี่ยนสิ่งที่เห็น — มีไว้ให้ระบบรู้ว่าใครปิดแท็บไป เพื่อให้ตัวนับคนดูถูกต้องเท่านั้น
+            <strong>การบิดยังต้องผ่าน HTTP และ guard ตามปกติ socket ไม่รับบิด</strong>
+          </p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>ร้านค้า · ตะกร้า · ออเดอร์ · จัดส่ง</h3>
+          <span class="chip chip--accent">Dev 3</span>
+          <span class="chip">PROD · CART · SHIP</span>
+        </div>
+        <p>
+          ฝั่งนี้ตรงไปตรงมากว่าประมูล ไม่มีตัวจับเวลา — ทุกอย่างเกิดจากคนกด
+          จุดที่ซับซ้อนที่สุดคือ <strong>ตะกร้าใบเดียวมีของจากหลายร้านได้ แต่ออเดอร์ผูกกับผู้ขายคนเดียว</strong>
+          ตอนจ่ายเงินจึงจ่ายครั้งเดียวแล้วแตกออกเป็นหลายออเดอร์ตามผู้ขาย
+        </p>
+        <p class="path">ตะกร้า (หลายร้าน) → <b>จ่ายครั้งเดียว</b> → แตกเป็นออเดอร์รายผู้ขาย → แต่ละออเดอร์มี shipment ของตัวเอง</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>หน้าจอ</th><th>เรียกอะไร</th><th>ลงตารางไหน</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/shop</code> · <code>/shop/[id]</code></td><td><code>GET /products</code> · <code>GET /products/:id</code> · <code>GET /categories</code></td><td>อ่านอย่างเดียว</td></tr>
+              <tr><td class="nowrap"><code>/sell/products/*</code></td><td><code>POST /products</code> · <code>PATCH /products/:id</code> · <code>/status</code> · <code>/stock</code> · <code>POST /products/:id/images</code></td><td><code>products</code>, <code>product_images</code></td></tr>
+              <tr><td class="nowrap"><code>/cart</code></td><td><code>GET /cart</code> · <code>POST /cart/items</code> · <code>PATCH</code>/<code>DELETE /cart/items/:id</code></td><td><code>carts</code>, <code>cart_items</code></td></tr>
+              <tr><td class="nowrap"><code>/checkout</code></td><td><code>POST /orders/checkout</code> — รับได้ 3 อย่าง: <code>cartItemIds</code> · <code>auctionId</code> · <code>offerAcceptToken</code> (ทีละอย่าง)</td><td><code>orders</code>, <code>order_items</code>, <code>order_addresses</code>, <code>payment_transactions</code>, <code>shipments</code></td></tr>
+              <tr><td class="nowrap"><code>/orders</code> · <code>/orders/[id]</code></td><td><code>GET /orders</code> · <code>GET /orders/:id</code> · <code>GET /orders/:id/shipment</code></td><td>อ่านอย่างเดียว</td></tr>
+              <tr><td class="nowrap"><code>/sell/orders/*</code></td><td><code>GET /orders/selling</code> · <code>PATCH /orders/:id/shipment</code></td><td><code>shipments</code>, <code>shipment_events</code>, <code>notifications</code></td></tr>
+              <tr><td class="nowrap">ปุ่มต่อรองราคา · banner “รอชำระเงิน”</td><td><code>POST /products/:id/offers</code> · <code>GET /offers/pending</code></td><td><code>offers</code> — ดูโมดูล AI</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>สิ่งที่เกิดขึ้นจริงตอนกดจ่ายเงิน</h4>
+        <ol>
+          <li><strong>ตั้งราคาใหม่ทั้งหมดที่เซิร์ฟเวอร์</strong> — ไม่เชื่อตัวเลขที่ส่งมาจากเบราว์เซอร์แม้แต่ค่าเดียว</li>
+          <li>เช็คว่าของยังขายอยู่และสต็อกพอ — ไม่พอ ตอบกลับพร้อม error code (<code>ITEMS_UNAVAILABLE</code>) โดย<strong>ยังไม่ตัดเงิน</strong></li>
+          <li>เรียก payment provider จำลอง — ยอด <code>666.00</code> พอดีจะถูกปฏิเสธเสมอ (<code>PAYMENT_DECLINED</code>)</li>
+          <li>ตัดสต็อกแบบมีเงื่อนไข <code>stockQty &gt;= quantity</code> — ถ้าสองคนจ่ายพร้อมกัน คนที่แพ้จะ rollback ทั้งก้อน ขายเกินสต็อกไม่ได้</li>
+          <li>เขียนออเดอร์แยกตามผู้ขาย + สร้าง shipment + ล้างของออกจากตะกร้า</li>
+          <li>แจ้งเตือนผู้ซื้อและผู้ขายทุกคนในรอบนั้น (NOT-005) และ push ผ่าน socket <code>/user</code></li>
+        </ol>
+        <p>
+          ล็อตที่ชนะประมูลใช้ทางเดียวกันหมด ต่างแค่ราคามาจาก <code>soldPrice</code> ที่ระบบเขียนไว้ตอนปิดประมูล
+          และสิทธิ์ในการจ่ายมาจาก <code>winnerUserId</code> — ไม่มีช่องไหนบนคำขอที่ผู้ซื้อจะแก้ราคาได้
+          และ <code>order_items.auction_id</code> เป็น unique จึงจ่ายซ้ำล็อตเดิมไม่ได้
+        </p>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>แจ้งเตือน · แชทผู้ซื้อ–ผู้ขาย</h3>
+          <span class="chip chip--accent">Dev 3</span>
+          <span class="chip chip--accent">Dev 4</span>
+          <span class="chip">NOT · CHAT</span>
+        </div>
+        <p>
+          สองฟีเจอร์นี้เป็น <strong>ปลายทางร่วม</strong> ที่โมดูลอื่นเรียกใช้ — โมดูลไหนก็เขียนแถวแจ้งเตือนได้
+          และทุกแถวเดินทางสองทางเสมอ: <strong>เก็บลงตาราง <code>notifications</code></strong> (เพื่อให้เปิดดูย้อนหลังได้)
+          และ <strong>ยิงผ่าน socket <code>/user</code></strong> (เพื่อให้กระดิ่งเด้งทันที)
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>หน้าจอ</th><th>เรียกอะไร</th><th>socket</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/notifications</code> · กระดิ่ง</td><td><code>GET /notifications</code> · <code>/unread-count</code> · <code>PATCH /notifications/:id/read</code> · <code>/read-all</code></td><td><code>notification:created</code></td></tr>
+              <tr><td class="nowrap"><code>/chat</code> · <code>/chat/[id]</code></td><td><code>GET /conversations</code> · <code>GET</code>/<code>POST /conversations/:id/messages</code></td><td><code>message:sent</code></td></tr>
+              <tr><td class="nowrap">ปุ่ม "คุยกับผู้ขาย"</td><td><code>POST /products/:id/conversations</code> · <code>POST /auctions/:id/conversations</code></td><td>—</td></tr>
+              <tr><td class="nowrap"><code>/sell/settings</code></td><td><code>GET</code>/<code>PATCH /users/me/auto-reply</code></td><td>—</td></tr>
+              <tr><td class="nowrap">หน้าออเดอร์</td><td>—</td><td><code>order:status_changed</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          แจ้งเตือนมี 8 ชนิด: <code>OUTBID</code> · <code>AUCTION_WON</code> · <code>AUCTION_ENDED</code> ·
+          <code>AUCTION_CANCELLED</code> · <code>ORDER_PLACED</code> · <code>SHIPMENT_UPDATE</code> ·
+          <code>DELIVERED</code> · <code>NEW_MESSAGE</code>
+        </p>
+        <div class="note">
+          <span class="note__tag">รายละเอียดที่มักอธิบายผิด</span>
+          <p>
+            <code>OUTBID</code> ส่งให้ <strong>คนที่เพิ่งถูกแซงเท่านั้น</strong> ไม่ได้ส่งให้ทุกคนที่เคยบิด —
+            คนที่อยู่ลำดับล่างลงไปถูกแซงไปแล้วตั้งแต่รอบก่อน และการเตือนซ้ำทุกครั้งที่ราคาขยับจะทำให้กระดิ่งไร้ประโยชน์
+            ส่วนคนที่บิดทับตัวเองไม่ถือว่าแซงใคร · แถวแจ้งเตือนถูกเขียนใน transaction เดียวกับแถวบิด
+            ดังนั้นบิดที่บันทึกแล้วจะมีแจ้งเตือนคู่กันเสมอ
+          </p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>AI — ประเมินราคา · ต่อรอง · แชทช่วยเหลือ</h3>
+          <span class="chip chip--accent">Dev 5</span>
+          <span class="chip">AI-001 · AI-002 · AI-003</span>
+        </div>
+        <p>
+          ทั้งสามตัวเรียก Google Gemini ผ่าน <code>gemini-client.service.ts</code> ตัวเดียว
+          ไม่มี key ก็บูตได้ แค่ route ที่ใช้จะตอบ 503
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>ฟีเจอร์</th><th>เรียกอะไร</th><th>ลงตารางไหน</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><span class="chip">AI-001</span> แชทช่วยเหลือ</td><td><code>POST /support/chat</code> · <code>GET /support/chat/:id</code> · <code>POST /support/chat/:id/messages</code> · <code>/escalate</code></td><td><code>support_chat_sessions</code>, <code>support_chat_messages</code></td></tr>
+              <tr><td class="nowrap"><span class="chip">AI-002</span> ประเมินราคา</td><td><code>POST /auctions/drafts/:id/price-estimate</code></td><td><code>ai_requests</code></td></tr>
+              <tr><td class="nowrap"><span class="chip">AI-003</span> ต่อรองราคา</td><td><code>POST /products/:id/offers</code> · <code>GET /offers/pending</code></td><td><code>offers</code>, <code>ai_requests</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>ต่อรองราคาตัดสินยังไง</h4>
+        <p>
+          ผู้ขายตั้ง <strong>พื้นราคา (floor)</strong> ที่ยอมรับได้ไว้ ซึ่ง <strong>ผู้ซื้อไม่มีวันเห็น</strong> — การเปรียบเทียบเกิดบนเซิร์ฟเวอร์เท่านั้น
+          แล้วตอบกลับหนึ่งใน 3 อย่าง:
+        </p>
+        <ul>
+          <li><code>ACCEPTED</code> — ข้อเสนอ ≥ ราคาที่ตั้งขายอยู่ <strong>หรือ ≥ ราคาที่ระบบ counter ไว้รอบก่อน</strong></li>
+          <li><code>COUNTERED</code> — ข้อเสนออยู่ระหว่างพื้นราคากับราคาขาย ระบบเสนอกลับที่ค่าเฉลี่ยของสองตัวนั้น</li>
+          <li><code>REJECTED</code> — ข้อเสนอต่ำกว่าพื้นราคา หรือขอจำนวนเกินสต็อก</li>
+        </ul>
+        <p>
+          เงื่อนไขข้อแรกที่ตัวหนาคือสิ่งที่ทำให้การต่อรอง <strong>จบได้</strong> — counter คือค่าเฉลี่ยระหว่างข้อเสนอกับราคาป้าย
+          จึงต่ำกว่าราคาป้ายเสมอ ถ้าไม่นับ counter ของตัวเอง การเสนอเท่า counter จะได้ counter รอบใหม่ไปเรื่อยๆ
+          เข้าใกล้ราคาป้ายแต่ไม่มีวันถึง · การกดยอมรับ counter <strong>ไม่ติดคูลดาวน์ 5 นาที</strong> เพราะตัวเลขนั้นมาจากเซิร์ฟเวอร์เอง
+          ส่งกลับไปจึงไม่ได้เปิดเผยอะไรเกี่ยวกับพื้นราคา · ด่านเช็คพื้นราคายังอยู่เหนือทุกข้อเสมอ
+        </p>
+        <h4>ต่อรองสำเร็จแล้วไปต่อยังไง</h4>
+        <p>
+          ACCEPTED ปลดล็อกราคานั้นไว้ <strong>15 นาที ใช้ได้ครั้งเดียว</strong> ผูกกับผู้ซื้อ สินค้า และจำนวนที่เสนอ
+          — แต่ยังต้อง checkout ให้เสร็จเอง <strong>ต่อรองสำเร็จไม่เท่ากับซื้อสำเร็จ</strong>
+        </p>
+        <p>
+          ระหว่าง 15 นาทีนั้น <code>GET /offers/pending</code> จะคืนรายการที่ยังจ่ายได้ (พร้อม token ที่เซ็นใหม่ทุกครั้งที่อ่าน)
+          และ <code>PayableOffersBanner</code> เอาไปแสดงบนหน้าสินค้า ตะกร้า checkout และรายการสั่งซื้อ
+          — ออกจากหน้าไปแล้วกลับมาจ่ายได้ ไม่ต้องต่อรองใหม่ · ตัวกรองคือ <code>expiresAt &gt; now</code> บรรทัดเดียว
+          เพราะการใช้ token คือการดัน <code>expiresAt</code> ไปอดีต เงื่อนไขเดียวจึงตัดทั้ง “หมดอายุ” และ “จ่ายไปแล้ว” ออกพร้อมกัน
+        </p>
+        <h4>แชทช่วยเหลือส่งต่อให้แอดมินตอนไหน</h4>
+        <p>
+          AI ตอบจากคลังคำถามที่เตรียมไว้ (<code>faq-knowledge-base.ts</code>) เมื่อตอบไม่ได้หรือผู้ใช้ขอคุยกับคน
+          session จะถูก escalate แล้วโผล่ในกล่องขาเข้าของแอดมินทันทีผ่าน socket <code>support:inbox_updated</code>
+          — แอดมินทุกคนที่ออนไลน์อยู่ในห้องรวมนี้ตั้งแต่ตอนเชื่อมต่อ ไม่ต้องเปิดหน้าไหนก่อน
+        </p>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>หลังบ้าน</h3>
+          <span class="chip chip--accent">Dev 5 (shell)</span>
+          <span class="chip">ADM-001 … ADM-006</span>
+        </div>
+        <p>
+          หลังบ้านไม่ได้มีกติกาของตัวเอง — มันคือ <strong>ที่รวมคำสั่งของทุกโมดูล</strong> ไว้จุดเดียว
+          จุดร่วมของทุกคำสั่งคือ <strong>ทุกครั้งที่แอดมินสั่งอะไร จะเขียนแถวลง <code>admin_actions</code> พร้อมเหตุผลทุกครั้ง</strong>
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>หน้าจอ</th><th>เรียกอะไร</th><th>กระทบโมดูลไหน</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/admin</code></td><td><code>GET /admin/overview</code></td><td>อ่านรวมทุกโมดูล</td></tr>
+              <tr><td class="nowrap"><code>/admin/users</code></td><td><code>GET /admin/users</code> · <code>PATCH /admin/users/:id/suspend</code> · <code>/reactivate</code></td><td>auth — ระงับแล้ว token เดิมใช้ไม่ได้ทันที</td></tr>
+              <tr><td class="nowrap"><code>/admin/products</code></td><td><code>GET /admin/products</code> · <code>PATCH /admin/products/:id/deactivate</code> · <code>/reactivate</code></td><td>e-commerce (ดู ADR-0002)</td></tr>
+              <tr><td class="nowrap"><code>/admin/auctions</code></td><td><code>GET /admin/auctions</code> · <code>PATCH /admin/auctions/:id/cancel</code></td><td>auction — broadcast <code>auction:cancelled</code> เข้าห้อง</td></tr>
+              <tr><td class="nowrap"><code>/admin/orders</code></td><td><code>GET /admin/orders</code></td><td>อ่านอย่างเดียว</td></tr>
+              <tr><td class="nowrap"><code>/admin/categories</code></td><td><code>GET /categories/admin</code> · <code>POST /categories</code> · <code>PATCH /categories/:id</code> · <code>/activate</code> · <code>/deactivate</code></td><td>ใช้ร่วมกันทั้งประมูลและร้านค้า (ดู ADR-0001)</td></tr>
+              <tr><td class="nowrap"><code>/admin/support</code></td><td><code>GET /admin/support/sessions</code> · <code>PATCH /:id/claim</code> · <code>/resolve</code> · <code>POST /:id/messages</code></td><td>AI</td></tr>
+              <tr><td class="nowrap"><code>/admin/audit-log</code></td><td><code>GET /admin/actions</code></td><td>อ่าน <code>admin_actions</code> ทั้งหมด</td></tr>
+              <tr><td class="nowrap"><code>/admin/account</code></td><td><code>PATCH /admin/users/me/password</code></td><td>auth</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note note--signal">
+          <span class="note__tag">แต่งตั้งแอดมินยังไง</span>
+          <p>
+            <strong>ไม่มี endpoint ไหนเปลี่ยน role ของผู้ใช้ได้ โดยตั้งใจ</strong> — คนที่จะเป็นแอดมินต้องสมัครผ่านหน้าเว็บตามปกติก่อน
+            แล้วค่อยเลื่อนตำแหน่งด้วยสคริปต์ <code>promote-admins.ts</code> ที่อ่านรายชื่อจาก <code>ADMIN_EMAILS</code>
+          </p>
+        </div>
+      </div>
+
+      <h3>เส้นทางเต็มสองเส้น — เอาไว้เล่าให้คนอื่นฟัง</h3>
+
+      <h4>เส้นที่ 1 · ประมูลจนได้ของ</h4>
+      <ol class="steps">
+        <li>
+          <h4>ผู้ขายสร้างร่าง</h4>
+          <p><code>/sell</code> → <code>POST /auctions/drafts</code> → แถวใหม่ใน <code>auctions</code> สถานะ <code>DRAFT</code> · อัปโหลดรูปผ่าน <code>POST /uploads/images</code> ขึ้น Cloudinary แล้วเก็บ URL ลง <code>auction_images</code></p>
+        </li>
+        <li>
+          <h4>ตรวจความครบแล้วเผยแพร่</h4>
+          <p><code>GET /auctions/drafts/:id/validation</code> บอกว่าอะไรยังขาด · กด publish → <code>POST /auctions/drafts/:id/publish</code> → สถานะเป็น <code>SCHEDULED</code></p>
+        </li>
+        <li>
+          <h4>ระบบเปิดประมูลเอง <span class="chip chip--signal">ไม่มีคนกด</span></h4>
+          <p>ตัวจับเวลาเห็นว่าถึงเวลาเริ่ม → เปลี่ยนเป็น <code>ACTIVE</code> → broadcast <code>auction:started</code> เข้าห้อง</p>
+        </li>
+        <li>
+          <h4>คนเข้าห้องแล้วบิด</h4>
+          <p>
+            <code>/auctions/[id]</code> ต่อ socket เข้าห้อง <code>auction:&lt;id&gt;</code> · กดบิด → <code>POST /auctions/:id/bids</code>
+            → ตรวจและเขียนทุกอย่างใน transaction เดียว → broadcast <code>auction:bid</code> →
+            ทุกหน้าจอในห้องยิง <code>GET /arena</code> อ่านสถานะใหม่ทั้งชุด · คนที่ถูกแซงได้แจ้งเตือน <code>OUTBID</code>
+          </p>
+        </li>
+        <li>
+          <h4>ระบบปิดและตัดสิน <span class="chip chip--signal">ไม่มีคนกด</span></h4>
+          <p>
+            หมดเวลา (รวมเวลาที่ถูกต่อจากกันยิงท้าย) → ตัวจับเวลาเปลี่ยนเป็น <code>SOLD</code> หรือ <code>UNSOLD</code> ตามว่าถึง reserve ไหม
+            → เขียน <code>soldPrice</code> และ <code>winnerUserId</code> → broadcast <code>auction:ended</code> → แจ้งเตือนผู้ชนะและผู้ขาย
+          </p>
+        </li>
+        <li>
+          <h4>ผู้ชนะจ่ายเงิน</h4>
+          <p>
+            <code>GET /auctions/won</code> บอกว่ามีล็อตไหนรอจ่าย → หน้า <code>/checkout</code> → <code>POST /orders/checkout</code>
+            → ออเดอร์ + shipment เกิดขึ้นเหมือนการซื้อจากร้านค้าทุกประการ
+          </p>
+        </li>
+        <li>
+          <h4>ผู้ขายจัดส่ง</h4>
+          <p>
+            <code>/sell/orders/[id]</code> → <code>PATCH /orders/:id/shipment</code> ทีละสถานะ
+            <code>PROCESSING</code> → <code>SHIPPED</code> → <code>IN_TRANSIT</code> → <code>DELIVERED</code>
+            ทุกครั้งเขียน <code>shipment_events</code> + แจ้งเตือนผู้ซื้อ + push <code>order:status_changed</code>
+          </p>
+        </li>
+      </ol>
+
+      <h4>เส้นที่ 2 · ซื้อทันทีจากร้านค้า</h4>
+      <ol class="steps">
+        <li>
+          <h4>ผู้ขายลงสินค้า</h4>
+          <p><code>/sell/products/new</code> → <code>POST /products</code> → <code>products</code> + <code>product_images</code> พร้อมสต็อกและราคา</p>
+        </li>
+        <li>
+          <h4>ผู้ซื้อค้นเจอแล้วหยิบใส่ตะกร้า</h4>
+          <p><code>/shop</code> → <code>GET /products</code> (ค้นหา + กรองหมวดหมู่) → <code>POST /cart/items</code> · ตะกร้าใบเดียวเก็บของจากหลายร้านได้</p>
+        </li>
+        <li>
+          <h4>อยากได้ถูกลง — ยื่นข้อเสนอให้ AI ตัดสิน</h4>
+          <p>
+            <code>POST /products/:id/offers</code> → ตอบ <code>ACCEPTED</code> / <code>COUNTERED</code> / <code>REJECTED</code>
+            โดยเทียบกับพื้นราคาที่ผู้ขายตั้งไว้ · ได้ COUNTER มาแล้วกด “ยอมรับราคานี้” ได้ทันที ไม่ติดคูลดาวน์
+          </p>
+        </li>
+        <li>
+          <h4>จ่ายเงิน</h4>
+          <p>
+            <strong>ของในตะกร้า:</strong> <code>/checkout</code> → <code>POST /orders/checkout</code> → ตั้งราคาใหม่ทั้งหมด → ตัดสต็อก →
+            <strong>แตกเป็นออเดอร์รายผู้ขาย</strong> → ล้างตะกร้า → แจ้งเตือนทุกฝ่าย
+          </p>
+          <p>
+            <strong>ราคาที่ต่อรองได้:</strong> <code>/checkout?offer=&lt;offerId&gt;</code> → หน้าจออ่านรายการจาก <code>GET /offers/pending</code>
+            แล้วส่ง <code>offerAcceptToken</code> ไปกับ checkout → ราคาต่อหน่วยมาจากข้อเสนอนั้น <strong>ไม่หักส่วนลดตามจำนวนซ้ำ</strong> (PROD-007 ไม่ทับซ้อนกัน)
+          </p>
+        </li>
+        <li>
+          <h4>ติดตามจนของถึงมือ</h4>
+          <p>ผู้ซื้อดูที่ <code>/orders/[id]</code> · ผู้ขายอัปเดตที่ <code>/sell/orders/[id]</code> — เส้นทางเดียวกับข้อ 7 ของเส้นประมูล</p>
+        </li>
+      </ol>
+
+      <h3>จุดที่โมดูลของคนละคนมาเจอกัน</h3>
+      <p>รู้ 5 จุดนี้แล้วจะเข้าใจว่าทำไมต้อง merge <code>dev</code> ทุกวัน</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>จุดเชื่อม</th><th>ใครส่ง</th><th>ใครรับ</th></tr></thead>
+          <tbody>
+            <tr><td>ประมูลปิดแล้วผู้ชนะต้องจ่ายเงิน</td><td class="nowrap">auction (Dev 4)</td><td class="nowrap">order / checkout (Dev 3)</td></tr>
+            <tr><td>ทุกโมดูลเขียนแถวแจ้งเตือน</td><td class="nowrap">auction · order · shipment · chat</td><td class="nowrap">notification + socket <code>/user</code></td></tr>
+            <tr><td>guard และ role ที่ทุก endpoint ใช้ร่วมกัน</td><td class="nowrap">auth / common (Dev 2)</td><td class="nowrap">ทุกโมดูล</td></tr>
+            <tr><td>หมวดหมู่ชุดเดียวใช้ทั้งประมูลและร้านค้า</td><td class="nowrap">categories (ADR-0001)</td><td class="nowrap">auction (Dev 4) · product (Dev 3)</td></tr>
+            <tr><td>คำสั่งแอดมินสั่งงานข้ามโมดูล</td><td class="nowrap">admin</td><td class="nowrap">auction · product · auth · support</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ch6">
+      <h2><span class="num">บทที่ 06</span>การเทส</h2>
+      <p class="lede">
+        บทนี้แยกเป็นสองเรื่องที่ตัดสินคนละจังหวะ — <strong>เลือกเครื่องมือให้ถูก</strong> ตัดสินตอนกำลังจะเขียนไฟล์เทสใหม่
+        ส่วน <strong>รันให้ครบชั้น</strong> ตัดสินตอนกำลังจะส่งงาน
+      </p>
+
+      <h3>เลือกเครื่องมือไหน — ตัดสินจากสองคำถาม</h3>
+      <p>
+        โปรเจกต์นี้มีเครื่องมือเทส 4 ตัว และมัน <strong>ไม่ได้แข่งกัน</strong> — แต่ละตัวมีที่ของตัวเอง
+        เวลาจะเขียนไฟล์เทสใหม่ ถามสองข้อนี้ตามลำดับ แล้วคำตอบจะออกมาเอง ไม่ต้องเถียงกันเรื่องความชอบ
+      </p>
+      <div class="grid2">
+        <div class="card">
+          <h4>ข้อ 1 · ไฟล์นี้อยู่แอปไหน → ได้ <em>ตัวรัน</em></h4>
+          <p>
+            อยู่ใน <code>apps/web</code> = <strong>Vitest</strong> · อยู่ใน <code>apps/api</code> = <strong>Jest</strong>
+            — ข้อนี้ไม่ใช่เรื่องรสนิยม แต่ละแอปตั้ง config ไว้คนละตัวอยู่แล้ว เลือกผิด = ไฟล์ไม่ถูกรันเลย
+          </p>
+        </div>
+        <div class="card">
+          <h4>ข้อ 2 · กำลังเทสอะไร → ได้ <em>library ที่วางทับ</em></h4>
+          <p>
+            ฟังก์ชันล้วน = ไม่ต้องเพิ่มอะไร · component ที่ผู้ใช้กดหรือกรอก = <strong>RTL</strong> ·
+            endpoint จริงผ่าน HTTP = <strong>Supertest</strong>
+          </p>
+        </div>
+      </div>
+      <div class="note">
+        <span class="note__tag">จุดที่คนมักเข้าใจผิด</span>
+        <p>
+          <strong>RTL ไม่ใช่ทางเลือกแทน Vitest และ Supertest ไม่ใช่ทางเลือกแทน Jest</strong> —
+          ทั้งคู่เป็นของที่ใช้ <em>ร่วมกับ</em> ตัวรัน ไม่ใช่แทนที่ ·
+          เทียบง่ายๆ: ตัวรันคือคนที่สั่งให้เทสเริ่มทำงานและบอกว่าผ่านหรือไม่ผ่าน
+          ส่วน RTL กับ Supertest คือเครื่องมือที่ใช้ <em>เอื้อมไปแตะ</em> สิ่งที่กำลังเทส
+        </p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>สิ่งที่จะเทส</th><th>ตัวรัน</th><th>library</th><th>ไฟล์ไปไว้ที่</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>ฟังก์ชันล้วนฝั่งเว็บ — จัดรูปแบบราคา คำนวณเวลาที่เหลือ กรองรายการ</td>
+              <td class="nowrap"><span class="chip chip--accent">Vitest</span></td>
+              <td class="nowrap">—</td>
+              <td><code>apps/web/src/lib/&lt;ชื่อ&gt;.test.ts</code></td>
+            </tr>
+            <tr>
+              <td>Component ที่ผู้ใช้กด กรอก หรือเห็นข้อความเปลี่ยน</td>
+              <td class="nowrap"><span class="chip chip--accent">Vitest</span></td>
+              <td class="nowrap"><span class="chip">RTL</span></td>
+              <td><code>apps/web/src/components/&lt;โมดูล&gt;/&lt;ชื่อ&gt;.test.tsx</code></td>
+            </tr>
+            <tr>
+              <td>กติกาฝั่งเซิร์ฟเวอร์ — service, mapper, util ที่ไม่แตะฐานข้อมูลจริง</td>
+              <td class="nowrap"><span class="chip chip--accent">Jest</span></td>
+              <td class="nowrap">— (mock Prisma)</td>
+              <td><code>apps/api/src/&lt;โมดูล&gt;/&lt;ชื่อ&gt;.spec.ts</code></td>
+            </tr>
+            <tr>
+              <td>endpoint จริง ยิงผ่าน HTTP เข้าฐานข้อมูลจริง</td>
+              <td class="nowrap"><span class="chip chip--accent">Jest</span></td>
+              <td class="nowrap"><span class="chip">Supertest</span></td>
+              <td><code>apps/api/test/&lt;ชื่อ&gt;.e2e-spec.ts</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>ทำไมสองแอปใช้ตัวรันคนละตัว</h4>
+      <div class="grid2">
+        <div class="card">
+          <h4><code>apps/api</code> → Jest</h4>
+          <p>
+            มากับ <code>nest new</code> ตั้งแต่วัน scaffold และ e2e ใช้ <code>Test.createTestingModule()</code>
+            ของ NestJS ซึ่งผูกกับระบบ DI ของ Nest — ย้ายไปตัวอื่นแปลว่าต้องรื้อวิธีประกอบโมดูลใหม่ทั้งหมด
+            โดยไม่ได้อะไรกลับมา
+          </p>
+        </div>
+        <div class="card">
+          <h4><code>apps/web</code> → Vitest</h4>
+          <p>
+            Next.js 16 เป็น ESM ล้วนและใช้ alias <code>@/*</code> · Vitest อ่าน path จาก <code>tsconfig.json</code>
+            ให้เลยผ่าน <code>resolve.tsconfigPaths</code> — path ที่ resolve ได้ในเอดิเตอร์จึง resolve ได้ในเทส
+            โดยไม่ต้องประกาศซ้ำในไฟล์ config
+          </p>
+        </div>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">อย่าสลับกัน</span>
+        <p>
+          อย่าลาก Vitest เข้า <code>apps/api</code> หรือลาก Jest เข้า <code>apps/web</code> เพราะถนัดตัวไหน —
+          แอปเดียวมีสองตัวรันแปลว่าคนที่เปิดไฟล์มาเดาไม่ออกว่าไฟล์นี้รันด้วยอะไร
+          และ <code>pnpm test</code> ที่รากจะรันไม่ครบโดยไม่มีใครรู้ตัว
+        </p>
+      </div>
+
+      <h4>RTL — เทสสิ่งที่ผู้ใช้เห็น ไม่ใช่สิ่งที่โค้ดทำข้างใน</h4>
+      <ul>
+        <li>
+          <strong>หาอิลิเมนต์ด้วยสิ่งที่ผู้ใช้ใช้หา</strong> — <code>getByRole("button", { name: "บิด" })</code>
+          หรือ <code>getByLabelText</code> ไม่ใช่ class หรือ test id · ถ้าหาด้วย role ไม่เจอ มักแปลว่า
+          <strong>คนที่ใช้ screen reader ก็หาไม่เจอเหมือนกัน</strong> — นั่นคือบั๊กจริง ไม่ใช่ปัญหาของเทส
+        </li>
+        <li>
+          <strong>ใช้ <code>user-event</code> ไม่ใช่ <code>fireEvent</code></strong> — <code>user-event</code>
+          จำลองลำดับที่เบราว์เซอร์ทำจริง (focus → keydown → input → change) ส่วน <code>fireEvent</code>
+          ยิง event เดี่ยวๆ ซึ่งผ่านได้ทั้งที่ของจริงพัง
+        </li>
+        <li>
+          <strong>ไม่ต้องเรียก <code>cleanup</code> เอง</strong> — <code>apps/web/src/test/setup.ts</code>
+          ตั้ง <code>afterEach(cleanup)</code> ไว้แล้ว ถ้าไม่มี component จากเทสก่อนหน้าจะค้างใน DOM
+          แล้ว <code>getByRole</code> จะเจอสองตัวและ throw
+        </li>
+      </ul>
+
+      <h4>Supertest — ยิงเข้าแอปที่ประกอบเหมือน production</h4>
+      <div class="note note--stop">
+        <span class="note__tag">บรรทัดที่ลืมแล้วเทสจะโกหก</span>
+        <p>
+          ทุกไฟล์ e2e ต้องเรียก <code>configureApp(app)</code> ต่อจาก <code>createTestingModule</code> —
+          <code>ValidationPipe</code> และ exception filter ถูกติดตั้งใน <code>main.ts</code>
+          <strong>ไม่ใช่ใน <code>AppModule</code></strong> ไฟล์ที่ลืมบรรทัดนี้จะรันแอปที่ไม่มีการตรวจ input เลย
+          เทสเขียวสวยแต่ของจริงรับค่าอะไรก็ได้
+        </p>
+      </div>
+
+      <h4>ของที่ไม่ต้องเขียนเทส</h4>
+      <p>
+        เทสที่ไม่ได้ปกป้องอะไรมีต้นทุนจริง เพราะต้องตามแก้ทุกครั้งที่โค้ดขยับ · สามอย่างนี้ปล่อยผ่านได้:
+        <strong>ค่าคงที่และ type</strong> (typecheck จับให้แล้ว) ·
+        <strong>Prisma ทำงานถูกไหม</strong> (นั่นคือเทส library ของเขา ไม่ใช่โค้ดเรา) ·
+        <strong>component ที่ render ข้อความตายตัวโดยไม่มีเงื่อนไข</strong> ·
+        ที่คุ้มที่สุดคือจุดที่มี <strong>เงื่อนไขหรือการคำนวณ</strong> — บิดขั้นต่ำ การตัดสินกันยิงท้าย การตัดสต็อก
+      </p>
+
+      <h3>เลือกวิธีไหน — เทสที่ชั้นไหนถึงคุ้ม</h3>
+      <p>
+        เลือกเครื่องมือถูกแล้วยังเหลืออีกคำถามที่สำคัญกว่า: <strong>เรื่องนี้ควรเทสที่ชั้นไหน</strong> ·
+        มีหลักเดียวพอ — <strong>เทสที่ชั้นต่ำที่สุดที่ยังพิสูจน์สิ่งที่กลัวได้จริง</strong>
+      </p>
+      <p>
+        วิธีใช้หลักนี้คือถามตัวเองว่า <strong>"ถ้าของชิ้นนี้พัง มันพังที่ไหน"</strong> แล้วเทสตรงนั้น —
+        ไม่ใช่ไล่ขึ้นไปเทสที่ชั้นบนสุดเพราะรู้สึกว่าจริงกว่า ชั้นบนช้ากว่ามากและพังบ่อยกว่าด้วยเหตุผลที่ไม่เกี่ยวกับโค้ดเรา
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>สิ่งที่กลัวว่าจะพัง</th><th>เทสที่ชั้น</th><th>ทำไมชั้นอื่นจับไม่ได้</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>คำนวณผิด — บิดขั้นต่ำ ส่วนลดตามจำนวน เวลาที่เหลือ ค่าเฉลี่ยที่ AI counter</td>
+              <td class="nowrap"><span class="chip chip--good">unit</span></td>
+              <td>e2e จับได้เหมือนกันแต่ช้ากว่ามาก และเวลาแดงจะไม่บอกว่าผิดที่บรรทัดไหน</td>
+            </tr>
+            <tr>
+              <td>ปุ่มเปิด/ปิดผิดจังหวะ · ข้อความ error ไม่ขึ้น · กรอกแล้วหน้าจอไม่ตอบสนอง</td>
+              <td class="nowrap"><span class="chip chip--good">component (RTL)</span></td>
+              <td>typecheck กับ <code>next build</code> จับได้แค่ว่า render ผ่าน ไม่ได้จับว่ากดแล้วเกิดอะไร</td>
+            </tr>
+            <tr>
+              <td>migration apply ไม่ผ่าน · unique index ชน · สองคนกดพร้อมกันแล้วสต็อกติดลบ · guard ต่อผิดลำดับ</td>
+              <td class="nowrap"><span class="chip chip--stop">e2e เท่านั้น</span></td>
+              <td><strong>unit จับไม่ได้เลย</strong> เพราะ mock Prisma ทิ้งไปหมดแล้ว — ของพวกนี้เป็นพฤติกรรมของฐานข้อมูลจริง</td>
+            </tr>
+            <tr>
+              <td>หน้าเว็บพังตอน build · Server Component เรียกของที่เรียกไม่ได้</td>
+              <td class="nowrap"><span class="chip">ไม่ต้องเขียนเทส</span></td>
+              <td><code>next build</code> ใน CI จับให้แล้ว — เขียนเทสซ้ำคือจ่ายฟรี</td>
+            </tr>
+            <tr>
+              <td>เส้นทางที่พาดหลายหน้า — ประมูลจบ → ไป checkout → ได้ออเดอร์</td>
+              <td class="nowrap"><span class="chip chip--signal">ยังต้องกดมือ</span></td>
+              <td>e2e ครอบเฉพาะฝั่ง API · ยังไม่มีเทสที่ขับเบราว์เซอร์จริงในโปรเจกต์นี้</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">กฎกันเทสเฟ้อ</span>
+        <p>
+          <strong>อย่าเทสกติกาเดียวกันสองชั้น</strong> — ถ้าการคำนวณบิดขั้นต่ำถูกเทสที่ unit แล้ว
+          e2e ควรเทสแค่ว่า <em>ต่อสายถูก</em> (ยิงเข้า endpoint จริงแล้วได้ 400 พร้อม error code ที่ถูก)
+          ไม่ใช่ไล่เทสทุกกรณีของสูตรซ้ำอีกรอบ · e2e รันทีละไฟล์ใช้เวลาราว 75 วินาที ส่วน unit จบในไม่กี่วินาที
+          — เทสที่ซ้ำกันไม่ได้เพิ่มความมั่นใจ แต่เพิ่มเวลาที่ทุกคนต้องรอทุก PR
+        </p>
+      </div>
+      <div class="note">
+        <span class="note__tag">เขียนเทสตอนไหนคุ้มที่สุด</span>
+        <p>
+          <strong>ตอนเพิ่งเจอบั๊ก</strong> — เขียนเทสที่แดงเพราะบั๊กนั้นก่อน แล้วค่อยแก้โค้ดให้เขียว
+          เพราะจังหวะนั้นเป็นจังหวะเดียวที่เรารู้แน่ว่าเทสที่เขียนมันจับของจริงได้ · ถ้าเขียนหลังแก้เสร็จแล้ว
+          จะไม่มีวันรู้ว่ามันเคยแดงจริงหรือเปล่า · ตัวอย่างในโปรเจกต์นี้คือ commit
+          <code>fix(BID-001)</code> ที่มาพร้อมเทสของตัวเองในก้อนเดียวกัน
+        </p>
+      </div>
+
+      <h3>ชั้นที่ 1 · pnpm check — ด่านก่อนส่งงาน</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+        <pre>pnpm check</pre>
+      </div>
+      <p>คำสั่งเดียวรวม 4 อย่าง: typecheck ของ <code>apps/api</code> → typecheck ของ <code>apps/web</code> → <code>pnpm test</code> → <code>pnpm lint</code></p>
+
+      <h3>ชั้นที่ 2 · unit test — 57 ไฟล์สองแอป ไม่ต้องมีฐานข้อมูล</h3>
+      <p>
+        <strong>ฝั่งเซิร์ฟเวอร์ 49 ไฟล์ (Jest)</strong> — <code>*.spec.ts</code> วางข้างไฟล์ที่มันเทสใน <code>apps/api/src/</code>
+      </p>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">apps/api · Jest</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># รันทั้งหมด</span>
+pnpm --dir apps/api test
+
+<span class="c"># รันเฉพาะไฟล์ที่กำลังแก้ (ใส่บางส่วนของชื่อไฟล์ได้)</span>
+pnpm --dir apps/api test bid.service
+
+<span class="c"># รันค้างไว้แล้วให้รันใหม่เองทุกครั้งที่แก้ไฟล์</span>
+pnpm --dir apps/api test:watch</pre>
+      </div>
+      <p>
+        <strong>ฝั่งเว็บ 8 ไฟล์ (Vitest)</strong> — แบ่งเป็นฟังก์ชันล้วน 5 ไฟล์ใน <code>src/lib/</code>
+        และ component 3 ไฟล์ใน <code>src/components/</code> ที่ใช้ RTL
+      </p>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">apps/web · Vitest</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># รันทั้งหมด</span>
+pnpm --dir apps/web test
+
+<span class="c"># รันเฉพาะไฟล์ที่กำลังแก้</span>
+pnpm --dir apps/web test auction-search
+
+<span class="c"># รันค้างไว้แล้วให้รันใหม่เองทุกครั้งที่แก้ไฟล์</span>
+pnpm --dir apps/web test:watch</pre>
+      </div>
+      <p>
+        ทั้งสองฝั่ง <strong>ไม่แตะฐานข้อมูลจริง</strong> — ฝั่ง api mock Prisma ทั้งหมด ส่วนฝั่งเว็บรันบน jsdom
+        จึงเร็วมากและไม่ต้องเปิด Docker เหมาะกับการเทสกติกาล้วนๆ เช่น การคำนวณบิดขั้นต่ำ การตัดสินกันยิงท้าย
+        การตัดสินใจของ AI negotiator — แต่แลกมาด้วยการที่มันจับ <strong>ไม่ได้เลย</strong> ว่า migration ใช้ไม่ได้
+        หรือ unique index ชนกันตอนสองคนกดพร้อมกัน
+      </p>
+      <div class="note note--signal">
+        <span class="note__tag">ทำไม vitest ฝั่งเว็บตั้ง environment เป็น jsdom ทั้งที่บางไฟล์เทสฟังก์ชันล้วน</span>
+        <p>
+          เพราะ <code>lib/api/client.ts</code> เอื้อมไปหา <code>next-auth/react</code> ผ่าน <code>authHeader()</code>
+          และ <code>lib/format.ts</code> จัดรูปแบบผ่าน <code>Intl</code> — ทั้งคู่ต้องการ global ที่มีหน้าตาแบบเบราว์เซอร์
+          ตั้ง <code>node</code> แล้วจะพังทั้งที่โค้ดไม่ผิด
+        </p>
+      </div>
+
+      <h3>ชั้นที่ 3 · e2e — 20 สเปค ยิงผ่าน HTTP จริงเข้าฐานข้อมูลจริง</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">เตรียมก่อน (ถ้ายังไม่ได้ทำในบทที่ 03)</span><button class="code__copy" type="button">copy</button></div>
+        <pre>docker compose -f infra/docker/compose.dev.yml up -d
+pnpm --dir apps/api exec prisma migrate deploy
+pnpm --dir apps/api exec prisma db seed</pre>
+      </div>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">รัน e2e</span><button class="code__copy" type="button">copy</button></div>
+        <pre>pnpm --dir apps/api test:e2e</pre>
+      </div>
+      <ul>
+        <li><strong>ต้อง seed ก่อน</strong> — หลายสเปคหาผู้ใช้จาก UUID คงที่ที่ <code>seed.ts</code> เขียนไว้ ไม่ได้สร้างเอง</li>
+        <li><strong>ต้องมี Maildev</strong> — สเปคฝั่ง auth อ่านรหัส OTP กลับมาจากกล่องจดหมายของ Maildev จริงๆ</li>
+        <li><code>force-maildev.ts</code> บังคับให้ทุกการรันส่งเมลเข้า Maildev เสมอ — ต่อให้ <code>.env</code> ในเครื่องชี้ไปที่ relay จริงก็ไม่หลุดออกไป</li>
+        <li>รันทีละไฟล์ (<code>maxWorkers: 1</code>) ใช้เวลาราว 75 วินาที</li>
+      </ul>
+
+      <h3>ชั้นที่ 4 · ยิงมือ — .http, Postman, Swagger</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>เครื่องมือ</th><th>อยู่ที่ไหน</th><th>เหมาะกับ</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">ไฟล์ <code>.http</code></td><td><code>apps/api/test/http/</code> — 15 ไฟล์แยกตามโมดูล</td><td>ยิงทีละ request จากใน VS Code / JetBrains</td></tr>
+            <tr><td class="nowrap">Postman</td><td><code>apps/api/test/postman/</code></td><td>คนที่ถนัด Postman — import collection + environment</td></tr>
+            <tr><td class="nowrap">Swagger</td><td><code>localhost:4000/docs</code></td><td>ดูว่ามี endpoint อะไรบ้างและรับ body หน้าตายังไง</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">เคล็ดลับ token สำหรับยิงมือ</span>
+        <p>
+          ตอน seed จบจะพิมพ์บรรทัด <code>@xToken = ...</code> ออกมาท้ายสุด — copy ไปวางในหัวไฟล์ <code>.http</code> ได้เลย
+          token หมดอายุใน 15 นาที พอเริ่มได้ 401 ให้ seed ใหม่แล้ววางทับ ไม่ต้องล็อกอินจริงเพราะการล็อกอินต้องรอ OTP
+        </p>
+      </div>
+
+      <h3>CI — สิ่งที่เกิดขึ้นอัตโนมัติตอนเปิด PR</h3>
+      <p>ทุก PR เข้า <code>dev</code> หรือ <code>main</code> รัน 3 job พร้อมกัน ใช้เวลารวมราว 4 นาที</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>job</th><th>ทำอะไร</th><th>จับอะไรที่ชั้นอื่นจับไม่ได้</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap"><code>lint-and-test</code></td>
+              <td>lint → unit test <strong>ทั้งสองแอป</strong> (Jest ของ api + Vitest ของ web) → <code>next build</code> ของ apps/web</td>
+              <td>ความผิดพลาดของ Server Component ที่ไม่โผล่ตอน <code>pnpm dev</code> เลย เพราะ dev render ทีละหน้าตามที่เปิด</td>
+            </tr>
+            <tr>
+              <td class="nowrap"><code>docker-build</code></td>
+              <td>build image ของ apps/api (build อย่างเดียว ไม่ push)</td>
+              <td>Dockerfile พังจาก dependency ที่ต้องการ system package หรือ path ที่ย้าย — lint กับ test ไม่เคยเปิดไฟล์นี้เลย</td>
+            </tr>
+            <tr>
+              <td class="nowrap"><code>e2e</code></td>
+              <td>ยก Postgres + Maildev แล้วรัน migrate → seed → e2e</td>
+              <td>migration ที่ apply ไม่ผ่าน, unique index ที่สอง request แย่งกัน, guard ที่ต่อผิดลำดับ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">ฝั่งเว็บมีเทสแล้ว แต่ยังไม่ครอบคลุม</span>
+        <p>
+          <code>apps/web</code> มี Vitest + RTL แล้ว และ CI รันให้ผ่าน <code>pnpm test</code> เหมือนฝั่ง api —
+          แต่ตอนนี้ครอบคลุมแค่ <strong>ฟังก์ชันล้วนกับ component เดี่ยวๆ 8 ไฟล์</strong> ยังไม่มีเทสที่เดินทั้งหน้าจอ
+          หรือทั้งเส้นทางผู้ใช้ · <strong>ฟีเจอร์ที่พาดหลายหน้ายังต้องกดลองด้วยมือก่อนส่ง</strong>
+          และด่านที่เหลือของฝั่งนี้ยังเป็น typecheck + <code>next build</code> ตามเดิม
+        </p>
+      </div>
+    </section>
+
+    <section id="ch7">
+      <h2><span class="num">บทที่ 07</span>ทำไมถึงเลือกแบบนี้</h2>
+      <p class="lede">
+        บทอื่นตอบว่า <strong>ใช้ยังไง</strong> · บทนี้ตอบว่า <strong>ทำไมถึงเป็นตัวนี้</strong> —
+        เอาไว้ตอบเวลาถูกถามตอนนำเสนอ และเวลาต้องตัดสินใจเรื่องคล้ายกันรอบหน้า
+      </p>
+      <div class="note">
+        <span class="note__tag">เรื่องเทสอยู่คนละบท</span>
+        <p>
+          หลักการเลือกเครื่องมือเทส (Vitest / Jest / RTL / Supertest) และหลักการเลือก<em>ชั้น</em>ที่จะเทส
+          อยู่ใน <a href="#ch6">บทที่ 06</a> ทั้งคู่ เพราะเป็นการตัดสินใจที่เกิดตอนกำลังเขียนเทส ไม่ใช่ตอนอ่านทบทวน
+        </p>
+      </div>
+
+      <h3>WebSocket — ทำไมประมูลถึงต้องมี</h3>
+      <p>
+        คำถามที่ต้องตอบให้ได้ก่อนคือ <strong>REST อย่างเดียวไม่พอตรงไหน</strong> · คำตอบอยู่ที่ลักษณะของข้อมูล:
+        ราคาประมูลเปลี่ยนเพราะ <strong>คนอื่น</strong> ไม่ใช่เพราะคนที่กำลังดู — REST ตอบได้เฉพาะตอนที่มีคนถาม
+        ส่วนคนดูประมูลไม่มีทางรู้ว่าควรถามเมื่อไหร่
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ทางเลือก</th><th>ผลที่ได้จริง</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap">กด refresh เอง</td>
+              <td>ผู้ใช้ต้องเดาเองว่าตอนไหนราคาขยับ — ในห้องประมูลนาทีสุดท้ายคือใช้ไม่ได้เลย</td>
+            </tr>
+            <tr>
+              <td class="nowrap">polling ทุก 1–2 วิ</td>
+              <td>ผู้ชม 1 คน = คำขอเปล่าหลายสิบครั้งต่อนาที และ <strong>ยังช้ากว่าอยู่ดี</strong> เพราะข่าวมาถึงช้าสุดเท่ากับ 1 รอบ polling — จ่ายแพงกว่าเพื่อได้ของที่แย่กว่า</td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--good">WebSocket</span></td>
+              <td>เซิร์ฟเวอร์บอกตอนที่มีอะไรเกิดขึ้นจริง ไม่มีคำขอเปล่า และถึงทันที</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        เกณฑ์ที่ใช้ตัดสินคือ <strong>ข้อมูลถูกผลักโดยเหตุการณ์ที่คนดูไม่ได้ก่อหรือเปล่า</strong> —
+        ประมูล แจ้งเตือน และแชทเข้าเกณฑ์นี้ · ส่วนตะกร้าหรือหน้าโปรไฟล์ไม่เข้า เพราะมันเปลี่ยนก็ต่อเมื่อเจ้าของกดเอง
+        <strong>จึงไม่ได้เอา socket ไปแปะทุกหน้า</strong>
+      </p>
+
+      <h4>ทำไม Socket.IO ไม่ใช่ WebSocket ดิบ</h4>
+      <p>ของ 4 อย่างนี้ต้องมีอยู่แล้ว ถ้าใช้ WS ดิบก็ต้องเขียนเองทั้งหมด</p>
+      <div class="grid2">
+        <div class="card">
+          <h4>ห้อง (rooms)</h4>
+          <p>ต้องยิงเข้าเฉพาะคนที่ดูประมูลนั้น ไม่ใช่ทุกคนที่ต่ออยู่ · WS ดิบต้องทำ registry ของ connection เอง</p>
+        </div>
+        <div class="card">
+          <h4>ต่อใหม่อัตโนมัติ</h4>
+          <p>เน็ตสะดุดกลางประมูลคือจังหวะที่แย่ที่สุด · <code>use-auction-room.ts</code> ตั้ง backoff 1 วิ → สูงสุด 10 วิ ให้เอง</p>
+        </div>
+        <div class="card">
+          <h4>namespace</h4>
+          <p>แยกช่องสาธารณะกับช่องส่วนตัวออกจากกันได้โดยไม่ต้องเปิดพอร์ตเพิ่มหรือทำ handshake เอง</p>
+        </div>
+        <div class="card">
+          <h4>fallback</h4>
+          <p>เครือข่ายที่บล็อก WebSocket จะถอยไป long-polling เองโดยโค้ดฝั่งเราไม่ต้องรู้เรื่อง</p>
+        </div>
+      </div>
+      <p>
+        บวกกับที่ NestJS มี <code>@nestjs/platform-socket.io</code> ให้ในตัว — gateway เขียนเป็นคลาสที่ใช้ DI
+        ชุดเดียวกับ service อื่น เข้าถึง <code>PrismaService</code> ได้เหมือนกัน ไม่ต้องต่อสายเอง
+      </p>
+
+      <h4>ทำไมแยกเป็น 2 namespace</h4>
+      <p>เพราะทั้งสองช่องมี <strong>คุณสมบัติด้านความปลอดภัยตรงข้ามกัน</strong> — เอามารวมกันแปลว่าต้องกรองรายคนในห้องเดียว ซึ่งพลาดครั้งเดียวคือข้อมูลรั่ว</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th><code>/auctions</code></th><th><code>/user</code></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap">ใครเข้าได้</td>
+              <td><span class="chip">ไม่ต้องมี token</span></td>
+              <td><span class="chip chip--stop">ต้องพิสูจน์ตัวตนตอนเชื่อมต่อ</span></td>
+            </tr>
+            <tr>
+              <td class="nowrap">เพราะอะไร</td>
+              <td>ประมูลที่เผยแพร่แล้วเป็นข้อมูลสาธารณะ (AUC-005) และห้องส่งข้อมูลชุดเดียวกับที่ <code>GET</code> สาธารณะส่งอยู่แล้ว — ไม่มีอะไรให้อนุญาต</td>
+              <td>ทุก event จ่าหน้าถึงบัญชีเดียว socket ที่พิสูจน์ตัวเองไม่ได้จึงไม่มีเหตุผลจะต่ออยู่</td>
+            </tr>
+            <tr>
+              <td class="nowrap">ส่ง token มาด้วยได้ไหม</td>
+              <td>ได้ และไม่เปลี่ยนสิ่งที่เห็น — มีไว้ให้ระบบรู้ว่าใครปิดแท็บ ตัวนับผู้ชมจะได้ถูก (LIV-001)</td>
+              <td>บังคับ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">รายละเอียดที่ตั้งใจทำแบบนี้</span>
+        <p>
+          <code>/user</code> ตรวจตัวตน <strong>ตอนเชื่อมต่อ ไม่ใช่ตอนส่งข้อความ join</strong> —
+          จึงไม่มีช่วงเวลาไหนเลยที่ socket ซึ่งยังไม่รู้ว่าเป็นใครเกาะอยู่กับ namespace นี้เพื่อรอบอกว่าตัวเองคือใคร
+        </p>
+      </div>
+
+      <h4>หลักที่สำคัญที่สุด — socket บอกว่า "มีอะไรเปลี่ยน" ไม่ได้บอกว่า "เปลี่ยนเป็นอะไร"</h4>
+      <p>
+        ทุก handler ใน <code>use-auction-room.ts</code> เรียก <code>onChange()</code> เหมือนกันหมด
+        แล้วหน้าจอไปยิง <code>GET /arena</code> อ่านใหม่ทั้งชุด — <strong>ไม่มีที่ไหนเอา payload ของ event มาแปะหน้าจอตรงๆ</strong>
+      </p>
+      <p>
+        เหตุผล: arena เป็นค่าชุดที่ <strong>ต้องสอดคล้องกันทั้งก้อน</strong> — ราคาปัจจุบัน ผู้นำ บิดขั้นต่ำถัดไป
+        เวลาปิด และโควตาต่อเวลาที่เหลือ · API คำนวณมันมาพร้อมกัน การหยิบมาแปะทีละฟิลด์คือวิธีที่ทำให้หน้าจอ
+        <strong>เสนอบิดที่ endpoint จะปฏิเสธ</strong> · ต้นทุนคือ 1 request ต่อ 1 event
+        ได้กลับมาคือสถานะที่ถูกทั้งก้อนเสมอ
+      </p>
+      <div class="note note--stop">
+        <span class="note__tag">socket ไม่รับคำสั่ง</span>
+        <p>
+          การบิดยังต้องผ่าน HTTP และ guard ตามปกติ — socket รับแค่ข้อความ join ห้อง นอกนั้นเป็นทางเดียว (ออกอย่างเดียว)
+          ผลที่ได้คือ <strong>ไม่มีกติกาธุรกิจข้อไหนที่ต้องเขียนสองที่</strong> ถ้ารับบิดผ่าน socket ด้วย
+          ทุกกฎ (บิดขั้นต่ำ กันบิดซ้ำ สิทธิ์ผู้ใช้) จะต้องมีสำเนาที่สอง และสองสำเนาย่อมหลุดจากกันสักวัน
+        </p>
+      </div>
+
+      <h4>presence เก็บใน memory โดยตั้งใจ</h4>
+      <p>
+        <code>presence-registry.ts</code> เก็บว่า socket ไหนเป็นของใครและกำลังดูประมูลอะไร ไว้ในหน่วยความจำล้วน
+        เหตุผลคือมันอธิบายว่าใครต่ออยู่กับ <strong>process นี้</strong> — process ตายเมื่อไหร่ socket ที่มันถืออยู่ก็หายไปด้วย
+        ข้อมูลจึงถูกต้องโดยธรรมชาติ ไม่ต้องมีใครมาล้างให้
+      </p>
+      <p>
+        และมัน <strong>นับ ไม่ใช่ติดธง</strong> เพราะคนเดียวเปิดประมูลเดียวกันได้สองแท็บ — ปิดไปแท็บหนึ่งไม่ได้แปลว่าออกจากห้อง
+      </p>
+      <div class="note note--signal">
+        <span class="note__tag">ข้อจำกัดที่ต้องรู้ก่อนขยาย</span>
+        <p>
+          ทั้ง presence และการ broadcast ผูกกับ process เดียว · <strong>วันที่รัน <code>apps/api</code> มากกว่า 1 instance
+          ต้องเพิ่ม Socket.IO adapter (เช่น Redis) ก่อน</strong> ไม่งั้นคนที่ต่ออยู่คนละ instance จะไม่เห็น event ของกันและกัน
+          และตัวนับผู้ชมจะนับได้แค่คนที่บังเอิญมาต่อ instance เดียวกัน · ตอนนี้ยังไม่มี adapter ในโค้ด
+          (ค้นทั้ง <code>apps/api/src</code> ไม่เจอทั้ง Redis และ <code>IoAdapter</code>) — <strong>ออกแบบไว้สำหรับ instance เดียว
+          และนี่คือสิ่งแรกที่ต้องแก้ก่อนเพิ่มจำนวน instance</strong> จำนวน replica จริงตั้งอยู่ใน dashboard ของ Railway
+          ไม่ได้อยู่ในรีโป จึงต้องไปดูที่นั่นก่อนสรุปว่าตอนนี้รันกี่ตัว
+        </p>
+      </div>
+
+      <h3>Docker — ทำไมต้องมี และได้อะไรจริงๆ</h3>
+      <p>
+        โปรเจกต์นี้ใช้ Docker <strong>สองบทบาทที่ไม่เหมือนกันเลย</strong> — แยกให้ออกก่อน ไม่งั้นจะงงว่าทำไมบางทีโค้ดเราอยู่ใน container บางทีไม่อยู่
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>บนเครื่อง dev</th><th>บน production</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap">ไฟล์</td>
+              <td><code>infra/docker/compose.dev.yml</code></td>
+              <td><code>Dockerfile</code> + <code>docker-entrypoint.sh</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap">อะไรอยู่ใน container</td>
+              <td><strong>ของรอบข้าง</strong> — Postgres + Maildev</td>
+              <td><strong>ตัวแอปเอง</strong> — <code>apps/api</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap">โค้ดเราอยู่ไหน</td>
+              <td>รันบนเครื่องตรงๆ ด้วย <code>pnpm dev</code> — แก้ไฟล์แล้วเห็นผลทันที</td>
+              <td>ถูก build ฝังอยู่ใน image</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>บทบาทที่ 1 · compose.dev.yml — ทำให้ 5 เครื่องเหมือนกัน</h4>
+      <p>
+        ถ้าไม่มีอันนี้ ทุกคนต้องลง Postgres เองและจะได้คนละเวอร์ชัน — <strong>"เครื่องผมได้ เครื่องคุณไม่ได้"</strong>
+        คือค่าใช้จ่ายที่แพงที่สุดของทีม 5 คนที่มีเวลา 14 วัน · ทุกบรรทัดใน compose มีเหตุผลของมัน
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ที่ตั้งไว้</th><th>แก้ปัญหาอะไร</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>postgres:17</code></td><td>ทุกคนได้เวอร์ชันเดียวกันเป๊ะ และตรงกับที่ Railway ใช้ — บั๊กที่เกิดจาก SQL ต่างเวอร์ชันจึงเจอตั้งแต่ในเครื่อง</td></tr>
+            <tr><td class="nowrap"><code>127.0.0.1:<strong>5433</strong>:5432</code></td><td>ใช้ 5433 ตั้งใจเลี่ยงชนกับ Postgres ที่บางคนลงไว้ในเครื่องอยู่แล้ว · ผูกกับ <code>127.0.0.1</code> ฐานข้อมูล dev จึงไม่โผล่ออกวง LAN</td></tr>
+            <tr><td class="nowrap"><code>maildev</code></td><td><strong>ระบบนี้ล็อกอินต้องมี OTP ทางอีเมล ทุกทางเข้า</strong> — ไม่มีตัวรับเมลในเครื่องคือเทสล็อกอินไม่ได้เลย และไม่มีใครต้องแจกรหัส SMTP จริงให้กัน</td></tr>
+            <tr><td class="nowrap"><code>pg_data</code> volume</td><td>ข้อมูลอยู่รอดแม้ลบ container ทิ้ง — ไม่ต้อง seed ใหม่ทุกเช้า</td></tr>
+            <tr><td class="nowrap"><code>healthcheck: pg_isready</code></td><td>บอกว่าฐานข้อมูล <strong>พร้อมรับ query จริง</strong> ไม่ใช่แค่ container ขึ้นแล้ว — สคริปต์จึงรอได้ถูกจังหวะ</td></tr>
+            <tr><td class="nowrap"><code>restart: unless-stopped</code></td><td>เปิดเครื่องมาแล้วขึ้นเอง ไม่ต้องสั่งทุกวัน</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="note__tag">ทำไมไม่ยัด apps/web และ apps/api ลง compose ด้วย</span>
+        <p>
+          เพราะจะเสียสิ่งที่ dev ต้องใช้ทุกนาที — <strong>hot reload</strong> · การ mount source เข้า container
+          บน Windows ทำให้ watcher ช้าลงชัดเจน แลกกับความ "เหมือนกัน" ที่โค้ดของเราไม่ได้ต้องการ
+          เพราะมันรันบน Node 22 เหมือนกันทุกเครื่องอยู่แล้ว · <strong>Docker จึงห่อเฉพาะของที่ลงยากและเวอร์ชันสำคัญ</strong>
+        </p>
+      </div>
+
+      <h4>บทบาทที่ 2 · Dockerfile — ทำให้ที่ deploy ไม่ต้องรู้จัก monorepo</h4>
+      <p>
+        Railway ไม่ต้องรู้ว่า pnpm workspace คืออะไร ไม่ต้องรู้ว่ามี <code>packages/contracts</code> อยู่ —
+        มันได้ image ที่รันได้ก้อนเดียว · สิ่งที่แลกมาคือ Dockerfile ต้องรู้เรื่องพวกนี้แทน และทุกบรรทัดในนั้นมีที่มา
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ที่ทำไว้</th><th>ถ้าไม่ทำจะเจออะไร</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">build context = <strong>รากของ repo</strong></td><td><code>pnpm-lock.yaml</code> และ <code>pnpm-workspace.yaml</code> อยู่ที่ราก — นี่คือเหตุผลที่ช่อง Root Directory ของ Railway ต้อง <strong>ปล่อยว่าง</strong> ไม่ใช่ใส่ <code>apps/api</code></td></tr>
+            <tr><td class="nowrap">multi-stage <code>deps</code> → <code>build</code> → <code>runtime</code></td><td>ชั้น deps copy แค่ไฟล์ manifest ก่อน — แก้ไฟล์ source แล้ว <strong>ไม่ต้อง install ใหม่ทั้งก้อน</strong></td></tr>
+            <tr><td class="nowrap">Debian ไม่ใช่ Alpine</td><td>Prisma schema engine เป็น glibc binary · บน musl ต้องใช้ build คนละตัวและจะพัง <strong>ตอน deploy</strong> ซึ่งเป็นจังหวะที่แย่ที่สุด</td></tr>
+            <tr><td class="nowrap">ลง <code>openssl</code> เพิ่ม</td><td><code>node:*-slim</code> ไม่มีมาให้ แต่ <code>prisma migrate deploy</code> ต้องใช้ตอน boot ทุกครั้ง</td></tr>
+            <tr><td class="nowrap">pin <code>pnpm@11.10.0</code> ผ่าน npm</td><td>Corepack อ่าน <code>devEngines</code> แล้วปฏิเสธ เพราะรับเฉพาะเวอร์ชันเป๊ะ ส่วน repo เขียนเป็น range <code>^11.10.0</code></td></tr>
+            <tr><td class="nowrap">copy <code>node_modules</code> ทั้งก้อน ไม่ prune</td><td>Prisma CLI เป็น devDependency แต่ entrypoint ต้องใช้ — <strong>ยอมแลกพื้นที่ไม่กี่ร้อย MB กับ container ที่ migrate ตัวเองได้</strong> ทำให้ redeploy เหลือขั้นตอนเดียว</td></tr>
+            <tr><td class="nowrap"><code>node:24</code> เป็นฐาน</td><td>เวอร์ชันนี้คือตัวที่ production รันจริง · <strong>CI และเอกสารถูกปรับให้ตรงกับมันแล้ว</strong> — ก่อนหน้านี้ CI เทสบน 22 ทั้งที่ไม่มีสภาพแวดล้อมไหนรัน 22 เลย ซึ่งแปลว่าโค้ดผ่าน CI โดยไม่เคยถูกพิสูจน์บนเวอร์ชันที่ใช้จริง · ตอนนี้ตัวเลขนี้ประกาศไว้ที่ <code>engines.node</code> ที่เดียว ซึ่ง <strong>Vercel อ่านไปใช้เลือก runtime ของ <code>apps/web</code> ด้วย</strong> จึงคุมได้ทั้งสองแพลตฟอร์มจากรีโป</td></tr>
+            <tr><td class="nowrap"><code>USER node</code></td><td>ไม่มีอะไรใน image นี้ต้องใช้ root</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>entrypoint ทำสองอย่าง และทั้งสองอย่างสำคัญ</h4>
+      <ol class="steps">
+        <li>
+          <h4><code>prisma migrate deploy</code> ก่อน start</h4>
+          <p>
+            ฐานข้อมูลที่ container เพิ่ง start มาเจอ มักตามหลังโค้ดอยู่หลาย migration — นั่นคือสภาพปกติหลัง deploy ·
+            <code>migrate deploy</code> apply เฉพาะที่ขาด ไม่เขียนประวัติใหม่ และ <strong>จับ advisory lock ก่อน</strong>
+            สอง container ที่ start พร้อมกันจึงแย่ง migration เดียวกันไม่ได้
+          </p>
+        </li>
+        <li>
+          <h4><code>exec</code> node ไม่ใช่เรียกเฉยๆ</h4>
+          <p>
+            <code>exec</code> ทำให้แอปแทนที่ shell แล้วกลายเป็น PID 1 — รับ <code>SIGTERM</code> จากแพลตฟอร์มตรงๆ ·
+            ถ้าไม่ใช้ shell จะกลืนสัญญาณไว้ graceful shutdown ไม่ทำงาน แล้ว container โดน kill ทิ้ง
+            <strong>ทั้งที่ยังมี request ค้างอยู่</strong>
+          </p>
+        </li>
+      </ol>
+
+      <h4>ทำไม apps/web ไม่เข้า Docker</h4>
+      <p>
+        Vercel build จาก source โดยตรงและต้องการโครงมาตรฐานของ Next.js · ยัดใส่ container จะเสีย
+        preview deploy อัตโนมัติ, image optimization และ edge network ที่ได้มาฟรี —
+        <strong>ห่อเพื่อให้เหมือนกัน แต่ไม่ห่อสิ่งที่แพลตฟอร์มทำให้ดีกว่าอยู่แล้ว</strong>
+      </p>
+
+      <h3>สรุปเกณฑ์ที่ใช้ตัดสินทั้งสามเรื่อง</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>เลือกของที่แก้ปัญหาที่มีจริง</h4>
+          <p>WebSocket เข้ามาเพราะ polling แพงกว่าและช้ากว่า ไม่ใช่เพราะเรียลไทม์ฟังดูดี — หน้าที่ข้อมูลเปลี่ยนเมื่อเจ้าของกดเองยังเป็น REST ล้วน</p>
+        </div>
+        <div class="card">
+          <h4>ห่อเฉพาะของที่ลงยาก</h4>
+          <p>Docker ห่อ Postgres กับ Maildev บนเครื่อง dev แต่ไม่ห่อโค้ดเรา เพราะจะเสีย hot reload โดยไม่ได้อะไรกลับมา</p>
+        </div>
+        <div class="card">
+          <h4>ให้ความจริงมีที่อยู่ที่เดียว</h4>
+          <p>กติกาบิดอยู่ที่ HTTP อย่างเดียว socket จึงไม่รับบิด · โครงสร้างข้อมูลอยู่ที่ <code>schema.prisma</code> อย่างเดียว</p>
+        </div>
+        <div class="card">
+          <h4>รู้ว่าที่เลือกไว้จะพังตอนไหน</h4>
+          <p>presence ใน memory ถูกสำหรับ instance เดียว และเราเขียนไว้ชัดว่าต้องเพิ่ม adapter วันที่มีมากกว่าหนึ่ง</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="ch8">
+      <h2><span class="num">บทที่ 08</span>ขึ้น production</h2>
+
+      <h3>อะไรอยู่ที่ไหน</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ส่วน</th><th>host</th><th>deploy จาก branch</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>apps/api</code></td><td>Railway (Docker)</td><td><code>main</code> → production</td></tr>
+            <tr><td class="nowrap"><code>apps/web</code></td><td>Vercel</td><td><code>main</code> → production · <code>dev</code> → preview</td></tr>
+            <tr><td class="nowrap">PostgreSQL</td><td>Railway — service แยกใน project เดียวกัน</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">ยังไม่มี staging</span>
+        <p>
+          มีแค่ production กับ Vercel preview · preview deploy จาก <code>dev</code> อัตโนมัติ แต่<strong>ได้ URL สุ่มใหม่ทุกครั้ง</strong>
+          และชี้ไปที่ API ตัวเดียวกับ production — ใช้ดูหน้าตาได้ แต่ <strong>เทสล็อกอิน Google/LINE ไม่ได้</strong>
+          เพราะ URL สุ่มไม่มีทางอยู่ในรายการที่ลงทะเบียนไว้กับสองเจ้านั้น
+        </p>
+      </div>
+
+      <h3>ปล่อยงานทีละขั้น</h3>
+      <ol class="steps">
+        <li>
+          <h4>เช็คว่ามีอะไรค้างรอปล่อยบ้าง</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">อ่านอย่างเดียว ไม่ได้สร้าง PR รันกี่รอบก็ได้</span><button class="code__copy" type="button">copy</button></div>
+            <pre>git fetch origin
+git log --merges --pretty='- %s' origin/main..origin/dev</pre>
+          </div>
+          <p>ไม่มีอะไรขึ้นเลย = <code>main</code> ตามทัน <code>dev</code> แล้ว รอบนี้ไม่ต้องปล่อย</p>
+        </li>
+        <li>
+          <h4>เปิด release PR — base ต้องเป็น main</h4>
+          <p>
+            เปิดหน้า compare <code>main...dev</code> ตรวจว่าหัวเพจเป็น <strong>base: main ← compare: dev</strong> และขึ้นว่า Able to merge ·
+            title ใช้รูปแบบ <code>chore: release dev to main - &lt;สรุปสั้นๆ&gt;</code> ·
+            description สั้น 2–3 บรรทัด อ้างเลข PR ลูกพอ (พิมพ์ <code>#153</code> เฉยๆ GitHub ทำลิงก์ให้เอง)
+          </p>
+          <p><strong>นี่เป็น PR ชนิดเดียวที่ base เป็น <code>main</code> ได้</strong> feature branch ต้องเข้า <code>dev</code> เสมอ</p>
+        </li>
+        <li>
+          <h4>กด Update branch ทันที อย่ารอ CI</h4>
+          <p>ถ้ารอ CI จบก่อนแล้วค่อยกด Update จะเสียเวลาฟรีหนึ่งรอบเต็ม เพราะ commit ที่กำลังเทสไม่ใช่ commit ที่จะ merge จริง · <strong>ห้ามเลือก Update with rebase</strong> เพราะจะเขียนประวัติ <code>dev</code> ใหม่ทั้งเส้น</p>
+        </li>
+        <li>
+          <h4>รอ CI ครบ 3 เขียว แล้วขอ approve 1 คน</h4>
+          <p>branch protection บังคับ <code>lint-and-test</code> + <code>docker-build</code> + <code>e2e</code> และต้องมีคน approve 1 คน — กด merge เองคนเดียวไม่ได้</p>
+        </li>
+        <li>
+          <h4>กด Merge แล้ว Railway กับ Vercel deploy เอง <span class="chip chip--signal">อัตโนมัติ</span></h4>
+          <p><code>docker-entrypoint.sh</code> รัน <code>prisma migrate deploy</code> ให้เองก่อน start ทุกครั้ง ตอน deploy จึงไม่ต้องรัน migration แยก</p>
+        </li>
+        <li>
+          <h4>ตรวจว่า production ยังหายใจอยู่</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">Git Bash — เปลี่ยน &lt;railway-domain&gt; เป็นโดเมนจริง</span><button class="code__copy" type="button">copy</button></div>
+            <pre>curl https://&lt;railway-domain&gt;/health</pre>
+          </div>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">PowerShell — curl ที่นี่เป็น alias ของ Invoke-WebRequest ไม่ใช่ curl ตัวจริง</span><button class="code__copy" type="button">copy</button></div>
+            <pre>Invoke-RestMethod https://&lt;railway-domain&gt;/health</pre>
+          </div>
+          <p>
+            ต้องได้ <code>{"status":"ok"}</code> <strong>เป๊ะแบบนี้เท่านั้น</strong> — ได้อย่างอื่นแปลว่ายิงผิดเซิร์ฟเวอร์
+            เพราะโดเมน Railway เป็นชื่อสาธารณะที่ใครก็จองได้ ยิงผิดตัวก็ได้ 200 กลับมาเหมือนกัน
+            ปิดท้ายด้วยการลองกดใช้ฟีเจอร์ที่เพิ่งปล่อยบนเว็บจริงสัก 1 อย่าง
+          </p>
+        </li>
+      </ol>
+
+      <h3>ค่าตั้งของ production อยู่ใน dashboard ไม่ได้อยู่ใน repo</h3>
+      <p>
+        ไฟล์ <code>railway.json</code> ในรีโป <strong>ไม่ได้ถูกอ่าน</strong> — Config as Code ของ Railway ถูก deprecated ไปแล้ว
+        ไฟล์นั้นเก็บไว้เป็นบันทึกว่าควรตั้งอะไรบ้างเท่านั้น ของจริงต้องไปกดเองที่ Settings ของ service
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ช่องใน Railway</th><th>ต้องตั้งเป็น</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">Builder</td><td><code>Dockerfile</code> — ค่า default คือ Railpack ซึ่ง build monorepo นี้ไม่ถูก</td></tr>
+            <tr><td class="nowrap">Root Directory</td><td>ปล่อยว่าง <strong>ไม่ใช่</strong> <code>apps/api</code> (pnpm อ่าน workspace จาก lockfile ที่รากของ repo)</td></tr>
+            <tr><td class="nowrap">Healthcheck Path</td><td><code>/health</code></td></tr>
+            <tr><td class="nowrap">Custom Start Command</td><td><strong>ปล่อยว่าง</strong> — ใส่แล้วจะทับ ENTRYPOINT แล้ว migration จะไม่ถูกรัน</td></tr>
+            <tr><td class="nowrap">Region</td><td>ให้ตรงกับ service Postgres ไม่งั้นทุก query วิ่งข้ามทวีป</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>env ที่ production ต้องมีเพิ่ม</h3>
+      <p>ระบบบังคับจริงแค่ <code>DATABASE_URL</code> + JWT secret สองตัว ที่เหลือมี default แต่ production ต้องตั้งเพิ่มอย่างน้อยเท่านี้</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ตัวแปร</th><th>ตั้งที่</th><th>ข้อควรระวัง</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>WEB_APP_URL</code></td><td>Railway</td><td>โดเมนของ Vercel · <strong>ห้ามมี <code>/</code> ต่อท้าย</strong> ไม่งั้น CORS บล็อกทั้งเว็บ</td></tr>
+            <tr><td class="nowrap"><code>MAIL_*</code> หรือ <code>SENDGRID_API_KEY</code></td><td>Railway</td><td>ต้องเป็น relay จริง · <strong>ห้ามชี้ Maildev เด็ดขาด</strong> เพราะหน้า dashboard ของมันโชว์ OTP ให้ใครก็ได้ที่เข้าถึงได้</td></tr>
+            <tr><td class="nowrap"><code>AUTH_URL</code> · <code>AUTH_SECRET</code> · <code>NEXT_PUBLIC_API_URL</code></td><td>Vercel</td><td><code>AUTH_URL</code> ห้ามมี <code>/</code> ต่อท้าย · <code>AUTH_SECRET</code> ของ production ต้องคนละค่ากับในเครื่อง</td></tr>
+            <tr><td class="nowrap"><code>GOOGLE_CLIENT_ID</code> · <code>LINE_CHANNEL_ID</code></td><td>ทั้งสองฝั่ง</td><td>ต้องตรงกันเป๊ะ · <code>LINE_CHANNEL_SECRET</code> ใส่ที่ <strong>Vercel เท่านั้น</strong></td></tr>
+            <tr><td class="nowrap"><code>ADMIN_SKIP_2FA</code></td><td>—</td><td><strong>ไม่ต้องใส่</strong> ค่าที่ไม่มีคือปิด</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>กับดักที่ทำให้พังเงียบ</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>ใส่เครื่องหมายคำพูดใน dashboard</h4>
+          <p><code>.env</code> มีคำพูดได้เพราะ dotenv ถลกออกให้ แต่ <strong>Railway ไม่ถลกให้</strong> ค่าที่ใส่ว่า <code>"a@x.com"</code> จะกลายเป็นอีเมลที่มีอัญประกาศติดไปด้วย — ใช้กับ <strong>ทุกตัวแปร</strong> ไม่ใช่แค่ <code>ADMIN_EMAILS</code></p>
+        </div>
+        <div class="card">
+          <h4>NEXT_PUBLIC_* ถูกฝังตอน build</h4>
+          <p>ตั้งค่าที่ Vercel แล้ว <strong>ต้องกด Redeploy</strong> ปุ่ม Google ถึงจะโผล่ — ไม่ใช่อ่านตอนรัน</p>
+        </div>
+        <div class="card">
+          <h4>เมล OTP ส่งไม่ออก = ล็อกอินไม่ได้ทั้งระบบ</h4>
+          <p>ผู้ใช้เห็นแค่ <code>Internal server error</code> · สาเหตุจริงอยู่ใน Deploy Logs ของ Railway ค้นคำว่า <code>Failed to deliver</code></p>
+        </div>
+        <div class="card">
+          <h4>ปล่อย migration ปนกับ feature ธรรมดา</h4>
+          <p>migration ย้อนกลับยากที่สุด รอบไหนแตะ <code>schema.prisma</code> ควรปล่อยแยกก้อน จะได้รู้ทันทีว่าพังเพราะอะไร</p>
+        </div>
+      </div>
+
+      <h3>คำสั่งที่รันจากแท็บ Console ของ Railway</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">Railway → service ของ API → Console</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># เลื่อนบัญชีที่สมัครไว้แล้วให้เป็น ADMIN (อ่านรายชื่อจาก ADMIN_EMAILS)</span>
+node apps/api/dist/prisma/promote-admins.js
+
+<span class="c"># ใส่ข้อมูลตั้งต้น (image มี seed ที่ compile แล้วติดไปด้วย)</span>
+node apps/api/dist/prisma/seed.js</pre>
+      </div>
+    </section>
+
+    <section id="ch9">
+      <h2><span class="num">บทที่ 09</span>อ้างอิงเร็ว</h2>
+
+      <h3>สถานะทั้งหมดในระบบ</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ของอะไร</th><th>สถานะที่เป็นไปได้</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">ประมูล</td><td><code>DRAFT</code> → <code>SCHEDULED</code> → <code>ACTIVE</code> → <code>SOLD</code> / <code>UNSOLD</code> · <code>CANCELLED</code></td></tr>
+            <tr><td class="nowrap">สินค้า</td><td><code>ACTIVE</code> · <code>INACTIVE</code> · <code>OUT_OF_STOCK</code> · <code>REMOVED</code> · <code>SUSPENDED</code> (แอดมินสั่ง — ผู้ขายปลดเองไม่ได้)</td></tr>
+            <tr><td class="nowrap">ออเดอร์</td><td><code>PENDING</code> · <code>PAID</code> · <code>CANCELLED</code></td></tr>
+            <tr><td class="nowrap">การจ่ายเงิน</td><td><code>SUCCEEDED</code> · <code>FAILED</code></td></tr>
+            <tr><td class="nowrap">ข้อเสนอต่อรอง</td><td><code>ACCEPTED</code> · <code>COUNTERED</code> · <code>REJECTED</code></td></tr>
+            <tr><td class="nowrap">การจัดส่ง</td><td><code>PROCESSING</code> → <code>SHIPPED</code> → <code>IN_TRANSIT</code> → <code>DELIVERED</code> · <code>CANCELLED</code></td></tr>
+            <tr><td class="nowrap">ผู้ใช้</td><td><code>ACTIVE</code> · <code>SUSPENDED</code> · role: <code>USER</code> / <code>ADMIN</code></td></tr>
+            <tr><td class="nowrap">แชทช่วยเหลือ</td><td><code>AI_ONLY</code> → <code>ESCALATED</code> (ส่งต่อแอดมิน) → <code>RESOLVED</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Socket.IO ทั้งหมด</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>namespace</th><th>ห้อง</th><th>event ที่เซิร์ฟเวอร์ส่ง</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap"><code>/auctions</code><br><span class="chip">ไม่ต้องล็อกอิน</span></td>
+              <td><code>auction:&lt;id&gt;</code></td>
+              <td><code>auction:bid</code> · <code>auction:extension</code> · <code>auction:presence</code> · <code>auction:started</code> · <code>auction:ended</code> · <code>auction:cancelled</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><code>/user</code><br><span class="chip chip--stop">ต้องล็อกอิน</span></td>
+              <td><code>user:&lt;id&gt;</code> · <code>conversation:&lt;id&gt;</code> · <code>support:&lt;id&gt;</code> · <code>support:admin-inbox</code></td>
+              <td><code>notification:created</code> · <code>order:status_changed</code> · <code>message:sent</code> · <code>support:message</code> · <code>support:inbox_updated</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>รหัส requirement เป็นของใคร</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>รหัส</th><th>เรื่อง</th><th>เจ้าของ</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>AUTH-001…008</code></td><td>สมัคร ล็อกอิน OTP OAuth รีเซ็ตรหัสผ่าน</td><td class="nowrap">Dev 2</td></tr>
+            <tr><td class="nowrap"><code>PROD-001…007</code></td><td>ลงสินค้า ค้นหา สต็อก สถานะสินค้า</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>CART-001…005</code></td><td>ตะกร้า ชำระเงิน ออเดอร์</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>SHIP-001…003</code></td><td>การจัดส่ง</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>CHAT-001…004</code></td><td>แชทผู้ซื้อ–ผู้ขาย ตอบอัตโนมัติ</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>AUC-001…008</code></td><td>วงจรชีวิตประมูล</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>BID-001…005</code></td><td>การบิด กันบิดซ้ำ กันยิงท้าย</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>LIV-001…005</code></td><td>ห้องประมูลสด</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>WAT-001…002</code></td><td>รายการติดตาม</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>NOT-001…008</code></td><td>แจ้งเตือน 8 เหตุการณ์</td><td class="nowrap">ร่วมกัน</td></tr>
+            <tr><td class="nowrap"><code>AI-001…003</code></td><td>แชทช่วยเหลือ ประเมินราคา ต่อรอง</td><td class="nowrap">Dev 5</td></tr>
+            <tr><td class="nowrap"><code>ADM-001…006</code></td><td>คำสั่งหลังบ้าน + audit log</td><td class="nowrap">ร่วมกัน</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>อ่านต่อที่ไหน</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>เอกสาร</th><th>เปิดเมื่อ</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>docs/requirements/</code></td><td>ต้องการเกณฑ์การยอมรับของ requirement — <strong>ยึดเป็นหลักเวลาตัดสินว่างานผ่านหรือไม่</strong></td></tr>
+            <tr><td class="nowrap"><code>docs/architecture/workflows/</code></td><td>อยากเห็นผังการทำงาน 14 ผัง วาดจากโค้ดจริง (เปิดไฟล์ HTML ได้เลย ไม่ต้องรันอะไร)</td></tr>
+            <tr><td class="nowrap"><code>docs/architecture/erd/</code></td><td>อยากรู้ว่าข้อมูลเก็บที่ตารางไหน</td></tr>
+            <tr><td class="nowrap"><code>docs/architecture/adr/</code></td><td>อยากรู้ว่าทำไมถึงออกแบบแบบนี้</td></tr>
+            <tr><td class="nowrap"><code>docs/KICKOFF_GUIDE.md</code></td><td>ตั้งเครื่อง โครงสร้าง monorepo CI commit convention (ฉบับเต็ม)</td></tr>
+            <tr><td class="nowrap"><code>docs/DAILY_WORKFLOW.md</code></td><td>คำสั่งประจำวันแบบสั้น เปิดดูเร็วๆ ตอนทำงาน</td></tr>
+            <tr><td class="nowrap"><code>docs/RELEASE_GUIDE.md</code></td><td>ปล่อยขึ้น production ฉบับเต็มพร้อมกับดักทุกข้อ</td></tr>
+            <tr><td class="nowrap"><code>docs/team-role/</code></td><td>ขอบเขตงานของแต่ละคน</td></tr>
+            <tr><td class="nowrap"><code>CLAUDE.md</code></td><td>กติกาการทำงานร่วมของทีม</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        เครื่องมือทีม: <a href="https://pitchayauds.atlassian.net/jira/software/projects/BN/boards/2">Jira</a> ·
+        <a href="https://www.figma.com/design/XjSmZZgT0IBPc8do84WaRa/Bidnest">Figma</a> ·
+        <a href="https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff">ERD ออนไลน์</a>
+      </p>
+    </section>
+
+  </main>
+</div>
+
+<footer class="end">
+  <p>
+    BidNest — Auction &amp; Marketplace · คู่มือทีม · เขียนจากโค้ดใน <code>apps/api</code> และ <code>apps/web</code>
+    เอกสารพี่น้อง: <strong>BidNest Blueprints</strong> (ผัง workflow 14 ผัง) ที่ <code>docs/architecture/workflows/</code>
+  </p>
+  <p>
+    เนื้อหาเปลี่ยนตามโค้ด — เมื่อ flow เปลี่ยนจริง (เพิ่มสถานะ เปลี่ยนลำดับการเขียนข้อมูล ย้าย endpoint) ให้อัปเดตหน้านี้ด้วย
+  </p>
+  <p>
+    <strong>ฉบับจริงอยู่ในรีโปที่ <code>docs/BIDNEST_HANDBOOK.html</code></strong> — เปิดไฟล์ในเบราว์เซอร์ได้เลย
+    แก้ที่นั่นแล้วเข้า PR ตามปกติ เวอร์ชันจึงเดินไปพร้อมโค้ด · ลิงก์ออนไลน์เป็นสำเนาไว้ส่งให้คนดูเร็วๆ
+    ซึ่งต้องอัปเดตด้วยมือ <strong>เวลาสองฉบับไม่ตรงกัน ให้ยึดไฟล์ในรีโป</strong>
+  </p>
+</footer>
+
+<script>
+  (function () {
+    document.querySelectorAll(".code__copy").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var block = button.closest(".code");
+        if (!block) return;
+        var pre = block.querySelector("pre");
+        if (!pre) return;
+        var text = pre.innerText;
+        var done = function () {
+          button.textContent = "copied";
+          setTimeout(function () { button.textContent = "copy"; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () {
+            button.textContent = "copy failed";
+            setTimeout(function () { button.textContent = "copy"; }, 1600);
+          });
+          return;
+        }
+        var area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "absolute";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand("copy"); done(); } catch (e) { button.textContent = "copy failed"; }
+        document.body.removeChild(area);
+      });
+    });
+
+    var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+    var sections = links
+      .map(function (link) { return document.querySelector(link.getAttribute("href")); })
+      .filter(Boolean);
+    if (!sections.length || !("IntersectionObserver" in window)) return;
+
+    var mark = function (id) {
+      links.forEach(function (link) {
+        if (link.getAttribute("href") === "#" + id) link.setAttribute("aria-current", "true");
+        else link.removeAttribute("aria-current");
+      });
+    };
+    mark(sections[0].id);
+
+    var observer = new IntersectionObserver(
+      function (entries) {
+        var visible = entries
+          .filter(function (entry) { return entry.isIntersecting; })
+          .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+        if (visible.length) mark(visible[0].target.id);
+      },
+      { rootMargin: "-10% 0px -70% 0px", threshold: 0 }
+    );
+    sections.forEach(function (section) { observer.observe(section); });
+  })();
+</script>
+
+</body></html>

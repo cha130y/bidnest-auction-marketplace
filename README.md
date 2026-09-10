@@ -283,6 +283,7 @@ node apps/api/dist/prisma/seed.js
 
 | เอกสาร | เนื้อหา |
 | --- | --- |
+| **[Handbook](docs/BIDNEST_HANDBOOK.html)** | **คู่มือทั้งโปรเจกต์ 9 บท — เริ่มที่นี่ถ้าเพิ่งเข้าทีม** ตั้งเครื่อง · งานประจำวัน · ฟีเจอร์ต่อกันยังไง · การเทส · ทำไมถึงเลือก stack นี้ · ขึ้น production (เปิดไฟล์ในเบราว์เซอร์ได้เลย ไม่ต้องรันอะไร) |
 | [SRS](docs/requirements/) | ข้อกำหนดและเกณฑ์การยอมรับของทุก requirement — **ยึดเป็นหลักเวลาตัดสินว่างานผ่านหรือไม่** |
 | [ผัง Workflow](docs/architecture/workflows/) | ผังการทำงานทั้งระบบ 14 ผัง วาดจากโค้ดจริง |
 | [ERD](docs/architecture/erd/bidnest-erd-v1.dbml) | โครงสร้างฐานข้อมูล ([ดูออนไลน์](https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff)) |
