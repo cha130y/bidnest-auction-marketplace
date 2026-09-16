@@ -1,127 +1,127 @@
-# วิธีเทส API (โมดูล e-commerce และประมูล)
+# How to test the API (e-commerce and auction modules)
 
-AUTH-008 มาแล้ว — `MockAuthGuard` กับ header `x-mock-user-id` ถูกถอดออกไป
-ตอนนี้ทุก request ที่ไม่ใช่ `@Public()` ต้องมี **bearer token จริง**:
+AUTH-008 has landed — `MockAuthGuard` and the `x-mock-user-id` header have been removed.
+Every request that is not `@Public()` now needs a **real bearer token**:
 
 ```
 Authorization: Bearer {{buyerToken}}
 ```
 
-`AccessTokenGuard` verify token แล้ว **อ่านบัญชีจาก DB ใหม่ทุก request** ดังนั้น
-บัญชีที่เพิ่งโดนระงับจะใช้ token เดิมต่อไม่ได้ทันที (ADM-002)
+`AccessTokenGuard` verifies the token and then **re-reads the account from the DB on every request**, so
+an account that was just suspended cannot keep using its existing token (ADM-002)
 
-## 1. เตรียมเครื่อง (ทำครั้งเดียว)
+## 1. Machine setup (one time)
 
 ```bash
-# 1) ยก Postgres (port 5433)
+# 1) Start Postgres (port 5433)
 docker compose -f infra/docker/compose.dev.yml up -d
 
-# 2) ตั้งค่า env
+# 2) Set up env
 cp apps/api/.env.example apps/api/.env
 
-# 3) สร้างตาราง
+# 3) Create the tables
 pnpm --dir apps/api exec prisma migrate dev
 
-# 4) ใส่ข้อมูลตั้งต้น (users / categories / products)
+# 4) Load the starter data (users / categories / products)
 pnpm --dir apps/api exec prisma db seed
 
-# 5) รัน API
+# 5) Run the API
 pnpm dev:api          # -> http://localhost:4000
 ```
 
-> **seed จะพิมพ์บรรทัด `@xToken = ...` ออกมาท้ายสุด — copy ไปวางในหัวไฟล์ `.http`**
-> token หมดอายุตาม `JWT_ACCESS_TTL` (ค่าเริ่มต้น 15 นาที) พอเริ่มได้ 401 ให้ seed ใหม่
-> แล้ววางทับ ไม่ต้อง login จริงเพราะขั้นตอน login ต้องรอ OTP ทางอีเมลก่อน (AUTH-007)
+> **The seed prints `@xToken = ...` lines at the very end — copy them into the top of the `.http` file**
+> Tokens expire per `JWT_ACCESS_TTL` (15 minutes by default); once you start getting 401, seed again
+> and paste over them. No need to log in for real, since login has to wait for an emailed OTP first (AUTH-007)
 
 
-## 2. ผู้ใช้ตั้งต้น
+## 2. Starter users
 
-| ใช้ตัวแปร | role | UUID | เอาไว้ทำอะไร |
+| Variable | role | UUID | Used for |
 |---|---|---|---|
-| `{{adminToken}}` | ADMIN | `...0001` | ดูออเดอร์ทั้งระบบ, ปิด/เปิดประกาศขาย — **ซื้อขายเองไม่ได้** |
-| `{{sellerAToken}}` | USER | `...0002` | เจ้าของสินค้า `...0201` (คีย์บอร์ด) และ `...0202` (USB hub) |
-| `{{sellerBToken}}` | USER | `...0003` | เจ้าของสินค้า `...0203` (แจ็คเก็ต) และ `...0204` (ฟิกเกอร์) |
-| `{{buyerToken}}` | USER | `...0004` | คนซื้อหลักที่ใช้ในเทสส่วนใหญ่ |
+| `{{adminToken}}` | ADMIN | `...0001` | View all orders, suspend/reactivate listings — **can't buy or sell** |
+| `{{sellerAToken}}` | USER | `...0002` | Owns products `...0201` (keyboard) and `...0202` (USB hub) |
+| `{{sellerBToken}}` | USER | `...0003` | Owns products `...0203` (jacket) and `...0204` (figurine) |
+| `{{buyerToken}}` | USER | `...0004` | The main buyer used in most tests |
 
-> อยากได้ข้อมูลเยอะกว่านี้สำหรับทำหน้าจอ (120 สินค้า, 47 ออเดอร์, แชท, แจ้งเตือน)
-> รัน `pnpm --dir apps/api seed:mock` เพิ่ม — มันพิมพ์ token ของบัญชี mock ให้เหมือนกัน
+> For more data to build screens with (120 products, 47 orders, chats, notifications)
+> also run `pnpm --dir apps/api seed:mock` — it prints tokens for the mock accounts the same way
 
-สินค้าตั้งต้น:
+Starter products:
 
-| id | ชื่อ | ราคา | สต๊อก | ผู้ขาย | หมายเหตุ |
+| id | Name | Price | Stock | Seller | Notes |
 |---|---|---|---|---|---|
-| `...0201` | Mechanical Keyboard 65% | 2500.00 | 10 | A | ซื้อ 3 ชิ้นขึ้นไปลด 10% (PROD-007) |
+| `...0201` | Mechanical Keyboard 65% | 2500.00 | 10 | A | 10% off for 3 or more (PROD-007) |
 | `...0202` | USB-C Hub 8-in-1 | 1200.00 | 5 | A | |
 | `...0203` | Vintage Denim Jacket | 1800.00 | 2 | B | |
-| `...0204` | Limited Edition Figurine | 4500.00 | 1 | B | สต๊อกเหลือ 1 ใช้เทสของหมด |
+| `...0204` | Limited Edition Figurine | 4500.00 | 1 | B | Only 1 in stock, for testing sold-out |
 
-## 3. ยิงด้วยไฟล์ `.http`
+## 3. Sending requests with `.http` files
 
-**VS Code** — ลง extension `humao.rest-client` แล้วเปิดไฟล์ กด `Send Request` เหนือ
-แต่ละ block
-**JetBrains (WebStorm / IntelliJ)** — เปิดไฟล์ได้เลย เลือก environment `local`
-จาก `http-client.env.json`
+**VS Code** — install the `humao.rest-client` extension, open a file and click `Send Request` above
+each block
+**JetBrains (WebStorm / IntelliJ)** — open the file directly and pick the `local` environment
+from `http-client.env.json`
 
-ยิง **เรียงจากบนลงล่างในไฟล์เดียวกัน** เพราะแต่ละไฟล์ส่ง id ต่อกันเอง
-(`# @name xxx` แล้วอ้าง `{{xxx.response.body.$.id}}`) จะได้ไม่ต้อง copy id ด้วยมือ
+Send them **top to bottom within the same file**, because each file passes ids along by itself
+(`# @name xxx`, then reference `{{xxx.response.body.$.id}}`), so you don't have to copy ids by hand
 
-| ไฟล์ | เนื้อหา |
+| File | Contents |
 |---|---|
-| `_env.http` | ตัวแปรกลาง — ไฟล์อื่น copy block นี้ไว้บนสุดของตัวเอง แก้ที่นี่ก่อนเสมอ |
-| `00-health.http` | เช็คว่า API ขึ้นแล้ว |
-| `01-product.http` | ลงขาย / ค้นหา / รายละเอียด / แก้ไข / สต๊อก / ลบ |
-| `02-cart.http` | ตะกร้า + ส่วนลดตามจำนวน + ตะกร้าข้ามผู้ขาย |
-| `03-order.http` | checkout → ออเดอร์แยกตามผู้ขาย → รายการซื้อ/ขาย |
-| `04-shipment.http` | ไทม์ไลน์จัดส่งครบ 4 สเต็ป + เคสยกเลิกแล้วคืนสต๊อก |
-| `05-chat.http` | เปิดห้องแชท / ส่งข้อความ / กล่องข้อความ |
-| `06-admin.http` | ดูออเดอร์ทั้งระบบ / ปิด-เปิดประกาศขาย |
-| `07-negative.http` | เคสที่ต้องพัง — 401 / 403 / 404 / 400 (**ห้ามมี 500**) |
-| `08-auction.http` | ประมูล: สร้าง draft ส่วนตัว + ตรวจสอบก่อนเผยแพร่ + preview/publish + หน้าสาธารณะ + แก้ไข/ยกเลิก + จบประมูล + Hot Auctions + เคสที่ต้องพังของฝั่งประมูล (AUC-001..008) |
-| `09-bid.http` | ประมูล: ลงบิด + retry ที่ปลอดภัย + วิธีเทส realtime + anti-sniping + ประวัติบิด + เคสที่ต้องพังของการบิด (BID-001..005) |
-| `10-notification.http` | กระดิ่งแจ้งเตือน: รายการ / เลข unread / อ่านทีละใบ / อ่านทั้งหมด (NOT-005..008) |
+| `_env.http` | Shared variables — other files copy this block to their top; always edit it here first |
+| `00-health.http` | Checks the API is up |
+| `01-product.http` | List / search / detail / edit / stock / delete |
+| `02-cart.http` | Cart + quantity discount + multi-seller cart |
+| `03-order.http` | checkout → orders split per seller → purchase/sales lists |
+| `04-shipment.http` | Full 4-step shipment timeline + cancel-and-restock case |
+| `05-chat.http` | Open a chat room / send messages / inbox |
+| `06-admin.http` | View all orders / suspend-reactivate listings |
+| `07-negative.http` | Cases that must fail — 401 / 403 / 404 / 400 (**no 500s allowed**) |
+| `08-auction.http` | Auctions: create a private draft + pre-publish validation + preview/publish + public page + edit/cancel + auction end + Hot Auctions + auction-side failure cases (AUC-001..008) |
+| `09-bid.http` | Auctions: place bids + safe retry + how to test realtime + anti-sniping + bid history + bidding failure cases (BID-001..005) |
+| `10-notification.http` | Notification bell: list / unread count / mark one read / mark all read (NOT-005..008) |
 
-## 4. ยิงด้วย Postman
+## 4. Sending requests with Postman
 
-`apps/api/test/postman/` มี 2 ไฟล์ให้ import:
+`apps/api/test/postman/` has 2 files to import:
 
 - `bidnest-ecommerce.postman_collection.json` — collection
-- `bidnest-local.postman_environment.json` — environment (เลือกเป็น `BidNest local` ก่อนยิง)
+- `bidnest-local.postman_environment.json` — the environment (select `BidNest local` before sending)
 
-กด **Run collection** ได้รวดเดียว มี `pm.test` เช็ค status code ให้ทุก request
-(collection ยิงเรียงตามลำดับเดียวกับไฟล์ `.http` และเซฟ id ลงตัวแปรให้อัตโนมัติ)
+Click **Run collection** to run everything in one go; every request has a `pm.test` checking its status code
+(the collection runs in the same order as the `.http` files and saves ids into variables automatically)
 
-## 5. จุดที่ต้องดูนอกจาก response
+## 5. What to watch besides the response
 
-เปิด terminal ที่รัน `pnpm dev:api` ค้างไว้ แล้วดู log พวกนี้:
+Keep the terminal running `pnpm dev:api` open and watch for these logs:
 
-- `[simulated] charge 3000.00 via CARD -> SUCCEEDED` — การจ่ายเงินจำลอง (ไม่มีเงินจริง)
-- `[stub] order:status_changed -> user:...` — event ที่จะกลายเป็น WebSocket จริงของ Dev 4
-- `[stub] notification:created -> user:...` — แจ้งเตือน NOT-005 / NOT-006 / NOT-007
+- `[simulated] charge 3000.00 via CARD -> SUCCEEDED` — the simulated payment (no real money)
+- `[stub] order:status_changed -> user:...` — the event that will become Dev 4's real WebSocket
+- `[stub] notification:created -> user:...` — notifications NOT-005 / NOT-006 / NOT-007
 
-## 6. เคสพิเศษที่ระบบเตรียมไว้ให้แกล้ง
+## 6. Special cases the system provides for breaking things on purpose
 
-| อยากเทสอะไร | ทำยังไง |
+| To test | How |
 |---|---|
-| จ่ายเงินไม่ผ่าน | ทำยอดรวมตะกร้าให้เท่ากับ **666.00 พอดี** (`MockPaymentProvider.DECLINE_AMOUNT`) — มีสคริปต์พร้อมใน `07-negative.http` |
-| ของหมดกลางคัน | ใช้ figurine `...0204` ที่เหลือชิ้นเดียว |
-| สินค้าถูกซ่อน | ให้แอดมิน `deactivate` แล้วลอง search — ต้องหาไม่เจอ แต่เจ้าของยังเปิดดูได้ |
-| ส่วนลดตามจำนวน | ใส่คีย์บอร์ด `...0201` ลงตะกร้า 3 ชิ้นขึ้นไป |
-| ยกเลิกแล้วคืนสต๊อก | เลื่อนสถานะเป็น `CANCELLED` ตอนยังเป็น `PROCESSING` |
+| Payment declined | Make the cart total **exactly 666.00** (`MockPaymentProvider.DECLINE_AMOUNT`) — a ready-made script is in `07-negative.http` |
+| Sold out mid-purchase | Use figurine `...0204`, which has only one left |
+| Hidden product | Have an admin `deactivate` it, then search — it must not be found, but the owner can still open it |
+| Quantity discount | Put keyboard `...0201` in the cart, 3 or more |
+| Cancel and restock | Move the status to `CANCELLED` while it is still `PROCESSING` |
 
-## 7. ดู data จริงในฐานข้อมูล
+## 7. Looking at the real data in the database
 
 ```bash
 pnpm --dir apps/api exec prisma studio
 ```
 
-## 8. เทสอัตโนมัติ
+## 8. Automated tests
 
 ```bash
 pnpm --dir apps/api test        # unit (auth, auction)
-pnpm --dir apps/api test:e2e    # e2e (auth, auction — ต้องมี DB ขึ้นอยู่)
+pnpm --dir apps/api test:e2e    # e2e (auth, auction — needs the DB running)
 ```
 
-e2e สร้าง user/category ของตัวเองแล้วลบทิ้งเมื่อจบ ไม่พึ่ง seed จึงรันซ้ำได้เรื่อยๆ
+e2e creates its own users/categories and deletes them when done, without relying on the seed, so it can be re-run any number of times
 
-ไฟล์ `.http` ชุดนี้ทำหน้าที่เป็นสเปกไว้ก่อน ใครจะเขียน `*.e2e-spec.ts` เพิ่ม
-แปลงจากไฟล์เหล่านี้ได้ตรงๆ (status ที่คาดหวังเขียนกำกับไว้ทุกอันแล้ว)
+These `.http` files serve as a spec for now; anyone adding `*.e2e-spec.ts`
+can convert straight from them (the expected status is already noted on every request)

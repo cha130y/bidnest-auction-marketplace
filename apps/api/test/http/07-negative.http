@@ -1,15 +1,15 @@
 ###############################################################################
-# NEGATIVE — เคสที่ "ต้องพัง" ตามที่ออกแบบไว้
+# NEGATIVE — cases that are designed to "fail"
 #
-# กติกาการอ่านผล: ต้องได้ status ตามที่เขียนกำกับไว้ และต้องไม่ใช่ 500
-# ถ้าเจอ 500 ที่ไหน = บั๊กจริง ให้แจ้งใน PR
+# How to read results: you must get the status written next to each request, and never 500
+# A 500 anywhere = a real bug; report it in the PR
 ###############################################################################
 
 @baseUrl = http://localhost:4000
 
-# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
-# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
-# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+# AUTH-008 — MockAuthGuard has been removed; every request needs a real bearer token
+# Run the seed, then copy the @xToken lines it prints and paste them here
+# (they expire per JWT_ACCESS_TTL, 15 minutes by default — once you start getting 401, seed again)
 @adminToken =
 @buyerToken =
 @sellerAToken =
@@ -20,33 +20,33 @@
 @productB2 = 00000000-0000-4000-8000-000000000204
 
 #=============================================================================
-# 1. ยืนยันตัวตน (AccessTokenGuard — AUTH-008)
+# 1. Authentication (AccessTokenGuard — AUTH-008)
 #=============================================================================
 
-### ไม่ส่ง Authorization ไปที่ route ที่ไม่ public. expect 401
+### no Authorization sent to a non-public route. expect 401
 GET {{baseUrl}}/cart
 
-### token ที่ไม่ใช่ JWT เลย. expect 401
+### a token that is not a JWT at all. expect 401
 GET {{baseUrl}}/cart
 Authorization: Bearer not-a-real-token
 
-### JWT ที่เซ็นด้วย secret อื่น. expect 401
-# guard ตอบ 401 เหมือนกันทั้ง token หมดอายุและ token ปลอม — ไม่บอกว่าอันไหน
+### a JWT signed with a different secret. expect 401
+# the guard answers 401 for both expired and forged tokens — it doesn't say which
 GET {{baseUrl}}/cart
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDQifQ.this-signature-is-not-valid
 
-### route ที่เป็น @Public ยิงได้แม้ไม่มี token. expect 200
+### a @Public route works without a token. expect 200
 GET {{baseUrl}}/products
 
 #=============================================================================
-# 2. สิทธิ์ตาม role (RolesGuard)
+# 2. Role permissions (RolesGuard)
 #=============================================================================
 
-### แอดมินซื้อของไม่ได้ — ตะกร้าเป็นของ role USER เท่านั้น. expect 403
+### an admin can't buy — the cart belongs to role USER only. expect 403
 GET {{baseUrl}}/cart
 Authorization: Bearer {{adminToken}}
 
-### แอดมิน checkout ไม่ได้. expect 403
+### an admin can't check out. expect 403
 POST {{baseUrl}}/orders/checkout
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
@@ -62,7 +62,7 @@ Content-Type: application/json
   }
 }
 
-### แอดมินลงขายสินค้าไม่ได้. expect 403
+### an admin can't list products. expect 403
 POST {{baseUrl}}/products
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
@@ -77,65 +77,65 @@ Content-Type: application/json
   "imageUrls": ["https://placehold.co/600x400"]
 }
 
-### user ธรรมดายิง endpoint แอดมินไม่ได้. expect 403
+### a regular user can't call admin endpoints. expect 403
 GET {{baseUrl}}/admin/orders
 Authorization: Bearer {{buyerToken}}
 
-### user ธรรมดาปิดประกาศสินค้าคนอื่นไม่ได้. expect 403
+### a regular user can't suspend someone else's listing. expect 403
 PATCH {{baseUrl}}/admin/products/{{productA1}}/deactivate
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
-{ "reason": "ไม่มีสิทธิ์" }
+{ "reason": "No permission" }
 
 #=============================================================================
-# 3. ความเป็นเจ้าของ
+# 3. Ownership
 #=============================================================================
 
-### แก้สินค้าที่ไม่ใช่ของตัวเองไม่ได้. expect 403
+### can't edit a product that isn't yours. expect 403
 PATCH {{baseUrl}}/products/{{productA1}}
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "price": 1 }
 
-### ลบสินค้าที่ไม่ใช่ของตัวเองไม่ได้ (seller B ลบของ seller A). expect 403
+### can't delete a product that isn't yours (seller B deletes seller A's). expect 403
 DELETE {{baseUrl}}/products/{{productA1}}
 Authorization: Bearer {{sellerBToken}}
 
-### CART-001 ผู้ขายซื้อของตัวเองไม่ได้. expect 403
+### CART-001 a seller can't buy their own product. expect 403
 POST {{baseUrl}}/cart/items
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 1 }
 
-### CHAT-001 ผู้ขายเปิดแชทกับประกาศตัวเองไม่ได้. expect 403
+### CHAT-001 a seller can't open a chat on their own listing. expect 403
 POST {{baseUrl}}/products/{{productA1}}/conversations
 Authorization: Bearer {{sellerAToken}}
 
 #=============================================================================
-# 4. ข้อมูลไม่ถูกต้อง (ValidationPipe: whitelist + forbidNonWhitelisted)
+# 4. Invalid input (ValidationPipe: whitelist + forbidNonWhitelisted)
 #=============================================================================
 
-### ส่ง field แปลกปลอมที่ไม่มีใน DTO. expect 400
+### sending an unknown field that is not in the DTO. expect 400
 POST {{baseUrl}}/cart/items
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 1, "hackerField": "boom" }
 
-### จำนวนต้องเป็นจำนวนเต็ม >= 1. expect 400
+### quantity must be an integer >= 1. expect 400
 POST {{baseUrl}}/cart/items
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productA1}}", "quantity": 0 }
 
-### :id ไม่ใช่ UUID (ParseUUIDPipe). expect 400
+### :id is not a UUID (ParseUUIDPipe). expect 400
 GET {{baseUrl}}/products/not-a-uuid
 
-### PROD-001 ลงขายโดยไม่แนบรูปสักใบ. expect 400
+### PROD-001 listing without a single image. expect 400
 POST {{baseUrl}}/products
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
@@ -150,7 +150,7 @@ Content-Type: application/json
   "imageUrls": []
 }
 
-### PROD-007 ตั้งส่วนลดมาครึ่งเดียว (มี minQty แต่ไม่มี percent). expect 400
+### PROD-007 discount only half set (minQty but no percent). expect 400
 POST {{baseUrl}}/products
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
@@ -166,22 +166,22 @@ Content-Type: application/json
   "quantityDiscountMinQty": 3
 }
 
-### PROD-002 minPrice มากกว่า maxPrice. expect 400
+### PROD-002 minPrice greater than maxPrice. expect 400
 GET {{baseUrl}}/products?minPrice=5000&maxPrice=100
 
 #=============================================================================
-# 5. สต๊อกและการจ่ายเงิน
+# 5. Stock and payment
 #=============================================================================
 
-### CART-001 ใส่ตะกร้าเกินจำนวนที่มี (figurine เหลือ 1). expect 400
+### CART-001 adding more than is in stock (figurine has 1 left). expect 400
 POST {{baseUrl}}/cart/items
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "productId": "{{productB2}}", "quantity": 99 }
 
-### CART-004 checkout ตอนตะกร้าว่าง. expect 400 "Cart is empty"
-# หมายเหตุ: ยิงได้ผลก็ต่อเมื่อตะกร้าของ buyer ว่างจริง
+### CART-004 checkout with an empty cart. expect 400 "Cart is empty"
+# Note: only gives this result when the buyer's cart is actually empty
 POST {{baseUrl}}/orders/checkout
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
@@ -198,18 +198,18 @@ Content-Type: application/json
 }
 
 #-----------------------------------------------------------------------------
-# เคสจ่ายเงินไม่ผ่าน — ยอดรวมต้องเท่ากับ 666.00 พอดี
+# Payment-failure case — the total must be exactly 666.00
 # (MockPaymentProvider.DECLINE_AMOUNT)
 #
-# ใช้ seller A เป็นคนซื้อ เพื่อไม่ให้ตะกร้าของ buyer ปนกับเทสอื่น
-# ยิง 3 ข้อล่างนี้เรียงกัน และตะกร้าของ seller A ต้องว่างก่อน
+# seller A is the purchaser, so the buyer's cart doesn't mix with other tests
+# run the 3 requests below in order, and seller A's cart must be empty first
 #-----------------------------------------------------------------------------
 
-### เช็คก่อน — ตะกร้าของ seller A ต้องว่าง (ถ้าไม่ว่างให้ลบทิ้งก่อน)
+### check first — seller A's cart must be empty (if not, remove its items first)
 GET {{baseUrl}}/cart
 Authorization: Bearer {{sellerAToken}}
 
-### setup — seller B ลงขายของราคา 666.00. expect 201
+### setup — seller B lists an item at 666.00. expect 201
 # @name declineProduct
 POST {{baseUrl}}/products
 Authorization: Bearer {{sellerBToken}}
@@ -217,7 +217,7 @@ Content-Type: application/json
 
 {
   "title": "Decline Trigger 666",
-  "description": "ยอด 666.00 พอดีจะถูกปฏิเสธการจ่ายเงินเสมอ",
+  "description": "A total of exactly 666.00 is always declined at payment",
   "categoryId": "{{catElectronics}}",
   "price": 666,
   "stockQty": 5,
@@ -227,20 +227,20 @@ Content-Type: application/json
 
 @declineProductId = {{declineProduct.response.body.$.id}}
 
-### setup — seller A ใส่ตะกร้า 1 ชิ้น (ยอดรวม = 666.00). expect 201
+### setup — seller A adds 1 item to the cart (total = 666.00). expect 201
 POST {{baseUrl}}/cart/items
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "productId": "{{declineProductId}}", "quantity": 1 }
 
-### CART-004 จ่ายเงินไม่ผ่าน. expect 400 { message: "Payment failed", code: "PAYMENT_DECLINED", checkoutSessionId, reason }
-# ผลข้างเคียงที่ต้องเป็นจริง: ไม่มีออเดอร์เกิดขึ้น + ของยังอยู่ในตะกร้าครบ
-# แต่ยังมีแถวใน payment_transactions สถานะ FAILED ไว้กระทบยอด
+### CART-004 payment declined. expect 400 { message: "Payment failed", code: "PAYMENT_DECLINED", checkoutSessionId, reason }
+# Side effects that must hold: no order is created + everything is still in the cart
+# but there is still a FAILED row in payment_transactions for reconciliation
 #
-# `code` คือตัวที่หน้าเว็บใช้แยกว่าจะขึ้นจอไหน — เส้นนี้เส้นเดียวที่กด "ลองใหม่" แล้วผ่านได้
-# ของหมดจะได้ code: "ITEMS_UNAVAILABLE" พร้อม issues[] และแพ้ race หลังตัดเงินได้
-# code: "STOCK_LOST_AFTER_CHARGE" ซึ่งเป็นเส้นเดียวที่มี charge ค้างโดยไม่มีออเดอร์
+# `code` is what the web app uses to pick the screen — this is the only path where "Try again" can succeed
+# Out of stock gives code: "ITEMS_UNAVAILABLE" with issues[], and losing the race after the charge gives
+# code: "STOCK_LOST_AFTER_CHARGE", the only path that leaves a charge with no order
 POST {{baseUrl}}/orders/checkout
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
@@ -256,15 +256,15 @@ Content-Type: application/json
   }
 }
 
-### ตรวจผล — ของต้องยังอยู่ในตะกร้าเหมือนเดิม
+### verify — the items must still be in the cart as before
 GET {{baseUrl}}/cart
 Authorization: Bearer {{sellerAToken}}
 
 #=============================================================================
-# 6. การจัดส่ง — ต้องมีออเดอร์จริงก่อน
+# 6. Shipping — needs a real order first
 #=============================================================================
 
-### setup — buyer ซื้อของ seller A
+### setup — buyer purchases seller A's item
 POST {{baseUrl}}/cart/items
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
@@ -290,21 +290,21 @@ Content-Type: application/json
 
 @orderId = {{checkout.response.body.$.orders[0].id}}
 
-### SHIP-001 ข้ามสถานะ PROCESSING -> DELIVERED ตรงๆ ไม่ได้. expect 400
+### SHIP-001 can't skip straight from PROCESSING -> DELIVERED. expect 400
 PATCH {{baseUrl}}/orders/{{orderId}}/shipment
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "DELIVERED" }
 
-### SHIP-001 ผู้ซื้อเลื่อนสถานะเองไม่ได้. expect 403
+### SHIP-001 the buyer can't advance the status. expect 403
 PATCH {{baseUrl}}/orders/{{orderId}}/shipment
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "status": "SHIPPED" }
 
-### SHIP-001 สถานะที่ไม่มีใน enum. expect 400
+### SHIP-001 a status not in the enum. expect 400
 PATCH {{baseUrl}}/orders/{{orderId}}/shipment
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
@@ -312,34 +312,34 @@ Content-Type: application/json
 { "status": "TELEPORTED" }
 
 #=============================================================================
-# 7. ความเป็นส่วนตัวของข้อมูล — คนนอกต้องได้ 404 ไม่ใช่ 403
-#    (จะได้ไม่รู้ด้วยซ้ำว่าออเดอร์/ห้องแชทนั้นมีอยู่จริง — SRS 6)
+# 7. Data privacy — outsiders must get 404, not 403
+#    (so they cannot even tell that the order/chat room exists — SRS 6)
 #=============================================================================
 
-### คนนอกเปิดดูออเดอร์ของคนอื่น. expect 404
+### an outsider views someone else's order. expect 404
 GET {{baseUrl}}/orders/{{orderId}}
 Authorization: Bearer {{sellerBToken}}
 
-### คนนอกดูไทม์ไลน์การจัดส่งของคนอื่น. expect 404
+### an outsider views someone else's shipment timeline. expect 404
 GET {{baseUrl}}/orders/{{orderId}}/shipment
 Authorization: Bearer {{sellerBToken}}
 
-### setup — buyer เปิดแชทกับ seller A
+### setup — buyer opens a chat with seller A
 # @name conversation
 POST {{baseUrl}}/products/{{productA1}}/conversations
 Authorization: Bearer {{buyerToken}}
 
 @conversationId = {{conversation.response.body.$.id}}
 
-### คนนอกอ่านแชทของคนอื่น. expect 404
+### an outsider reads someone else's chat. expect 404
 GET {{baseUrl}}/conversations/{{conversationId}}/messages
 Authorization: Bearer {{sellerBToken}}
 
-### แอดมินก็อ่านแชทไม่ได้ (ติด RolesGuard ก่อน). expect 403
+### an admin can't read chats either (blocked by RolesGuard first). expect 403
 GET {{baseUrl}}/conversations/{{conversationId}}/messages
 Authorization: Bearer {{adminToken}}
 
-### CHAT-002 ส่งข้อความว่าง. expect 400
+### CHAT-002 sending an empty message. expect 400
 POST {{baseUrl}}/conversations/{{conversationId}}/messages
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json

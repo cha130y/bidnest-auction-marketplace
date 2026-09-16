@@ -1,79 +1,79 @@
 ###############################################################################
-# ADM — เครื่องมือแอดมินฝั่ง e-commerce
-# ADM-006: ดูออเดอร์ได้อย่างเดียว V1 ไม่มี endpoint แก้/คืนเงิน
-# ADM-005: ปิด/เปิดสินค้าทุกครั้งต้องแนบเหตุผลไว้ลง audit log
+# ADM — e-commerce admin tools
+# ADM-006: orders are view-only; V1 has no edit/refund endpoint
+# ADM-005: every product suspend/reactivate must attach a reason to the audit log
 ###############################################################################
 
 @baseUrl = http://localhost:4000
 
-# AUTH-008 — MockAuthGuard ถูกถอดออกแล้ว ทุก request ต้องมี bearer token จริง
-# รัน seed แล้ว copy บรรทัด @xToken ที่มันพิมพ์ออกมาวางตรงนี้
-# (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที — พอเริ่มได้ 401 ให้ seed ใหม่)
+# AUTH-008 — MockAuthGuard has been removed; every request needs a real bearer token
+# Run the seed, then copy the @xToken lines it prints and paste them here
+# (they expire per JWT_ACCESS_TTL, 15 minutes by default — once you start getting 401, seed again)
 @adminToken =
 @sellerAToken =
 
 @productA1 = 00000000-0000-4000-8000-000000000201
 
-### ADM-006 ดูออเดอร์ทั้งระบบ. expect 200
+### ADM-006 view all orders in the system. expect 200
 GET {{baseUrl}}/admin/orders
 Authorization: Bearer {{adminToken}}
 
-### ADM-006 กรองสถานะ + แบ่งหน้า
+### ADM-006 filter by status + pagination
 GET {{baseUrl}}/admin/orders?status=PAID&page=1&limit=5
 Authorization: Bearer {{adminToken}}
 
-### ADM-005 ปิดประกาศขายสินค้า (status -> SUSPENDED). expect 200
+### ADM-005 suspend a product listing (status -> SUSPENDED). expect 200
 PATCH {{baseUrl}}/admin/products/{{productA1}}/deactivate
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
-{ "reason": "รูปสินค้าไม่ตรงกับคำอธิบาย" }
+{ "reason": "Product photos don't match the description" }
 
-### ตรวจผล — คนทั่วไปต้องหาไม่เจอแล้ว (search คืนเฉพาะ ACTIVE)
+### verify — the public can't find it anymore (search returns ACTIVE only)
 GET {{baseUrl}}/products?q=keyboard
 
-### ตรวจผล — แต่เจ้าของยังเปิดดูของตัวเองได้. expect 200
+### verify — but the owner can still open their own listing. expect 200
 GET {{baseUrl}}/products/{{productA1}}
 Authorization: Bearer {{sellerAToken}}
 
-### ตรวจผล — คนทั่วไปเปิดหน้าสินค้าตรงๆ ไม่ได้. expect 404
+### verify — the public can't open the product page directly. expect 404
 GET {{baseUrl}}/products/{{productA1}}
 
 #=============================================================================
-# SRS v7 §7.2 ข้อ 8 — ผู้ขายต้องปลดการระงับเองไม่ได้ ทั้งสามทาง
+# SRS v7 §7.2 item 8 — the seller must not be able to lift the suspension themselves, by any of three routes
 #=============================================================================
 
-### ผู้ขายแก้ไขสินค้าที่ถูกระงับไม่ได้. expect 403
+### the seller can't edit a suspended product. expect 403
 PATCH {{baseUrl}}/products/{{productA1}}
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "price": 1200 }
 
-### ผู้ขายเปิดขายกลับเองไม่ได้. expect 403
+### the seller can't reopen the listing themselves. expect 403
 PATCH {{baseUrl}}/products/{{productA1}}/status
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "status": "ACTIVE" }
 
-### ผู้ขายเติมสต็อกเพื่อปลดแบนไม่ได้. expect 403
+### the seller can't restock to lift the ban. expect 403
 PATCH {{baseUrl}}/products/{{productA1}}/stock
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 { "stockQty": 99 }
 
-### ผู้ขาย soft-delete เพื่อลบร่องรอยการระงับไม่ได้. expect 403
+### the seller can't soft-delete to erase the suspension. expect 403
 DELETE {{baseUrl}}/products/{{productA1}}
 Authorization: Bearer {{sellerAToken}}
 
-### ADM-005 เปิดขายกลับ (status -> ACTIVE). expect 200
+### ADM-005 reactivate the listing (status -> ACTIVE). expect 200
 PATCH {{baseUrl}}/admin/products/{{productA1}}/reactivate
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
-{ "reason": "ผู้ขายแก้ไขรูปเรียบร้อยแล้ว" }
+{ "reason": "The seller has fixed the photos" }
 
-### ตรวจผล — กลับมาค้นเจอตามเดิม
+### verify — it shows up in search again
 GET {{baseUrl}}/products?q=keyboard

@@ -1,18 +1,18 @@
 ###############################################################################
-# NOTIFICATION — แจ้งเตือนฝั่งประมูล (ฝั่ง Dev 4)
-# ยิงจากบนลงล่างได้ทั้งไฟล์ (request ที่ 1 ส่ง id ต่อให้ request ถัดๆ ไป)
+# NOTIFICATION — auction-side notifications (Dev 4)
+# The whole file can be run top to bottom (request 1 passes its id to the requests after it)
 #
-# ครอบคลุมถึงตอนนี้: NOT-001 Outbid, NOT-002 AuctionWon,
+# Covered so far: NOT-001 Outbid, NOT-002 AuctionWon,
 # NOT-003 AuctionEnded, NOT-004 AuctionCancelled
 #
-# 💡 ไฟล์นี้เขียนแค่ฝั่ง "ทำให้เกิด" แจ้งเตือน ส่วนฝั่งอ่าน (GET /notifications,
-#    unread-count, mark read) เป็นของ Dev 3 อยู่ใน 10-notification.http
-#    ที่นี่ใช้ GET /notifications เพื่อ "ตรวจผล" เท่านั้น
+# 💡 This file only covers the side that "causes" notifications; the reading side (GET /notifications,
+#    unread-count, mark read) belongs to Dev 3, in 10-notification.http
+#    Here GET /notifications is used only to "verify results"
 #
-# 💡 ทุกแถวถูกเขียนใน transaction เดียวกับเหตุการณ์ที่ทำให้เกิด (SRS ข้อ 6)
-#    ประมูลที่ปิดสำเร็จจึงมีแจ้งเตือนครบเสมอ ไม่มีกรณี "ปิดแล้วแต่ไม่มีใครรู้"
+# 💡 Every row is written in the same transaction as the event that causes it (SRS section 6)
+#    so a successfully closed auction always has all its notifications — never "closed but nobody knows"
 #
-# 💡 ทุกแจ้งเตือน push เข้า WebSocket ห้องส่วนตัวของเจ้าของทันทีด้วย ดูหัวข้อ 4
+# 💡 Every notification is also pushed immediately to the owner's private WebSocket room — see section 4
 ###############################################################################
 
 @baseUrl = http://localhost:4000
@@ -21,7 +21,7 @@
 @buyer   = 00000000-0000-4000-8000-000000000004
 @catCollectibles = 00000000-0000-4000-8000-000000000103
 
-# AUTH-008 — วาง token จาก `pnpm --filter api exec prisma db seed`
+# AUTH-008 — paste the tokens from `pnpm --filter api exec prisma db seed`
 @sellerAToken =
 @sellerBToken =
 @buyerToken   =
@@ -30,15 +30,15 @@
 # 1. Outbid (NOT-001)
 #=============================================================================
 
-### สร้าง + publish ประมูลที่วิ่งอยู่
+### create + publish a running auction
 # @name liveDraft
 POST {{baseUrl}}/auctions/drafts
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
-  "title": "ของสำหรับทดสอบแจ้งเตือน",
-  "description": "เริ่มไปแล้ว",
+  "title": "Notification test item",
+  "description": "Already started",
   "categoryId": "{{catCollectibles}}",
   "condition": "USED",
   "startingPrice": 3000,
@@ -55,48 +55,48 @@ Content-Type: application/json
 POST {{baseUrl}}/auctions/drafts/{{liveId}}/publish
 Authorization: Bearer {{sellerAToken}}
 
-### บิดแรก โดย buyer. expect 201
-# ยังไม่มีใครถูก outbid — ไม่มีแจ้งเตือนเกิดขึ้นเลย
+### first bid, by buyer. expect 201
+# Nobody has been outbid yet — no notification is created at all
 POST {{baseUrl}}/auctions/{{liveId}}/bids
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "amount": 3000, "clientRequestId": "22222222-2222-4222-8222-222222222201" }
 
-### ตรวจว่าไม่มีอะไรเข้ากระดิ่ง buyer. expect 200 + meta.total 0
+### check nothing reached buyer's bell. expect 200 + meta.total 0
 GET {{baseUrl}}/notifications?types=OUTBID
 Authorization: Bearer {{buyerToken}}
 
-### buyer บิดทับตัวเอง. expect 201
-# คนที่นำอยู่บิดสูงขึ้นเอง = ไม่ได้แซงใคร ยังไม่มีแจ้งเตือน
+### buyer outbids themselves. expect 201
+# The current leader raising their own bid = not overtaking anyone; still no notification
 POST {{baseUrl}}/auctions/{{liveId}}/bids
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 { "amount": 3200, "clientRequestId": "22222222-2222-4222-8222-222222222202" }
 
-### ตรวจซ้ำ. expect 200 + meta.total ยังเป็น 0
+### check again. expect 200 + meta.total still 0
 GET {{baseUrl}}/notifications?types=OUTBID
 Authorization: Bearer {{buyerToken}}
 
-### sellerB แซง. expect 201
+### sellerB outbids. expect 201
 POST {{baseUrl}}/auctions/{{liveId}}/bids
 Authorization: Bearer {{sellerBToken}}
 Content-Type: application/json
 
 { "amount": 3500, "clientRequestId": "22222222-2222-4222-8222-222222222203" }
 
-### NOT-001 — ตอนนี้ buyer ต้องมี OUTBID 1 แถว. expect 200
-# ตรวจ: type OUTBID, auctionId = liveId, bidId = id ของบิดที่แซง
-#       message มีชื่อประมูล และ "THB 3,500.00"
+### NOT-001 — buyer must now have 1 OUTBID row. expect 200
+# Check: type OUTBID, auctionId = liveId, bidId = id of the overtaking bid
+#       message contains the auction name and "THB 3,500.00"
 GET {{baseUrl}}/notifications?types=OUTBID
 Authorization: Bearer {{buyerToken}}
 
-### sellerB ต้องไม่ได้อะไร (เขาเป็นคนแซง). expect 200 + meta.total 0
+### sellerB must get nothing (they did the outbidding). expect 200 + meta.total 0
 GET {{baseUrl}}/notifications?types=OUTBID
 Authorization: Bearer {{sellerBToken}}
 
-### ผู้ขายก็ไม่ได้ (ไม่เกี่ยวกับการแซง). expect 200 + meta.total 0
+### the seller gets nothing either (not involved in the outbid). expect 200 + meta.total 0
 GET {{baseUrl}}/notifications?types=OUTBID
 Authorization: Bearer {{sellerAToken}}
 
@@ -104,32 +104,32 @@ Authorization: Bearer {{sellerAToken}}
 # 2. AuctionWon + AuctionEnded (NOT-002 / NOT-003)
 #=============================================================================
 #
-# ทำให้ {{liveId}} หมดเวลา แล้วให้ read repair ปิดให้ (AUC-007):
+# Let {{liveId}} expire, then have read repair close it (AUC-007):
 #
 #   docker exec docker-postgres-1 psql -U bidnest -d bidnest_db -c \
 #     "update auctions set current_end_at = now() - interval '1 second' \
 #      where id = '<liveId>';"
 #
-# ราคาล่าสุดคือ 3500 ซึ่งต่ำกว่า reserve 4500 ประมูลนี้จะจบแบบ UNSOLD
-# ถ้าอยากได้เคส SOLD ให้บิดถึง 4500 ก่อนทำขั้นตอนข้างบน
+# The latest price is 3500, below the 4500 reserve, so this auction ends UNSOLD
+# For the SOLD case, bid up to 4500 before doing the steps above
 #=============================================================================
 
-### trigger การปิด. expect 200 + status UNSOLD (หรือ SOLD ถ้าบิดถึง reserve)
+### trigger the close. expect 200 + status UNSOLD (or SOLD if bids reached the reserve)
 GET {{baseUrl}}/auctions/{{liveId}}
 
-### NOT-003 — ผู้ขายต้องได้ AUCTION_ENDED. expect 200
-# ⚠️ message ต้องไม่มีเลข 4500 โผล่ — reserve ยังเป็นความลับหลังจบ (AUC-003)
-#    เคส UNSOLD จะบอกแค่ "ended without meeting its reserve"
+### NOT-003 — the seller must get AUCTION_ENDED. expect 200
+# ⚠️ The message must not show the number 4500 — the reserve stays secret after the end (AUC-003)
+#    the UNSOLD case only says "ended without meeting its reserve"
 GET {{baseUrl}}/notifications?types=AUCTION_ENDED
 Authorization: Bearer {{sellerAToken}}
 
-### คนที่บิดแล้วไม่ชนะก็ได้ AUCTION_ENDED ด้วย. expect 200
-# buyer จะมี 2 แถว: OUTBID (จากข้อ 1) + AUCTION_ENDED
+### bidders who didn't win get AUCTION_ENDED too. expect 200
+# buyer will have 2 rows: OUTBID (from step 1) + AUCTION_ENDED
 GET {{baseUrl}}/notifications
 Authorization: Bearer {{buyerToken}}
 
-### ถ้าเป็นเคส SOLD ผู้ชนะจะได้ AUCTION_WON ไม่ใช่ AUCTION_ENDED
-# ตั้งใจให้ได้แค่แถวเดียว — สองแถวเรื่องเดียวกันจะอ่านเหมือนระบบพลาด
+### in the SOLD case, the winner gets AUCTION_WON, not AUCTION_ENDED
+# Deliberately just one row — two rows about the same thing would read like a system mistake
 GET {{baseUrl}}/notifications?types=AUCTION_WON
 Authorization: Bearer {{sellerBToken}}
 
@@ -137,15 +137,15 @@ Authorization: Bearer {{sellerBToken}}
 # 3. AuctionCancelled (NOT-004)
 #=============================================================================
 
-### สร้างประมูลที่ยังไม่เริ่ม ไว้ยกเลิก
+### create an auction that has not started, to cancel
 # @name cancelDraft
 POST {{baseUrl}}/auctions/drafts
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
 {
-  "title": "ของที่จะถูกยกเลิก",
-  "description": "รอเริ่ม",
+  "title": "Item to be cancelled",
+  "description": "Waiting to start",
   "categoryId": "{{catCollectibles}}",
   "condition": "USED",
   "startingPrice": 3000,
@@ -161,72 +161,72 @@ Content-Type: application/json
 POST {{baseUrl}}/auctions/drafts/{{cancelId}}/publish
 Authorization: Bearer {{sellerAToken}}
 
-### buyer กดติดตาม (WAT-001). expect 200
+### buyer watches it (WAT-001). expect 200
 POST {{baseUrl}}/auctions/{{cancelId}}/watchlist
 Authorization: Bearer {{buyerToken}}
 
-### ผู้ขายกดติดตามของตัวเองด้วย เพื่อพิสูจน์ว่าเขาจะไม่ได้แจ้งเตือน. expect 200
+### the seller watches their own too, to prove they won't be notified. expect 200
 POST {{baseUrl}}/auctions/{{cancelId}}/watchlist
 Authorization: Bearer {{sellerAToken}}
 
-### ผู้ขายยกเลิก. expect 200 + status CANCELLED
+### the seller cancels. expect 200 + status CANCELLED
 POST {{baseUrl}}/auctions/{{cancelId}}/cancel
 Authorization: Bearer {{sellerAToken}}
 Content-Type: application/json
 
-{ "reason": "ของมีตำหนิ ขอถอนก่อน" }
+{ "reason": "Item has a defect, withdrawing it for now" }
 
-### NOT-004 — buyer ต้องได้ AUCTION_CANCELLED พร้อมเหตุผล. expect 200
-# "ยกเลิก" เฉยๆ โดยไม่บอกเหตุผลคือแจ้งเตือนแบบที่คนจะเปิด support ticket ถาม
+### NOT-004 — buyer must get AUCTION_CANCELLED with the reason. expect 200
+# A bare "cancelled" with no reason is exactly the kind of notification people open a support ticket about
 GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
 Authorization: Bearer {{buyerToken}}
 
-### ผู้ขายต้องไม่ได้ ทั้งที่กดติดตามไว้. expect 200 + meta.total 0
-# เขาเป็นคนกดยกเลิกเอง จะแจ้งกลับไปหาทำไม
+### the seller must get nothing, even though they are watching. expect 200 + meta.total 0
+# They cancelled it themselves — why notify them back?
 GET {{baseUrl}}/notifications?types=AUCTION_CANCELLED
 Authorization: Bearer {{sellerAToken}}
 
-### กระดิ่งของ Dev 3 ใช้กับแจ้งเตือนฝั่งประมูลได้ปกติ. expect 200
-# unread นับรวมแจ้งเตือนประมูลด้วย ไม่ได้แยกกระดิ่งคนละใบ
+### Dev 3's bell works normally with auction notifications. expect 200
+# unread includes auction notifications too; there is no separate bell
 GET {{baseUrl}}/notifications/unread-count
 Authorization: Bearer {{buyerToken}}
 
 #=============================================================================
-# 4. ส่งผ่าน WebSocket — ห้องส่วนตัวของแต่ละคน
+# 4. Delivery over WebSocket — each person's private room
 #=============================================================================
 #
-# ทุก request ข้างบนนอกจากเขียนแถวลง DB แล้ว ยัง push เข้า WebSocket ให้เจ้าของ
-# แจ้งเตือนนั้นทันทีด้วย ทดสอบด้วย .http ไม่ได้ ต้องต่อ socket จริง
+# Besides writing a DB row, every request above also pushes to the WebSocket of that
+# notification's owner immediately. .http can't test this; you need a real socket connection
 #
-# namespace: /user   (คนละตัวกับ /auctions ที่เป็นห้องประมูล)
-# event:     notification:created  และ  order:status_changed
+# namespace: /user   (different from /auctions, which is for auction rooms)
+# event:     notification:created  and  order:status_changed
 #
-# ⚠️ ต้องแนบ token ตอนต่อ ไม่งั้นถูกตัดทันที — ต่างจาก /auctions ที่ไม่ต้อง
-#    เพราะห้องประมูลเป็นสาธารณะ แต่ที่นี่ทุกอย่างจ่าหน้าถึงคนเดียว
+# ⚠️ A token must be attached when connecting, or you are disconnected immediately — unlike /auctions, which doesn't need one
+#    because auction rooms are public, whereas everything here is addressed to one person
 #
 #   const socket = io('http://localhost:4000/user', {
 #     transports: ['websocket'],
-#     auth: { token: '<access token>' }     // ใส่ 'Bearer x' ก็ได้
+#     auth: { token: '<access token>' }     // 'Bearer x' also works
 #   });
 #
-#   socket.on('connection:ready',    (p) => console.log('ต่อได้', p.userId));
-#   socket.on('connection:rejected', (p) => console.log('ถูกปฏิเสธ', p.reason));
+#   socket.on('connection:ready',    (p) => console.log('connected', p.userId));
+#   socket.on('connection:rejected', (p) => console.log('rejected', p.reason));
 #   socket.on('notification:created', (n) => console.log(n.type, n.message));
 #
-# เคสที่ถูกตัดทั้งหมด (ตอบ connection:rejected { reason: 'Unauthorized' }
-# เหมือนกันหมด ไม่บอกว่าผิดตรงไหน เหมือนฝั่ง HTTP):
-#   - ไม่ส่ง token
-#   - token ปลอม
-#   - token หมดอายุ
-#   - token ของ account ที่ไม่มีอยู่แล้ว
-#   - account ที่ถูกระงับ (ADM-002 — ตัดทันที ไม่รอ token หมดอายุ)
+# Cases that are disconnected (all answer connection:rejected { reason: 'Unauthorized' }
+# identically, without saying what was wrong, same as the HTTP side):
+#   - no token sent
+#   - forged token
+#   - expired token
+#   - token for an account that no longer exists
+#   - suspended account (ADM-002 — cut off immediately, without waiting for the token to expire)
 #
-# วิธีดูของจริงเร็วๆ:
-#   1. เปิด socket ด้วย token ของ buyer ค้างไว้
-#   2. ให้คนอื่นบิดแซง buyer (หัวข้อ 1 ข้างบน)
-#   3. socket จะได้ notification:created ทันที ก้อนเดียวกับที่อยู่ใน
-#      GET /notifications เป๊ะ
+# A quick way to see it for real:
+#   1. keep a socket open with buyer's token
+#   2. have someone else outbid buyer (section 1 above)
+#   3. the socket receives notification:created immediately — exactly the same payload as in
+#      GET /notifications
 #
-# 💡 message:sent (ห้อง conversation) ยังเป็น stub อยู่ — กฎว่าใครเข้าห้อง
-#    สนทนาไหนได้เป็นของโมดูล chat ฝั่งประมูลไม่ควรตัดสินใจแทน
+# 💡 message:sent (conversation room) is still a stub — the rule for who may join which
+#    conversation room belongs to the chat module; the auction side shouldn't decide it
 #=============================================================================

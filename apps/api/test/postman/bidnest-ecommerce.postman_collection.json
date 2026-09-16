@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "BidNest — E-commerce API (dev3)",
-    "description": "ชุดทดสอบ API ฝั่ง e-commerce ของ BidNest\n\nAUTH-008 — ทุก request ที่ไม่ใช่ @Public ต้องมี bearer token จริง\nรัน `pnpm --dir apps/api exec prisma db seed` แล้ว copy ค่า token ที่มันพิมพ์\nออกมาใส่ในตัวแปร adminToken / sellerAToken / sellerBToken / buyerToken\nของ environment 'BidNest local' (หมดอายุตาม JWT_ACCESS_TTL ค่าเริ่มต้น 15 นาที)\n\nเลือก environment 'BidNest local' ก่อนยิง แล้ว Run collection ได้ตั้งแต่โฟลเดอร์ 00 ลงไป\nโฟลเดอร์ 07 Negative ต้องรันหลัง 03/04/05 เพราะใช้ id ที่โฟลเดอร์เหล่านั้นเซฟไว้\n\nก่อนรัน: docker compose up -d, prisma migrate dev, prisma db seed, pnpm dev:api",
+    "description": "BidNest e-commerce API test suite\n\nAUTH-008 — every request that is not @Public needs a real bearer token.\nRun `pnpm --dir apps/api exec prisma db seed`, then copy the tokens it prints\ninto the adminToken / sellerAToken / sellerBToken / buyerToken variables\nof the 'BidNest local' environment (they expire per JWT_ACCESS_TTL, 15 minutes by default)\n\nSelect the 'BidNest local' environment before sending, then Run the collection from folder 00 down.\nFolder 07 Negative must run after 03/04/05, because it uses ids those folders saved.\n\nBefore running: docker compose up -d, prisma migrate dev, prisma db seed, pnpm dev:api",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -20,7 +20,7 @@
               ],
               "path": []
             },
-            "description": "เช็คว่า API ขึ้นแล้ว เป็น @Public route"
+            "description": "Checks the API is up; a @Public route"
           },
           "event": [
             {
@@ -86,7 +86,7 @@
                   "",
                   "if (pm.response.code < 400) pm.collectionVariables.set('newProductId', pm.response.json().id);",
                   "",
-                  "pm.test('PROD-007 floor ต่ำกว่าราคาหลังลด -> ต้องมี warnings', function () {",
+                  "pm.test('PROD-007 floor below the discounted price -> warnings expected', function () {",
                   "  pm.expect(pm.response.json().warnings.length).to.be.above(0);",
                   "});"
                 ]
@@ -119,7 +119,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('มี items และ meta', function () {",
+                  "pm.test('has items and meta', function () {",
                   "  const b = pm.response.json();",
                   "  pm.expect(b).to.have.property('items');",
                   "  pm.expect(b.meta).to.have.property('totalPages');",
@@ -245,7 +245,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('PROD-006 ห้ามหลุด negotiationFloor ให้คนทั่วไป', function () {",
+                  "pm.test('PROD-006 negotiationFloor must not leak to the public', function () {",
                   "  pm.expect(pm.response.json()).to.not.have.property('negotiationFloor');",
                   "});"
                 ]
@@ -284,7 +284,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('เจ้าของต้องเห็น negotiationFloor', function () {",
+                  "pm.test('the owner must see negotiationFloor', function () {",
                   "  pm.expect(pm.response.json()).to.have.property('negotiationFloor');",
                   "});"
                 ]
@@ -318,7 +318,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"price\": 2999,\n  \"description\": \"ลดราคาแล้ว - edited from Postman\"\n}",
+              "raw": "{\n  \"price\": 2999,\n  \"description\": \"Price reduced - edited from Postman\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -487,7 +487,7 @@
       "name": "02 Cart",
       "item": [
         {
-          "name": "CART-001 get cart (สร้างอัตโนมัติครั้งแรก)",
+          "name": "CART-001 get cart (created automatically the first time)",
           "request": {
             "method": "GET",
             "header": [
@@ -571,7 +571,7 @@
           ]
         },
         {
-          "name": "CART-001 add เดิมอีก 1 -> ทบเป็น 3",
+          "name": "CART-001 add the same item again -> adds up to 3",
           "request": {
             "method": "POST",
             "header": [
@@ -614,7 +614,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('PROD-007 ครบ 3 ชิ้นต้องได้ส่วนลด 10%', function () {",
+                  "pm.test('PROD-007 3 items must get the 10% discount', function () {",
                   "  const line = pm.response.json().items.find(i => i.quantity >= 3);",
                   "  pm.expect(line.discountPercent).to.eql('10.00');",
                   "});"
@@ -624,7 +624,7 @@
           ]
         },
         {
-          "name": "CART-003 add ของผู้ขายคนที่สอง",
+          "name": "CART-003 add the second seller's item",
           "request": {
             "method": "POST",
             "header": [
@@ -907,10 +907,10 @@
                   "",
                   "if (pm.response.code < 400) pm.collectionVariables.set('orderId', pm.response.json().orders[0].id);",
                   "",
-                  "pm.test('จ่ายเงินสำเร็จ', function () {",
+                  "pm.test('payment succeeded', function () {",
                   "  pm.expect(pm.response.json().paymentStatus).to.eql('SUCCEEDED');",
                   "});",
-                  "pm.test('CART-003 ของ 2 ผู้ขาย -> ออเดอร์ 2 ใบ', function () {",
+                  "pm.test('CART-003 items from 2 sellers -> 2 orders', function () {",
                   "  pm.expect(pm.response.json().orders.length).to.eql(2);",
                   "});"
                 ]
@@ -919,7 +919,7 @@
           ]
         },
         {
-          "name": "ตะกร้าต้องถูกล้างหลังจ่ายเงิน",
+          "name": "Cart must be cleared after payment",
           "request": {
             "method": "GET",
             "header": [
@@ -948,7 +948,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('ตะกร้าว่าง', function () {",
+                  "pm.test('cart is empty', function () {",
                   "  pm.expect(pm.response.json().items.length).to.eql(0);",
                   "});"
                 ]
@@ -1279,7 +1279,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('เริ่มที่ PROCESSING และเป็นของจำลอง', function () {",
+                  "pm.test('starts at PROCESSING and is simulated', function () {",
                   "  const b = pm.response.json();",
                   "  pm.expect(b.status).to.eql('PROCESSING');",
                   "  pm.expect(b.isSimulated).to.be.true;",
@@ -1334,7 +1334,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('ได้เลขพัสดุ', function () {",
+                  "pm.test('got a tracking number', function () {",
                   "  pm.expect(pm.response.json().trackingNumber).to.be.a('string');",
                   "});"
                 ]
@@ -1445,7 +1445,7 @@
           ]
         },
         {
-          "name": "SHIP-002 timeline สุดท้าย (4 events)",
+          "name": "SHIP-002 final timeline (4 events)",
           "request": {
             "method": "GET",
             "header": [
@@ -1476,7 +1476,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('ครบ 4 event และไม่มีสถานะถัดไป', function () {",
+                  "pm.test('all 4 events and no next status', function () {",
                   "  const b = pm.response.json();",
                   "  pm.expect(b.timeline.length).to.eql(4);",
                   "  pm.expect(b.nextStatuses.length).to.eql(0);",
@@ -1487,7 +1487,7 @@
           ]
         },
         {
-          "name": "setup — cart ใบที่จะยกเลิก",
+          "name": "setup — cart for the order to cancel",
           "request": {
             "method": "POST",
             "header": [
@@ -1535,7 +1535,7 @@
           ]
         },
         {
-          "name": "setup — checkout ใบที่จะยกเลิก",
+          "name": "setup — checkout the order to cancel",
           "request": {
             "method": "POST",
             "header": [
@@ -1585,7 +1585,7 @@
           ]
         },
         {
-          "name": "SHIP-001 cancel ตอนยัง PROCESSING",
+          "name": "SHIP-001 cancel while still PROCESSING",
           "request": {
             "method": "PATCH",
             "header": [
@@ -1634,7 +1634,7 @@
           ]
         },
         {
-          "name": "ตรวจผล — order เป็น CANCELLED",
+          "name": "verify — order is CANCELLED",
           "request": {
             "method": "GET",
             "header": [
@@ -1716,7 +1716,7 @@
           ]
         },
         {
-          "name": "CHAT-001 open ซ้ำ ต้องได้ห้องเดิม",
+          "name": "CHAT-001 opening again returns the same room",
           "request": {
             "method": "POST",
             "header": [
@@ -1747,7 +1747,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('id เดิม ไม่สร้างห้องใหม่', function () {",
+                  "pm.test('same id, no new room created', function () {",
                   "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('conversationId'));",
                   "});"
                 ]
@@ -1756,7 +1756,7 @@
           ]
         },
         {
-          "name": "CHAT-002 buyer ส่งข้อความ",
+          "name": "CHAT-002 buyer sends a message",
           "request": {
             "method": "POST",
             "header": [
@@ -1782,7 +1782,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"body\": \"สนใจครับ ลดได้ถึงเท่าไหร่ครับ\"\n}",
+              "raw": "{\n  \"body\": \"I'm interested. How low can you go?\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1805,7 +1805,7 @@
           ]
         },
         {
-          "name": "CHAT-002 seller ตอบกลับ",
+          "name": "CHAT-002 seller replies",
           "request": {
             "method": "POST",
             "header": [
@@ -1831,7 +1831,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"body\": \"ลดได้ถึง 2,000 ครับ\"\n}",
+              "raw": "{\n  \"body\": \"I can go down to 2,000.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1900,7 +1900,7 @@
           ]
         },
         {
-          "name": "CHAT-003 inbox ของ buyer",
+          "name": "CHAT-003 buyer's inbox",
           "request": {
             "method": "GET",
             "header": [
@@ -1934,7 +1934,7 @@
           ]
         },
         {
-          "name": "CHAT-003 inbox ของ seller",
+          "name": "CHAT-003 seller's inbox",
           "request": {
             "method": "GET",
             "header": [
@@ -2084,7 +2084,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reason\": \"รูปสินค้าไม่ตรงกับคำอธิบาย\"\n}",
+              "raw": "{\n  \"reason\": \"Product photos don't match the description\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2111,7 +2111,7 @@
           ]
         },
         {
-          "name": "ตรวจผล — คนทั่วไปเปิดไม่ได้",
+          "name": "verify — the public can't open it",
           "request": {
             "method": "GET",
             "header": [],
@@ -2141,7 +2141,7 @@
           ]
         },
         {
-          "name": "ตรวจผล — เจ้าของยังเปิดได้",
+          "name": "verify — the owner can still open it",
           "request": {
             "method": "GET",
             "header": [
@@ -2203,7 +2203,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reason\": \"ผู้ขายแก้ไขรูปเรียบร้อยแล้ว\"\n}",
+              "raw": "{\n  \"reason\": \"The seller has fixed the photos\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2221,7 +2221,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('กลับมา ACTIVE', function () {",
+                  "pm.test('back to ACTIVE', function () {",
                   "  pm.expect(pm.response.json().status).to.eql('ACTIVE');",
                   "});"
                 ]
@@ -2235,7 +2235,7 @@
       "name": "07 Negative",
       "item": [
         {
-          "name": "401 — ไม่ส่ง Authorization",
+          "name": "401 — no Authorization sent",
           "request": {
             "method": "GET",
             "header": [],
@@ -2264,7 +2264,7 @@
           ]
         },
         {
-          "name": "401 — user id ไม่มีในระบบ",
+          "name": "401 — user id doesn't exist",
           "request": {
             "method": "GET",
             "header": [
@@ -2298,7 +2298,7 @@
           ]
         },
         {
-          "name": "403 — admin เข้าตะกร้าไม่ได้",
+          "name": "403 — admin can't use the cart",
           "request": {
             "method": "GET",
             "header": [
@@ -2332,7 +2332,7 @@
           ]
         },
         {
-          "name": "403 — admin checkout ไม่ได้",
+          "name": "403 — admin can't check out",
           "request": {
             "method": "POST",
             "header": [
@@ -2380,7 +2380,7 @@
           ]
         },
         {
-          "name": "403 — user ธรรมดายิง /admin/orders",
+          "name": "403 — regular user calls /admin/orders",
           "request": {
             "method": "GET",
             "header": [
@@ -2415,7 +2415,7 @@
           ]
         },
         {
-          "name": "403 — แก้สินค้าที่ไม่ใช่ของตัวเอง",
+          "name": "403 — editing someone else's product",
           "request": {
             "method": "PATCH",
             "header": [
@@ -2463,7 +2463,7 @@
           ]
         },
         {
-          "name": "403 — ผู้ขายซื้อของตัวเอง",
+          "name": "403 — seller buys their own product",
           "request": {
             "method": "POST",
             "header": [
@@ -2511,7 +2511,7 @@
           ]
         },
         {
-          "name": "403 — ผู้ขายเปิดแชทกับประกาศตัวเอง",
+          "name": "403 — seller opens a chat on their own listing",
           "request": {
             "method": "POST",
             "header": [
@@ -2547,7 +2547,7 @@
           ]
         },
         {
-          "name": "400 — ส่ง field แปลกปลอม (forbidNonWhitelisted)",
+          "name": "400 — unknown field sent (forbidNonWhitelisted)",
           "request": {
             "method": "POST",
             "header": [
@@ -2643,7 +2643,7 @@
           ]
         },
         {
-          "name": "400 — :id ไม่ใช่ UUID",
+          "name": "400 — :id is not a UUID",
           "request": {
             "method": "GET",
             "header": [],
@@ -2673,7 +2673,7 @@
           ]
         },
         {
-          "name": "400 — ลงขายโดยไม่มีรูป",
+          "name": "400 — listing without images",
           "request": {
             "method": "POST",
             "header": [
@@ -2720,7 +2720,7 @@
           ]
         },
         {
-          "name": "400 — ตั้งส่วนลดมาครึ่งเดียว",
+          "name": "400 — discount only half set",
           "request": {
             "method": "POST",
             "header": [
@@ -2806,7 +2806,7 @@
           ]
         },
         {
-          "name": "400 — ใส่ตะกร้าเกินสต๊อก",
+          "name": "400 — adding more than the stock to the cart",
           "request": {
             "method": "POST",
             "header": [
@@ -2854,7 +2854,7 @@
           ]
         },
         {
-          "name": "setup — seller B ลงของราคา 666.00",
+          "name": "setup — seller B lists an item at 666.00",
           "request": {
             "method": "POST",
             "header": [
@@ -2878,7 +2878,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Decline Trigger 666\",\n  \"description\": \"ยอด 666.00 พอดีจะถูกปฏิเสธเสมอ\",\n  \"categoryId\": \"{{catElectronics}}\",\n  \"price\": 666,\n  \"stockQty\": 5,\n  \"condition\": \"NEW\",\n  \"imageUrls\": [\n    \"https://placehold.co/600x400?text=666\"\n  ]\n}",
+              "raw": "{\n  \"title\": \"Decline Trigger 666\",\n  \"description\": \"A total of exactly 666.00 is always declined\",\n  \"categoryId\": \"{{catElectronics}}\",\n  \"price\": 666,\n  \"stockQty\": 5,\n  \"condition\": \"NEW\",\n  \"imageUrls\": [\n    \"https://placehold.co/600x400?text=666\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2903,7 +2903,7 @@
           ]
         },
         {
-          "name": "setup — seller A ใส่ตะกร้า (ยอด = 666.00)",
+          "name": "setup — seller A adds to cart (total = 666.00)",
           "request": {
             "method": "POST",
             "header": [
@@ -2946,7 +2946,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('ยอดรวมต้องเป็น 666.00 พอดี ไม่งั้นเคสถัดไปจะไม่ทำงาน', function () {",
+                  "pm.test('total must be exactly 666.00, otherwise the next case will not work', function () {",
                   "  pm.expect(pm.response.json().summary.total).to.eql('666.00');",
                   "});"
                 ]
@@ -2955,7 +2955,7 @@
           ]
         },
         {
-          "name": "400 — CART-004 จ่ายเงินไม่ผ่าน (666.00)",
+          "name": "400 — CART-004 payment declined (666.00)",
           "request": {
             "method": "POST",
             "header": [
@@ -2998,15 +2998,15 @@
                   "  pm.expect([400]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('ตอบกลับพร้อม checkoutSessionId ไว้กระทบยอด', function () {",
+                  "pm.test('responds with checkoutSessionId for reconciliation', function () {",
                   "  const b = pm.response.json();",
                   "  pm.expect(b.message).to.eql('Payment failed');",
                   "  pm.expect(b).to.have.property('checkoutSessionId');",
                   "});",
                   "",
-                  "pm.test('บอกชนิดของความล้มเหลว ไม่ใช่แค่ข้อความ', function () {",
-                  "  // หน้าเว็บแยกจอจาก code ตัวนี้ ไม่ใช่จากข้อความอังกฤษ",
-                  "  // PAYMENT_DECLINED = เส้นเดียวที่กดลองใหม่แล้วผ่านได้",
+                  "pm.test('reports the kind of failure, not just a message', function () {",
+                  "  // the web app picks the screen from this code, not from the English message",
+                  "  // PAYMENT_DECLINED = the only path where retrying can succeed",
                   "  pm.expect(pm.response.json().code).to.eql('PAYMENT_DECLINED');",
                   "});"
                 ]
@@ -3015,7 +3015,7 @@
           ]
         },
         {
-          "name": "ตรวจผล — ของยังอยู่ในตะกร้าครบ",
+          "name": "verify — everything is still in the cart",
           "request": {
             "method": "GET",
             "header": [
@@ -3044,7 +3044,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "pm.test('ตะกร้าไม่ถูกล้างเมื่อจ่ายเงินไม่ผ่าน', function () {",
+                  "pm.test('cart is not cleared when payment fails', function () {",
                   "  pm.expect(pm.response.json().items.length).to.be.above(0);",
                   "});"
                 ]
@@ -3053,7 +3053,7 @@
           ]
         },
         {
-          "name": "400 — ข้ามสถานะการจัดส่ง (ใช้ออเดอร์จาก 04)",
+          "name": "400 — skipping a shipment status (uses the order from 04)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -3102,7 +3102,7 @@
           ]
         },
         {
-          "name": "403 — ผู้ซื้อเลื่อนสถานะเองไม่ได้",
+          "name": "403 — buyer can't advance the status",
           "request": {
             "method": "PATCH",
             "header": [
@@ -3151,7 +3151,7 @@
           ]
         },
         {
-          "name": "400 — สถานะไม่มีใน enum",
+          "name": "400 — status not in the enum",
           "request": {
             "method": "PATCH",
             "header": [
@@ -3200,7 +3200,7 @@
           ]
         },
         {
-          "name": "404 — คนนอกเปิดดูออเดอร์คนอื่น",
+          "name": "404 — outsider views someone else's order",
           "request": {
             "method": "GET",
             "header": [
@@ -3235,7 +3235,7 @@
           ]
         },
         {
-          "name": "404 — คนนอกอ่านแชทคนอื่น",
+          "name": "404 — outsider reads someone else's chat",
           "request": {
             "method": "GET",
             "header": [
@@ -3271,7 +3271,7 @@
           ]
         },
         {
-          "name": "403 — แอดมินอ่านแชทไม่ได้",
+          "name": "403 — admin can't read chats",
           "request": {
             "method": "GET",
             "header": [
@@ -3307,7 +3307,7 @@
           ]
         },
         {
-          "name": "400 — ส่งข้อความว่าง",
+          "name": "400 — empty message",
           "request": {
             "method": "POST",
             "header": [
