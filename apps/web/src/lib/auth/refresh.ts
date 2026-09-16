@@ -49,7 +49,7 @@ const SKEW_MS = 60_000
  * until somebody brings the tab back, which is a lunch break away rather than
  * a second. It happened in production: one "Refresh token replayed for user …
  * — revoking all sessions" in the API log, and every device on that account
- * signed out with "เซสชันหมดอายุแล้ว".
+ * signed out with "Session has expired".
  *
  * The wider window costs one map entry per rotation while it is open, which is
  * a couple per signed-in person — a rotation only happens every fifteen
@@ -122,7 +122,7 @@ export function needsRefresh(
  *   unreachable  the API never got to look — network failure, a 5xx, a 429.
  *                Saying nothing about the session, so nothing may act as if
  *                it did. Collapsing this into `dead` is how an API restart
- *                signed everyone out with "เซสชันหมดอายุ" mid-development.
+ *                signed everyone out with "Session expired" mid-development.
  */
 export type RefreshResult =
   | { outcome: "renewed"; tokens: ApiTokens }

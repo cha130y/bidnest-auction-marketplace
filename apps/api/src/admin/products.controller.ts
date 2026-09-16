@@ -16,16 +16,18 @@ import { AdminProductsService } from './products.service';
 /**
  * ADM-005 — Product listing oversight (owner: Dev 3)
  *
- * การปิดการขายจะปิดกั้นคำสั่งซื้อใหม่ แต่ **ไม่ยกเลิกคำสั่งซื้อที่จ่ายเงินแล้ว (PAID)**
+ * Suspending a listing blocks new orders, but **does not cancel orders that are
+ * already paid (PAID)**.
  *
- * admin สั่งปิด → `ProductStatus.SUSPENDED` ซึ่งเป็นสถานะที่ **ผู้ขายย้ายออกเองไม่ได้**
- * (ต่างจาก INACTIVE ที่ผู้ขายปิดเองและเปิดกลับเองได้ตาม PROD-002)
- * state machine เต็มและกฎที่ต้อง implement ทุกข้อดูที่ ADR-0002
+ * An admin suspension → `ProductStatus.SUSPENDED`, a status that **the seller
+ * cannot move out of on their own** (unlike INACTIVE, which the seller can set
+ * and undo themselves per PROD-002). The full state machine and every rule that
+ * must be implemented are in ADR-0002.
  *
- * `@Roles('ADMIN')` ทำงานผ่าน RolesGuard ที่ลงทะเบียนเป็น APP_GUARD ใน AppModule
- * ตัวตนผู้เรียกมาจาก AccessTokenGuard (AUTH-008) — ตอนสลับจาก MockAuthGuard มา
- * ใช้ JWT จริง controller นี้ไม่ต้องแก้อะไรเลย เพราะอ่าน identity ผ่าน
- * `@CurrentUser()` อย่างเดียว
+ * `@Roles('ADMIN')` works through the RolesGuard registered as APP_GUARD in
+ * AppModule. The caller's identity comes from AccessTokenGuard (AUTH-008) —
+ * switching from MockAuthGuard to real JWTs needed no change here, because this
+ * controller reads identity only through `@CurrentUser()`.
  */
 @Roles('ADMIN')
 @Controller('admin/products')
@@ -59,7 +61,7 @@ export class AdminProductsController {
     );
   }
 
-  /** body: { reason: string } → products.status = ACTIVE (หรือ OUT_OF_STOCK ถ้า stockQty = 0) */
+  /** body: { reason: string } → products.status = ACTIVE (or OUT_OF_STOCK if stockQty = 0) */
   @Patch(':productId/reactivate')
   reactivateProduct(
     @Param('productId', ParseUUIDPipe) productId: string,

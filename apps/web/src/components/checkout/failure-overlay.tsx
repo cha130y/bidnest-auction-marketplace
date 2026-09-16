@@ -10,8 +10,8 @@ import type { CheckoutErrorCode, CheckoutIssue } from "@/lib/api/types"
 /**
  * CART-004 — a refused checkout, sorted into the answer the buyer needs.
  *
- * There used to be one screen for all of them, titled "ชำระเงินไม่สำเร็จ", with
- * "ลองใหม่อีกครั้ง" as its main button and a note promising that nothing had
+ * There used to be one screen for all of them, titled "Payment failed", with
+ * "Try again" as its main button and a note promising that nothing had
  * been charged. For the common case — somebody else bought the last one first
  * — every part of that was wrong: it is not a payment problem, retrying can
  * never succeed, and in the race below money really had moved.

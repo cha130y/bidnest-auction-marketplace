@@ -1,142 +1,142 @@
-# SRS Change Request — CART-003 และการเลือกรายการมาชำระเงิน
+# SRS Change Request — CART-003 and choosing which items to pay for
 
-- **สถานะ:** ✅ **ปิดแล้ว** — โค้ดอยู่ใน `dev` แล้ว และ SRS แก้ครบทั้ง 3 จุดใน `BidNest-Auction and Marketplace-v6.pdf` เรียบร้อย
-- **สร้างเมื่อ:** 2026-08-25 · **ปิดเมื่อ:** 2026-08-25
-- **ทีมเห็นชอบ:** 2026-08-25 — โดยการรีวิวและ merge PR #100 ซึ่งระบุไว้ในหัวข้อ *"CART-003 contradicts SRS v5 — please decide before merging"* ว่าถ้าไม่เอาให้ revert commit `88febcb` ทีมเลือก merge
-- **ผู้เสนอ:** Dev 3 (E-Commerce)
-- **SRS ฉบับปัจจุบัน:** `BidNest-Auction and Marketplace-v6.pdf` (ฉบับก่อนหน้า v5 ถูกลบออกแล้ว)
-- **ข้อกำหนดที่กระทบ:** CART-002, CART-003, CART-004
+- **Status:** ✅ **Closed** — the code is in `dev`, and all 3 SRS changes are done in `BidNest-Auction and Marketplace-v6.pdf`
+- **Created:** 2026-08-25 · **Closed:** 2026-08-25
+- **Team approval:** 2026-08-25 — by reviewing and merging PR #100, which stated under *"CART-003 contradicts SRS v5 — please decide before merging"* that commit `88febcb` should be reverted if rejected; the team chose to merge
+- **Proposed by:** Dev 3 (E-Commerce)
+- **Current SRS:** `BidNest-Auction and Marketplace-v6.pdf` (the previous v5 has been removed)
+- **Affected requirements:** CART-002, CART-003, CART-004
 
-> เอกสารนี้เก็บไว้เป็นบันทึกว่าแก้อะไรไปบ้างและทำไม ไม่ต้องทำอะไรต่อแล้ว รูปแบบเดียวกับ [srs-change-request-adm-005.md](./srs-change-request-adm-005.md)
-> ข้อความในโค้ดบล็อกคือสิ่งที่ถูกนำไปใส่ใน SRS v6 จริง
+> This document is kept as a record of what was changed and why; nothing further needs doing. Same format as [srs-change-request-adm-005.md](./srs-change-request-adm-005.md)
+> The text in the code blocks is what actually went into SRS v6 (the SRS is written in Thai; the blocks here are English translations)
 >
-> ✅ **ตอนนี้โค้ดกับ SRS ตรงกันแล้ว** — v6 เขียนว่า *"จ่ายเงินครั้งเดียวรวมกันทั้งหมดที่เลือก"*
-> ช่วงที่ v5 ยังค้างอยู่ (25 ส.ค. ระหว่าง merge PR #100 ถึง export v6) เอกสารกับโค้ดไม่ตรงกันชั่วคราว
+> ✅ **The code and the SRS now match** — v6 says *"a single payment covering everything selected"*
+> While v5 was still in place (Aug 25, between merging PR #100 and exporting v6), the document and the code were temporarily out of sync
 
 ---
 
-# ส่วนที่ 1 — ที่มา
+# Part 1 — Background
 
-ผู้ใช้งานจริงขอให้ **ติ๊กเลือกได้ว่าจะจ่ายรายการไหนในตะกร้า** ตอนนี้ตะกร้าที่มีของจาก 3 ร้านต้องจ่ายทั้งหมดในครั้งเดียว ถ้าอยากจ่ายแค่ชิ้นเดียวต้องลบอีก 2 ชิ้นทิ้งก่อน แล้วค่อยกดใส่ใหม่ทีหลัง ซึ่งเสียของที่เลือกไว้และเสียเวลา
+Real users asked to **tick which cart items to pay for**. As it stood, a cart with items from 3 shops had to be paid for all at once; to pay for just one item you had to delete the other 2 first and add them back later, losing your selection and wasting time
 
-แต่ **SRS v5 (ฉบับก่อนหน้า) เขียนไว้ชัดว่าจ่ายทั้งตะกร้า** — ประโยคใน CART-003 ตอนนั้นคือ
+But **SRS v5 (the previous edition) said clearly that the whole cart is paid** — the CART-003 sentence at the time was
 
-> *"…จะได้ 3 ออเดอร์ที่ติดตามแยกจากกันได้ ขณะแต่ยังจ่ายเงินครั้งเดียว**รวมกันทั้งตะกร้า** (ดู CART-004)"*
+> *"…you get 3 orders that can be tracked separately, while still paying once **for the whole cart** (see CART-004)"*
 
-ถ้าทำฟีเจอร์นี้โดยไม่แก้ SRS โค้ดกับเอกสารจะขัดกันทันที ซึ่งเป็นปัญหาเดียวกับที่ทีมเพิ่งแก้ไปในรอบ ADM-005 จึงเสนอเป็น change request แทนที่จะแก้เงียบๆ
-
----
-
-# ส่วนที่ 2 — ข้อความสำเร็จรูปสำหรับ copy วาง
-
-## แก้ที่ 1 — CART-003 (บังคับ)
-
-**ตำแหน่ง:** หน้า 7 · หัวข้อ `4.5 ตะกร้าสินค้าและการชำระเงิน (จำลอง)` · ตารางแถว **CART-003 แยกคำสั่งซื้อตามผู้ขายหลายราย** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** ลบข้อความในช่องนั้นทั้งหมด แล้ววางข้อความนี้แทน
-
-```
-ผู้ซื้อเลือกได้ว่าจะชำระเงินสำหรับรายการใดในตะกร้าบ้าง โดยค่าเริ่มต้นคือเลือกไว้ทุกรายการ ตอน checkout ระบบจะจัดกลุ่มเฉพาะรายการที่เลือกตามผู้ขาย และสร้าง Order แยกให้แต่ละผู้ขาย 1 รายการ (มีเลขออเดอร์ ยอดรวมย่อย และสถานะเป็นของตัวเอง) ภายใต้ checkout_session_id เดียวกัน ดังนั้นการ checkout ครั้งเดียวที่มีสินค้าจาก 3 ผู้ขาย จะได้ 3 ออเดอร์ที่ติดตามแยกจากกันได้ ขณะแต่ยังจ่ายเงินครั้งเดียวรวมกันทั้งหมดที่เลือก (ดู CART-004) รายการที่ไม่ได้เลือกจะยังคงอยู่ในตะกร้าและไม่ถูกตัดสต็อก ยอดรวมและจำนวนร้านที่แสดงบนหน้าตะกร้าและหน้าชำระเงินต้องคำนวณจากรายการที่เลือกเท่านั้น หากไม่ได้เลือกรายการใดเลยจะกด checkout ไม่ได้ และหากรายการที่เลือกไว้ถูกเอาออกจากตะกร้าไปแล้ว (เช่น จากอีกแท็บหนึ่ง) ระบบต้องปฏิเสธการชำระเงินทั้งครั้งแทนที่จะจ่ายเฉพาะส่วนที่เหลือ
-```
-
-## แก้ที่ 2 — CART-002 (บังคับ)
-
-**ตำแหน่ง:** หน้า 6 · ตารางแถว **CART-002 จัดการตะกร้า** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** เติมประโยคนี้ต่อท้ายข้อความเดิม (ไม่ต้องลบของเดิม)
-
-```
-นอกจากแก้จำนวนและลบรายการแล้ว ผู้ใช้ยังติ๊กเลือกหรือยกเลิกการเลือกรายการเพื่อกำหนดว่าจะชำระเงินสำหรับรายการใดได้ด้วย (ดู CART-003) การไม่เลือกไม่ใช่การลบ รายการนั้นยังอยู่ในตะกร้าตามเดิม
-```
-
-## แก้ที่ 3 — CART-004 (บังคับ)
-
-**ตำแหน่ง:** หน้า 7 · ตารางแถว **CART-004 การชำระเงินแบบจำลอง** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** ใช้ Ctrl+H แทนที่ข้อความ
-
-**ค้นหา**
-
-```
-หากเป็น FAILED จะไม่มีการสร้างออเดอร์ใดๆ และตะกร้าจะยังคงอยู่เหมือนเดิม
-```
-
-**แทนที่ด้วย**
-
-```
-หากเป็น FAILED จะไม่มีการสร้างออเดอร์ใดๆ และตะกร้าจะยังคงอยู่เหมือนเดิมทั้งรายการที่เลือกและไม่ได้เลือก
-```
+Building this feature without changing the SRS would immediately put the code and the document in conflict — the same problem the team had just fixed in the ADM-005 round — so it was proposed as a change request instead of changed quietly
 
 ---
 
-# ส่วนที่ 3 — สิ่งที่ implement ไปแล้ว
+# Part 2 — Ready-to-paste text
 
-**ไม่แตะ schema** ไม่มี migration ใหม่ — ใช้ `cart_items.id` ที่มีอยู่แล้ว
+## Change 1 — CART-003 (required)
 
-| จุด | สิ่งที่ทำ |
+**Location:** page 7 · section `4.5 Cart and payment (simulated)` · table row **CART-003 Split orders across multiple sellers** · **Acceptance criteria** cell
+
+**How:** delete all the text in that cell and paste this instead
+
+```
+The buyer can choose which items in the cart to pay for; by default every item is selected. At checkout the system groups only the selected items by seller and creates a separate Order for each seller (with its own order number, subtotal and status) under the same checkout_session_id, so a single checkout containing products from 3 sellers produces 3 orders that can be tracked separately, while still paying once for everything selected (see CART-004). Unselected items remain in the cart and their stock is not deducted. The totals and shop count shown on the cart and checkout pages must be calculated from the selected items only. Checkout cannot be pressed if nothing is selected, and if a selected item has already been removed from the cart (e.g. from another tab), the system must reject the whole payment rather than paying for only the remaining part
+```
+
+## Change 2 — CART-002 (required)
+
+**Location:** page 6 · table row **CART-002 Manage cart** · **Acceptance criteria** cell
+
+**How:** append this sentence to the end of the existing text (don't delete the existing text)
+
+```
+Besides changing quantities and removing items, the user can also tick or untick items to decide which ones to pay for (see CART-003). Unselecting is not removing; the item stays in the cart as before
+```
+
+## Change 3 — CART-004 (required)
+
+**Location:** page 7 · table row **CART-004 Simulated payment** · **Acceptance criteria** cell
+
+**How:** use Ctrl+H to replace the text
+
+**Find**
+
+```
+If FAILED, no orders are created and the cart remains unchanged
+```
+
+**Replace with**
+
+```
+If FAILED, no orders are created and the cart remains unchanged, both the selected and the unselected items
+```
+
+---
+
+# Part 3 — What has been implemented
+
+**Schema untouched**, no new migration — uses the existing `cart_items.id`
+
+| Where | What was done |
 | --- | --- |
-| `apps/api/src/order/dtos/checkout.dto.ts` | เพิ่มฟิลด์ `cartItemIds?: string[]` เป็น **optional** |
-| `apps/api/src/order/checkout.service.ts` | `priceCart(buyerId, cartItemIds?)` กรองด้วย `id: { in: … }` |
-| `apps/web/src/lib/cart-selection.ts` | ตัวช่วยคำนวณยอดจากรายการที่เลือก และแปลง selection เป็น query string |
-| `apps/web/src/components/cart/cart-view.tsx` | checkbox ต่อแถว + "เลือกทั้งหมด" + สรุปยอดคิดจากที่เลือก |
-| `apps/web/src/components/checkout/checkout-view.tsx` | อ่าน selection จาก URL แล้วส่ง `cartItemIds` ไปกับ checkout |
+| `apps/api/src/order/dtos/checkout.dto.ts` | Added the field `cartItemIds?: string[]` as **optional** |
+| `apps/api/src/order/checkout.service.ts` | `priceCart(buyerId, cartItemIds?)` filters with `id: { in: … }` |
+| `apps/web/src/lib/cart-selection.ts` | Helpers to total the selected items and turn the selection into a query string |
+| `apps/web/src/components/cart/cart-view.tsx` | A checkbox per row + "Select all" + a summary computed from the selection |
+| `apps/web/src/components/checkout/checkout-view.tsx` | Reads the selection from the URL and sends `cartItemIds` with checkout |
 
-## เข้ากันได้กับของเดิม
+## Backward compatibility
 
-`cartItemIds` เป็น optional — **ถ้าไม่ส่งมาจะจ่ายทั้งตะกร้าเหมือนเดิมทุกประการ** โค้ดหรือเทสเดิมที่เรียก `POST /orders/checkout` โดยไม่รู้จักฟิลด์นี้ยังทำงานได้ไม่ต่างจากเดิม และฝั่งเว็บก็ส่งฟิลด์นี้เฉพาะตอนที่ผู้ใช้เลือกไม่ครบเท่านั้น
+`cartItemIds` is optional — **if it isn't sent, the whole cart is paid exactly as before**. Existing code or tests that call `POST /orders/checkout` without knowing this field work no differently, and the web app only sends the field when the user hasn't selected everything
 
-## ทำไม selection ถึงอยู่ใน URL ไม่ใช่ใน state
+## Why the selection lives in the URL, not in state
 
-`/checkout` เป็นคนละ route กับ `/cart` ถ้าเก็บใน state ธรรมดา พอผู้ใช้กด refresh หรือเปิดแท็บใหม่ selection จะหายแล้วกลายเป็น "ทั้งตะกร้า" เงียบๆ ซึ่งเป็นคำตอบผิดแบบที่ไม่มีใครสังเกตจนกว่าจะเห็นใบเสร็จ — จึงใส่ไว้ที่ `?items=<id>,<id>`
+`/checkout` is a different route from `/cart`. Kept in plain state, the selection would be lost when the user refreshes or opens a new tab and would silently become "the whole cart" — the kind of wrong answer nobody notices until they see the receipt — so it is put in `?items=<id>,<id>`
 
-## ทำไมต้องปฏิเสธทั้งครั้งเมื่อ id ที่เลือกหายไป
+## Why the whole payment is rejected when a selected id is gone
 
-ถ้าจ่ายเฉพาะส่วนที่เหลือ เท่ากับเรียกเก็บเงินในจำนวนที่ผู้ซื้อไม่ได้ยืนยัน (เขาเห็นยอดหนึ่งตอนกด แต่ถูกตัดอีกยอดหนึ่ง) จึงเลือกให้ตอบ 400 แล้วให้หน้าจออ่านตะกร้าใหม่แทน
+Paying for only the remaining part would charge an amount the buyer never confirmed (they saw one total when they clicked, but were charged another), so it answers 400 and has the screen re-read the cart instead
 
-## เทสที่เพิ่ม
+## Tests added
 
-`apps/api/test/ecommerce.e2e-spec.ts` — `describe('CART-003 — paying for part of the cart')` 5 เคส
+`apps/api/test/ecommerce.e2e-spec.ts` — `describe('CART-003 — paying for part of the cart')`, 5 cases
 
-- คิดเงินเฉพาะรายการที่เลือก (2 × 700 = 1,400 ไม่รวมอีกชิ้น 900)
-- รายการที่ไม่ได้เลือกยังอยู่ในตะกร้า
-- ส่ง id ที่ถูกจ่ายไปแล้วมาด้วย → 400 และตะกร้าไม่ถูกแตะ
-- ส่ง id ของตะกร้าคนอื่น → 400 และตะกร้าคนนั้นไม่ถูกแตะ
-- ไม่ส่ง `cartItemIds` → จ่ายทั้งตะกร้าเหมือนเดิม
+- charges only the selected items (2 × 700 = 1,400, excluding the other 900 item)
+- unselected items stay in the cart
+- sending an id that was already paid for → 400 and the cart isn't touched
+- sending an id from someone else's cart → 400 and that person's cart isn't touched
+- not sending `cartItemIds` → the whole cart is paid as before
 
-รันแล้วผ่านทั้งไฟล์ 65/65
+The whole file passes, 65/65
 
 ---
 
 # Checklist
 
-- [x] ทีมเห็นชอบให้เปลี่ยนพฤติกรรมนี้ — merge PR #100 เมื่อ 25 ส.ค. 2569
-- [x] โค้ดอยู่ใน `dev` แล้ว (commit `88febcb`) พร้อม e2e 5 เคสใน `ecommerce.e2e-spec.ts`
-- [x] แก้ 3 จุดในส่วนที่ 2 ที่ไฟล์ `.docx` ต้นฉบับ
-- [x] export PDF ด้วย `Save As → PDF` **ไม่ใช่** `Print to PDF` (ดูเหตุผลใน change request ของ ADM-005)
-- [x] วาง PDF ใหม่แทน `BidNest-Auction and Marketplace-v5.pdf` เป็น v6 แล้วอัปเดต path ของ SRS ใน `CLAUDE.md` ให้ชี้ไฟล์ใหม่
-- [ ] อัปเดต story CART-002/003/004 ใน Jira
+- [x] The team approved changing this behavior — merged PR #100 on Aug 25, 2026
+- [x] The code is in `dev` (commit `88febcb`) with 5 e2e cases in `ecommerce.e2e-spec.ts`
+- [x] Made the 3 changes from Part 2 in the original `.docx` file
+- [x] Exported the PDF with `Save As → PDF`, **not** `Print to PDF` (see the reason in the ADM-005 change request)
+- [x] Put the new PDF in place of `BidNest-Auction and Marketplace-v5.pdf` as v6 and updated the SRS path in `CLAUDE.md` to point at the new file
+- [ ] Update the CART-002/003/004 stories in Jira
 
-เหลือข้อเดียวคือ Jira ซึ่งอยู่นอก repo — งานเอกสารในฝั่ง repo ปิดครบแล้ว
+Only Jira is left, which lives outside the repo — the documentation work on the repo side is fully closed
 
 ---
 
-# ตรวจ v6 เทียบกับ v5
+# Checking v6 against v5
 
-ดึงข้อความออกจาก PDF ทั้งสองฉบับแล้ว diff กันก่อนวางไฟล์ลง repo — **v6 คือ v5 บวกการแก้ 3 จุดในส่วนที่ 2 เท่านั้น** จำนวน requirement ID ยังเท่าเดิม 58 ข้อ ไม่มีข้อไหนถูกเพิ่มหรือตัดออก ส่วนต่างที่เหลือในไฟล์เป็นแค่การจัดบรรทัดใหม่จากการ export
+The text was extracted from both PDFs and diffed before the file went into the repo — **v6 is v5 plus the 3 changes in Part 2 only**. The number of requirement IDs is still 58; none were added or removed. The remaining differences in the file are just line re-wrapping from the export
 
-จุดที่ต้องเช็คเป็นพิเศษคือ **§7.2** เพราะ `apps/api/test/http/06-admin.http` อ้างเลขข้อในนั้นอยู่ — ยืนยันแล้วว่าเป็นข้อความเดิมทุกตัวอักษร ลำดับข้อไม่ขยับ
+The part that needed special checking is **§7.2**, because `apps/api/test/http/06-admin.http` cites an item number in it — confirmed to be the same text character for character, with the item order unchanged
 
-## ไฟล์ที่อัปเดต path/เวอร์ชันตามไปด้วย
+## Files whose path/version references were updated too
 
-| ไฟล์ | เดิม |
+| File | Before |
 | --- | --- |
-| `CLAUDE.md` | ชี้ `-v5.pdf` |
+| `CLAUDE.md` | pointed at `-v5.pdf` |
 | `docs/team-role/dev4-auction-workflow.md` | "SRS v5" + path `-v5.pdf` |
 | `docs/team-role/dev3-ecommerce-workflow.md` | "SRS v5" + path `-v5.pdf` |
 | `docs/team-role/dev2-backend-security-workflow.md` | "SRS v5" + path `-v5.pdf` |
-| `docs/team-role/dev2-checklist.md` | ชี้ `-v4.pdf` ที่ถูกลบไปตั้งแต่รอบ ADM-005 |
-| `docs/KICKOFF_GUIDE.md` | เขียน "SRS v1.0" |
-| `apps/api/test/http/06-admin.http` | คอมเมนต์อ้าง "SRS v5 §7.2" |
-| `docs/requirements/srs-change-request-adm-005.md` | บรรทัดที่บอกว่า SRS ฉบับไหนอยู่ใน repo ตอนนี้ |
+| `docs/team-role/dev2-checklist.md` | pointed at `-v4.pdf`, which had been removed back in the ADM-005 round |
+| `docs/KICKOFF_GUIDE.md` | said "SRS v1.0" |
+| `apps/api/test/http/06-admin.http` | a comment cited "SRS v5 §7.2" |
+| `docs/requirements/srs-change-request-adm-005.md` | the line saying which SRS edition is currently in the repo |
 
-ADR-0001 และ ADR-0002 **ไม่แก้** เพราะบรรทัด "อ้างอิง: SRS v4" คือบันทึกว่าตอนตัดสินใจอิงฉบับไหน เป็นข้อมูลย้อนหลังที่ต้องคงไว้ตามธรรมเนียมของ ADR เช่นเดียวกับบรรทัดประวัติใน `srs-change-request-adm-005.md` ที่ยังอ้าง v5 ตามเดิม
+ADR-0001 and ADR-0002 are **not changed**, because their "References: SRS v4" line records which edition the decision was based on at the time — historical information that must be kept, per ADR convention — just like the history lines in `srs-change-request-adm-005.md` that still cite v5

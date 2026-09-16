@@ -69,7 +69,7 @@ export default async function AuctionDetailPage({
                   the API will not say which: announcing "this seller set no
                   reserve" gives a bidder as much as the amount would. So this
                   row cannot branch on whether a reserve exists — it can only
-                  say something true in both cases. "ถึงแล้ว" was not: it
+                  say something true in both cases. "Reached" was not: it
                   claimed a threshold had been crossed on every auction that
                   never had one, which is most of them.
 

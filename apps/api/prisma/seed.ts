@@ -385,7 +385,7 @@ const AUCTION_FIXTURES: SeedAuction[] = [
     id: AUCTION.draftIncomplete,
     sellerId: SELLER_A_ID,
     categoryId: CATEGORY_ELECTRONICS_ID,
-    title: 'Retro Game Console (ร่างยังไม่เสร็จ)',
+    title: 'Retro Game Console (unfinished draft)',
     description: 'Boxed, works, needs a photo and a schedule before it can go.',
     condition: 'USED',
     status: 'DRAFT',

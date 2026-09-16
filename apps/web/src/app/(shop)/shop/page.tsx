@@ -120,7 +120,7 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
  *   submit, the ids come from checkboxes), so this only happens on a
  *   hand-edited or stale URL, and the way out is to drop the filters.
  * - **Anything else**, including the API being down, where `ApiError.message`
- *   is already the Thai "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" set by `apiFetch`.
+ *   is already the Thai "cannot connect to the server" message set by `apiFetch`.
  *
  * The hint about `NEXT_PUBLIC_API_URL` stays only on the second: it is aimed
  * at whoever is running the stack, and a shopper reading it about their own

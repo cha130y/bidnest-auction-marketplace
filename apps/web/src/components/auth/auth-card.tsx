@@ -76,7 +76,7 @@ export function AuthCard({
 }
 
 /**
- * The one link style these screens use, so "ลืมรหัสผ่าน" and "สมัครสมาชิก"
+ * The one link style these screens use, so "Forgot password" and "Sign up"
  * cannot drift apart. Underlined rather than colour-only: colour alone is not
  * an affordance, and amber on white is the weakest contrast on the page.
  */

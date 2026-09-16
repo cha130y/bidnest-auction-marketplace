@@ -160,8 +160,8 @@ export function OwnedAuctionsList() {
             items={STATUS_ITEMS}
             value={status}
             onValueChange={(value) => {
-              // A filter change starts at page 1: page 3 of "ร่าง" rarely
-              // exists under "ขายแล้ว".
+              // A filter change starts at page 1: page 3 of "Drafts" rarely
+              // exists under "Sold".
               setPage(1)
               setStatus(
                 value === ALL_STATUSES

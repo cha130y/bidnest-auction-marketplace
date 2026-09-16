@@ -41,9 +41,9 @@ function StatusPill({ status }: { status: AdminProductRow['status'] }) {
   );
 }
 
-// เหตุผลเก็บเป็น state ของแถวตัวเอง ไม่ยกขึ้นไปไว้ที่หน้า: ถ้ายกขึ้นไป
-// columns จะต้อง dep กับ state นั้น แล้วถูกสร้างใหม่ทุกตัวอักษรที่พิมพ์
-// ทำให้ cell remount และ input หลุด focus
+// The reason is kept as each row's own state, not lifted up to the page: if it
+// were lifted, columns would depend on that state and be rebuilt on every
+// keystroke, remounting the cell and making the input lose focus
 function ProductActionsCell({ product }: { product: AdminProductRow }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');

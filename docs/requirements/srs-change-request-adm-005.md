@@ -1,183 +1,183 @@
-# SRS Change Request — ADM-005 และสถานะสินค้า
+# SRS Change Request — ADM-005 and product status
 
-- **สถานะ:** ✅ **ปิดแล้ว** — แก้ครบทุกจุดและ export เป็น `BidNest-Auction and Marketplace-v5.pdf` เรียบร้อย
-- **อัปเดตล่าสุด:** 2026-08-19
-- **ไฟล์ต้นฉบับ:** `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
-- **SRS ที่อยู่ใน repo:** `BidNest-Auction and Marketplace-v6.pdf` (ข้อความ ADM-005 ที่แก้ในรอบนี้ยกมาครบไม่มีเปลี่ยน — v6 แก้เฉพาะ CART-002/003/004 ดู [srs-change-request-cart-003.md](./srs-change-request-cart-003.md))
-- **อ้างอิงการตัดสินใจ:** [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
+- **Status:** ✅ **Closed** — every change is made and exported as `BidNest-Auction and Marketplace-v5.pdf`
+- **Last updated:** 2026-08-19
+- **Source file:** `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
+- **SRS in the repo:** `BidNest-Auction and Marketplace-v6.pdf` (the ADM-005 text changed in this round carries over unchanged — v6 only changes CART-002/003/004, see [srs-change-request-cart-003.md](./srs-change-request-cart-003.md))
+- **Decision reference:** [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
 
-> เอกสารนี้เก็บไว้เป็นบันทึกว่าแก้อะไรไปบ้างและทำไม ไม่ต้องทำอะไรต่อแล้ว
-> ข้อความในโค้ดบล็อกคือสิ่งที่ถูกนำไปใส่ใน SRS v5 จริง
-> เหตุผลของแต่ละจุดอยู่ในหัวข้อ "เหตุผลประกอบ" ท้ายเอกสาร
-
----
-
-# ส่วนที่ 1 — ข้อความสำเร็จรูปสำหรับ copy วาง
-
-## แก้ที่ 1 — ADM-005
-
-**ตำแหน่ง:** หน้า 9 · หัวข้อ `4.8 การบริหารจัดการระบบ (Admin)` · ตารางแถว **ADM-005 ควบคุมดูแลรายการสินค้า** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** ลบข้อความในช่องนั้นทั้งหมด แล้ววางข้อความนี้แทน
-
-```
-Admin ปิดการขายสินค้าที่ไม่เหมาะสมได้ โดยเปลี่ยนสถานะสินค้าเป็น SUSPENDED ซึ่งเป็นสถานะที่สงวนไว้ให้ Admin เท่านั้น ผู้ขายเปลี่ยนออกจากสถานะนี้เองไม่ได้ (ดู PROD-002) มีเพียง Admin เท่านั้นที่เปิดการขายกลับได้ โดยระบบจะคืนสถานะเป็น ACTIVE หรือ OUT_OF_STOCK ตามจำนวนสต็อกคงเหลือ ณ ขณะนั้น ระหว่างที่สินค้าอยู่ในสถานะ SUSPENDED การที่ผู้ขายเติมสต็อกจะไม่ทำให้สถานะเปลี่ยนเป็น ACTIVE โดยอัตโนมัติ (อ้างอิงจาก PROD-005) ทุกครั้งที่ปิดหรือเปิดการขายต้องบันทึกเหตุผลไว้ เหมือนกับ ADM-001 การปิดการขายจะปิดกั้นคำสั่งซื้อใหม่ (ค้นหาไม่เจอในหน้าสาธารณะ เพิ่มลงตะกร้าและ checkout ไม่ได้) แต่ไม่ยกเลิกคำสั่งซื้อที่จ่ายเงินแล้ว (PAID)
-```
-
-*ข้อความนี้แก้ทั้งเรื่อง SUSPEND ที่ถูกอธิบายเหมือน flag แยก และเรื่องการเปิดกลับที่ต้องคืนเป็น ACTIVE หรือ OUT_OF_STOCK ในคราวเดียว*
+> This document is kept as a record of what was changed and why; nothing further needs doing
+> The text in the code blocks is what actually went into SRS v5 (the SRS is written in Thai; the blocks here are English translations)
+> The reasoning for each change is in the "Supporting rationale" part at the end of the document
 
 ---
 
-## แก้ที่ 2 — PROD-002
+# Part 1 — Ready-to-paste text
 
-**ตำแหน่ง:** หน้า 5 · หัวข้อ `4.4 แคตตาล็อกสินค้าและการจัดการสินค้า (E-commerce)` · ตารางแถว **PROD-002 แก้ไข/ลบสินค้าของตัวเอง** · ช่อง **เกณฑ์การยอมรับ**
+## Change 1 — ADM-005
 
-**วิธีแก้:** ลบข้อความในช่องนั้นทั้งหมด แล้ววางข้อความนี้แทน
+**Location:** page 9 · section `4.8 System administration (Admin)` · table row **ADM-005 Product listing oversight** · **Acceptance criteria** cell
+
+**How:** delete all the text in that cell and paste this instead
 
 ```
-ผู้ขายแก้ไขราคา รายละเอียด รูปภาพ หมวดหมู่ และสต็อกได้ในขณะที่สินค้าอยู่ในสถานะ ACTIVE หรือ INACTIVE และสลับสถานะระหว่าง ACTIVE กับ INACTIVE เองได้ การลบเป็นแบบ soft-delete ไปสถานะ REMOVED ซึ่งจะซ่อนจากการค้นหาสาธารณะ สินค้าที่ถูกอ้างอิงโดยคำสั่งซื้อที่ยังไม่ถูกยกเลิกอย่างน้อย 1 รายการ จะลบถาวรไม่ได้ ทำได้แค่ปิดการขาย เพื่อรักษาความถูกต้องของประวัติคำสั่งซื้อ สถานะ REMOVED เป็นสถานะปลายทาง ไม่มีการกู้คืนใน V1 หากผู้ขายต้องการเพียงหยุดขายชั่วคราว ให้ใช้ INACTIVE แทน ซึ่งเปิดกลับเองได้ตลอด สินค้าที่อยู่ในสถานะ SUSPENDED (ADM-005) ผู้ขายแก้ไขข้อมูล เปลี่ยนสถานะ หรือ soft-delete ไม่ได้ ทุกคำขอจะถูกปฏิเสธจนกว่า Admin จะเปิดการขายกลับให้ ที่ต้องห้าม soft-delete ด้วย เพราะการย้ายไป REMOVED จะลบร่องรอยว่าสินค้าเคยถูกระงับ ทำให้การตรวจสอบในขั้นถัดไปไม่เจอ
+The Admin can suspend inappropriate product listings by changing the product status to SUSPENDED, a status reserved for the Admin only; the seller cannot move out of this status themselves (see PROD-002). Only the Admin can reactivate the listing, and the system restores the status to ACTIVE or OUT_OF_STOCK based on the stock remaining at that moment. While the product is SUSPENDED, the seller restocking it does not automatically change the status to ACTIVE (see PROD-005). Every suspension or reactivation must record a reason, the same as ADM-001. Suspension blocks new orders (not found on public pages, cannot be added to the cart or checked out) but does not cancel orders that are already paid (PAID)
+```
+
+*This text fixes both SUSPEND being described like a separate flag and reactivation needing to restore ACTIVE or OUT_OF_STOCK in one step*
+
+---
+
+## Change 2 — PROD-002
+
+**Location:** page 5 · section `4.4 Product catalog and product management (E-commerce)` · table row **PROD-002 Edit/delete own products** · **Acceptance criteria** cell
+
+**How:** delete all the text in that cell and paste this instead
+
+```
+The seller can edit the price, details, images, category and stock while the product is ACTIVE or INACTIVE, and can switch the status between ACTIVE and INACTIVE themselves. Deletion is a soft-delete to the REMOVED status, which hides the product from public search. A product referenced by at least 1 order that has not been cancelled cannot be permanently deleted, only taken off sale, to preserve the integrity of order history. REMOVED is a terminal status with no restore in V1; a seller who only wants to stop selling temporarily should use INACTIVE instead, which they can reopen any time. For a product in SUSPENDED status (ADM-005), the seller cannot edit details, change the status or soft-delete; every request is rejected until the Admin reactivates the listing. Soft-delete must be blocked too, because moving to REMOVED would erase the trace that the product was ever suspended, so later checks would not find it
 ```
 
 ---
 
-## แก้ที่ 3 — §5.1 แถว E-commerce (แก้ 2 ที่ในช่องเดียวกัน)
+## Change 3 — §5.1 E-commerce row (2 changes in the same cell)
 
-**ตำแหน่ง:** หน้า 9 · หัวข้อ `5.1 โครงสร้างข้อมูลหลัก` · ตารางแถว **E-commerce** · ช่อง **Entity ปัจจุบันใน V1 / field สำคัญ**
+**Location:** page 9 · section `5.1 Core data structure` · table row **E-commerce** · **Current V1 entities / key fields** cell
 
-ช่องนี้ยาวมาก ไม่ต้องลบทั้งช่อง ให้ใช้ Ctrl+H แทน 2 ครั้ง
+This cell is very long; don't delete the whole cell — use Ctrl+H twice instead
 
-**3.1 — ค้นหาข้อความนี้**
-
-```
-สถานะสินค้า ACTIVE/INACTIVE/OUT_OF_STOCK/REMOVED;
-```
-
-**แทนที่ด้วย**
+**3.1 — Find this text**
 
 ```
-สถานะสินค้า ACTIVE/INACTIVE/OUT_OF_STOCK/REMOVED/SUSPENDED (SUSPENDED สงวนไว้ให้ ADM-005 เท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้);
+product status ACTIVE/INACTIVE/OUT_OF_STOCK/REMOVED;
 ```
 
-**3.2 — ค้นหาข้อความนี้แล้วลบทิ้ง (แทนที่ด้วยค่าว่าง)**
+**Replace with**
 
 ```
-; เพิ่ม SUSPENDED ในลิสต์สถานะสินค้า
+product status ACTIVE/INACTIVE/OUT_OF_STOCK/REMOVED/SUSPENDED (SUSPENDED is reserved for ADM-005 only; the seller cannot move out of it);
 ```
 
-ข้อความนี้อยู่ท้ายช่อง ต่อจาก `PROCESSING/SHIPPED/IN_TRANSIT/DELIVERED/CANCELLED` เป็นคำสั่งจาก change request ฉบับก่อนที่ถูก copy ลงไปตรงๆ ไม่ใช่เนื้อหาของ SRS
+**3.2 — Find this text and delete it (replace with nothing)**
+
+```
+; add SUSPENDED to the product status list
+```
+
+This text sits at the end of the cell, after `PROCESSING/SHIPPED/IN_TRANSIT/DELIVERED/CANCELLED` — an instruction from the previous change request that was copied in verbatim, not SRS content
 
 ---
 
-## แก้ที่ 4 (ไม่บังคับ แต่แนะนำ) — §7.2 ข้อ 8
+## Change 4 (optional but recommended) — §7.2 item 8
 
-**ตำแหน่ง:** หน้า 11 · หัวข้อ `7.2 ฝั่ง E-commerce` · รายการข้อ **8**
+**Location:** page 11 · section `7.2 E-commerce side` · item **8**
 
-**วิธีแก้:** แทนที่ข้อ 8 ทั้งข้อ
+**How:** replace item 8 entirely
 
 ```
-Admin ปิดการขายสินค้าที่ไม่เหมาะสมพร้อมระบุเหตุผล และการกระทำนั้นถูกบันทึกไว้ จากนั้นผู้ขายพยายามเปิดการขายกลับเอง แก้ไขข้อมูลสินค้า และลบสินค้านั้น ทั้งสามอย่างต้องถูกปฏิเสธ และการเติมสต็อกต้องไม่ทำให้สินค้ากลับมาขายได้เอง
+The Admin suspends an inappropriate product listing with a reason, and the action is recorded. The seller then tries to reopen the listing themselves, edit the product details and delete the product; all three must be rejected, and restocking must not put the product back on sale by itself
 ```
 
-เหตุผลที่ควรเพิ่ม: ข้อ 8 เดิมทดสอบแค่ว่า Admin ปิดได้ ซึ่งผ่านอยู่แล้วตั้งแต่ก่อนแก้ SRS — ส่วนที่เป็นหัวใจของ ADM-005 คือ "ผู้ขายปลดเองไม่ได้" ยังไม่มีใครทดสอบ
+Why it should be added: the original item 8 only tested that the Admin can suspend, which already passed before the SRS change — the heart of ADM-005, "the seller cannot lift it themselves", was not tested by anyone
 
 ---
 
-# ส่วนที่ 2 — เหตุผลประกอบ
+# Part 2 — Supporting rationale
 
-## ที่มา
+## Background
 
-SRS v4 มีข้อกำหนด 2 ข้อที่ขัดกันเอง — ADM-005 ให้ Admin ปิดการขายสินค้าที่ไม่เหมาะสมได้ แต่ PROD-002 ก็ให้ผู้ขายสลับ `ACTIVE`/`INACTIVE` เองได้ ผลคือผู้ขายกด `ACTIVE` กลับได้ทันทีหลัง Admin สั่งปิด **ทำให้ ADM-005 ไม่มีผลบังคับจริง**
+SRS v4 had 2 requirements that contradicted each other — ADM-005 lets the Admin suspend inappropriate product listings, but PROD-002 also lets the seller switch `ACTIVE`/`INACTIVE` themselves. As a result, the seller could set it back to `ACTIVE` immediately after the Admin suspended it, **leaving ADM-005 with no real force**
 
-ทีมตัดสินใจแล้ว 2 ข้อ:
+The team made 2 decisions:
 
-1. ถ้า Admin เป็นคนสั่งปิด ผู้ขายต้องเปิดกลับเองไม่ได้ → เพิ่มสถานะ `SUSPENDED` (migration `20260819031110_add_suspended_product_status`)
-2. **ไม่ทำฟีเจอร์กู้คืนสินค้าที่ลบแล้วใน V1** → `REMOVED` เป็นสถานะปลายทาง ใช้ `INACTIVE` สำหรับพักขายชั่วคราวแทน
+1. If the Admin suspends a listing, the seller must not be able to reopen it themselves → add a `SUSPENDED` status (migration `20260819031110_add_suspended_product_status`)
+2. **No restore feature for deleted products in V1** → `REMOVED` is a terminal status; use `INACTIVE` for pausing sales temporarily instead
 
-## ✅ ที่แก้ในฉบับแก้ไข-5 เรียบร้อยแล้ว
+## ✅ Already fixed in revision 5
 
-| ข้อกำหนด | ข้อความที่เพิ่มเข้าไป |
+| Requirement | Text added |
 | --- | --- |
-| **PROD-005** | "…แต่จะไม่สามารถเปลี่ยนสถานะสินค้าที่ถูก SUSPEND ได้ (ADM-005)" — จุดวิกฤตที่สุด ครอบคลุมแล้ว |
-| **CART-001** | "…เพิ่มลงตะกร้าได้เฉพาะ ACTIVE ถ้าของในตะกร้าเปลี่ยนสถานะทีหลัง checkout ไม่ได้" |
-| **PROD-002** | "…สินค้า SUSPENDED ผู้ขายแก้ไข/เปลี่ยนสถานะ/soft-delete ไม่ได้" (ยังต้องขัดเกลาตามแก้ที่ 2) |
+| **PROD-005** | "…but cannot change the status of a product that has been SUSPENDed (ADM-005)" — the most critical point, now covered |
+| **CART-001** | "…only ACTIVE items can be added to the cart; if an item in the cart changes status later, checkout is not possible" |
+| **PROD-002** | "…for a SUSPENDED product, the seller cannot edit/change status/soft-delete" (still needed polishing per Change 2) |
 
-## เหตุผลของแก้ที่ 1 — ADM-005
+## Rationale for Change 1 — ADM-005
 
-ข้อความปัจจุบันเขียนว่า *"สถานะจะไม่เปลี่ยนจาก OUT_OF_STOCK ไปเป็น ACTIVE ถ้าสินค้านั้นถูกปิด (SUSPEND)"* ซึ่งบอกว่าสินค้าอยู่ในสถานะ `OUT_OF_STOCK` **และ** ถูก SUSPEND พร้อมกัน
+The existing text said *"the status will not change from OUT_OF_STOCK to ACTIVE if the product is suspended (SUSPEND)"*, which implies the product is in `OUT_OF_STOCK` status **and** SUSPENDed at the same time
 
-แต่ `products.status` เป็น field เดียวที่เก็บได้ค่าเดียว พอ Admin สั่งปิด ค่าจะเป็น `SUSPENDED` ทับ `OUT_OF_STOCK` ไปแล้ว ถ้าปล่อยไว้ Dev 3 อาจ implement เป็น boolean แยก (`isSuspended`) ซึ่งเป็นทางเลือกที่ ADR-0002 ปฏิเสธไปแล้ว **ทำให้ schema ไม่ตรงกับ SRS**
+But `products.status` is a single field that holds a single value; when the Admin suspends it, the value becomes `SUSPENDED`, overwriting `OUT_OF_STOCK`. Left as it was, Dev 3 might implement it as a separate boolean (`isSuspended`), an option ADR-0002 has already rejected, **making the schema disagree with the SRS**
 
-อีกจุดคือ *"เปิด(ACTIVE)"* — ADR-0002 กำหนดว่าเปิดกลับต้องคืนเป็น `ACTIVE` **หรือ** `OUT_OF_STOCK` ตามสต็อก ณ ขณะนั้น ถ้าเขียนแค่ `ACTIVE` แล้ว Admin ปลดตอนสต็อกเหลือ 0 จะได้สินค้า `ACTIVE` ที่ไม่มีของ ขัดกับ PROD-005
+The other point is *"reactivate (ACTIVE)"* — ADR-0002 specifies that reactivation must restore `ACTIVE` **or** `OUT_OF_STOCK` based on the stock at that moment. If it only said `ACTIVE` and the Admin lifted the suspension with 0 stock left, you would get an `ACTIVE` product with nothing to sell, contradicting PROD-005
 
-## เหตุผลของแก้ที่ 2 — PROD-002
+## Rationale for Change 2 — PROD-002
 
-วงเล็บ *"(กันเลี่ยงด้วยการลบแล้วกู้กลับ)"* อ้างถึงฟีเจอร์กู้คืนที่ V1 ไม่มี
+The parenthetical *"(to prevent getting around it by deleting and restoring)"* refers to a restore feature V1 does not have
 
-เหตุผลที่แท้จริงที่ต้องห้าม soft-delete คือ **`SUSPENDED` เก็บอยู่ใน field เดียวกับที่ผู้ขายเขียนได้** การย้ายไป `REMOVED` จึงลบร่องรอยว่าสินค้าเคยถูกระงับทิ้ง ถ้า guard เขียนแบบเช็คสถานะปลายทาง ผู้ขายจะเดินอ้อม `SUSPENDED → REMOVED → ACTIVE` ได้ในสองก้าว เพราะก้าวที่สอง guard ไม่ทำงานแล้ว
+The real reason soft-delete has to be blocked is that **`SUSPENDED` is stored in the same field the seller can write**, so moving to `REMOVED` would erase the trace that the product was ever suspended. If the guard checks the target status, the seller can detour `SUSPENDED → REMOVED → ACTIVE` in two steps, because the guard no longer fires on the second step
 
-และยังขาดข้อความว่า `REMOVED` กู้คืนไม่ได้ ซึ่งเป็นสิ่งที่ทีมเพิ่งตัดสินใจ
+It was also missing the statement that `REMOVED` cannot be restored, which the team had just decided
 
-## ที่ตรวจแล้วว่า **ไม่ต้องแก้**
+## Checked and **no change needed**
 
-| ข้อกำหนด | เหตุผล |
+| Requirement | Reason |
 | --- | --- |
-| PROD-003 ค้นหาและเรียกดู | ระบุไว้แล้วว่า "ค้นหาสินค้าสาธารณะที่สถานะ ACTIVE ได้" → `SUSPENDED` ถูกกรองออกอัตโนมัติ |
-| PROD-004 รายละเอียดสินค้า | เป็นหน้าสาธารณะของสินค้าที่ ACTIVE อยู่แล้ว |
-| PROD-005 การจัดการสต็อก | แก้ในฉบับแก้ไข-5 แล้ว ข้อความถูกต้อง |
-| CART-001 เพิ่มลงตะกร้า | แก้ในฉบับแก้ไข-5 แล้ว ข้อความถูกต้อง |
-| ADM-004 บันทึก Audit | ใช้ `DEACTIVATE_PRODUCT` / `REACTIVATE_PRODUCT` ที่มีอยู่แล้ว ไม่ต้องเพิ่มประเภทการกระทำใหม่ |
-| §2 ตารางสิทธิ์ Administrator | "ปิด/เปิดการขายสินค้าที่ไม่เหมาะสมกลับคืน" ยังถูกต้อง จะเติม "(สถานะ SUSPENDED)" ให้ชัดขึ้นก็ได้ ไม่บังคับ |
-| §6 ความปลอดภัยและคุณภาพ | กฎ "บังคับใช้การตรวจสอบสิทธิ์ที่ฝั่ง server ไม่ใช่แค่ที่ UI" ครอบคลุมอยู่แล้ว |
+| PROD-003 Search and browse | Already says "can search public products with ACTIVE status" → `SUSPENDED` is filtered out automatically |
+| PROD-004 Product detail | Already a public page for ACTIVE products |
+| PROD-005 Stock management | Fixed in revision 5; the text is correct |
+| CART-001 Add to cart | Fixed in revision 5; the text is correct |
+| ADM-004 Audit log | Uses the existing `DEACTIVATE_PRODUCT` / `REACTIVATE_PRODUCT`; no new action type needed |
+| §2 Administrator permissions table | "Suspend/reactivate inappropriate product listings" is still correct; adding "(SUSPENDED status)" for clarity is optional |
+| §6 Security and quality | The rule "enforce permission checks on the server, not just in the UI" already covers it |
 
 ---
 
-# ส่วนที่ 3 — ปัญหาการ export PDF ✅ แก้แล้ว
+# Part 3 — The PDF export problem ✅ fixed
 
-> **สรุป:** v5 export ด้วย `Save As → PDF` จาก Word 365 แล้ว ตัวเลขไม่เพี้ยนอีก และไฟล์เล็กลงจาก 820 KB เหลือ 291 KB
-> หัวข้อนี้เก็บไว้เป็นบันทึกกันพลาดซ้ำตอน export รอบหน้า
+> **Summary:** v5 was exported with `Save As → PDF` from Word 365; the digits are no longer garbled, and the file shrank from 820 KB to 291 KB
+> This section is kept as a record, to avoid repeating the mistake on the next export
 
-ฉบับ v4 (export ด้วย `Microsoft: Print To PDF`) มีปัญหา **ตัวเลขทั้งเอกสารกลายเป็นอักษรละตินตอน copy หรือค้นหา** แม้จะมองเห็นถูกต้องบนหน้าจอ
+The v4 edition (exported with `Microsoft: Print To PDF`) had a problem: **every digit in the document turned into Latin letters when copied or searched**, even though it looked correct on screen
 
-| ในเอกสารควรเป็น | copy ออกมาได้ |
+| What the document should say | What copying produced |
 | --- | --- |
-| `2 รูปแบบการซื้อขาย` | `Ś รูปแบบการซื้อขาย` |
-| `1 บัญชี` | `ř บัญชี` |
-| `รหัส 6 หลัก` | `รหัส Ş หลัก` |
-| `1 ครั้งต่อ 60 วินาที` | `ř ครั้งต่อ ŞŘ วินาที` |
-| `ต่อได้สูงสุด 5 ครั้ง` | `ต่อได้สูงสุด ŝ ครั้ง` |
+| `2 trading modes` | `Ś trading modes` |
+| `1 account` | `ř account` |
+| `6-digit code` | `Ş-digit code` |
+| `1 time per 60 seconds` | `ř time per ŞŘ seconds` |
+| `extended at most 5 times` | `extended at most ŝ times` |
 
-เลข 0–9 ถูก map ไปที่ `Ř ř Ś ś Ŝ ŝ Ş ...` ตามลำดับ เกิดจาก ToUnicode map ของ font ที่ฝังมาใน PDF ผิด
+Digits 0–9 were mapped to `Ř ř Ś ś Ŝ ŝ Ş ...` in order, caused by a wrong ToUnicode map in the font embedded in the PDF
 
-**ผลกระทบ:** Ctrl+F หา "2 นาที" ไม่เจอ, copy ข้อความ requirement ออกมาแล้วตัวเลขเพี้ยน — และตัวเลขพวกนี้คือ requirement จริง (anti-sniping 2 นาที, ต่อเวลาสูงสุด 5 ครั้ง, offer หมดอายุ 15 นาที)
+**Impact:** Ctrl+F for "2 minutes" found nothing, and requirement text copied out had garbled numbers — and those numbers are real requirements (2-minute anti-sniping, at most 5 extensions, offers expiring after 15 minutes)
 
-**วิธีแก้:** ตอน export จาก Word ให้ใช้ `File → Save As → PDF` หรือ `File → Export → Create PDF/XPS` แทน `Print → Microsoft Print to PDF` (ฉบับ v4 ใช้ print-to-PDF ซึ่งมักฝัง font แบบไม่มี ToUnicode ที่ถูกต้อง)
+**Fix:** when exporting from Word, use `File → Save As → PDF` or `File → Export → Create PDF/XPS` instead of `Print → Microsoft Print to PDF` (v4 used print-to-PDF, which often embeds fonts without a correct ToUnicode map)
 
 ---
 
 # Checklist
 
-- [x] แก้ 4 จุดในส่วนที่ 1 ที่ `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
-- [x] export PDF ด้วย Save As ไม่ใช่ Print to PDF — ตัวเลขไม่เพี้ยนแล้ว และไฟล์เล็กลงจาก 820 KB เหลือ 291 KB
-- [x] วาง PDF ใหม่ที่ `docs/requirements/BidNest-Auction and Marketplace-v5.pdf`
-- [x] ลบ `BidNest-Auction and Marketplace-v4.pdf` ออก
-- [x] อัปเดต path ของ SRS ใน `CLAUDE.md` ให้ชี้ไฟล์ใหม่
-- [x] อัปเดต dbdiagram.io ให้ตรงกับ `docs/architecture/erd/bidnest-erd-v1.dbml` (เพิ่ม `SUSPENDED` ใน `product_status`)
-- [ ] แจ้ง Dev 3 ว่า story ADM-005, PROD-002, PROD-005 และ CART-001 ใน Jira มีเงื่อนไขเพิ่ม
-- [ ] แจ้ง Dev 1 / Dev 3 เรื่อง confirm dialog ตอนลบสินค้า (ต้องบอกว่ากู้คืนไม่ได้ + เสนอ INACTIVE)
+- [x] Made the 4 changes from Part 1 in `Auction_Ecommerce_SRS_v1_TH-แก้ไข-5.docx`
+- [x] Exported the PDF with Save As, not Print to PDF — digits are no longer garbled, and the file shrank from 820 KB to 291 KB
+- [x] Put the new PDF at `docs/requirements/BidNest-Auction and Marketplace-v5.pdf`
+- [x] Removed `BidNest-Auction and Marketplace-v4.pdf`
+- [x] Updated the SRS path in `CLAUDE.md` to point at the new file
+- [x] Updated dbdiagram.io to match `docs/architecture/erd/bidnest-erd-v1.dbml` (added `SUSPENDED` to `product_status`)
+- [ ] Tell Dev 3 that the ADM-005, PROD-002, PROD-005 and CART-001 stories in Jira have extra conditions
+- [ ] Tell Dev 1 / Dev 3 about the confirm dialog when deleting a product (must say it cannot be restored + offer INACTIVE)
 
-SRS v6, `schema.prisma`, ERD และ scaffold ใน `apps/api/src/admin/` ตรงกันหมดแล้ว รายละเอียดการตัดสินใจดูที่ [ADR-0001](../architecture/adr/0001-single-admin-role-and-shared-category-set.md) และ [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
+SRS v6, `schema.prisma`, the ERD and the scaffold in `apps/api/src/admin/` all match now. For the decision details see [ADR-0001](../architecture/adr/0001-single-admin-role-and-shared-category-set.md) and [ADR-0002](../architecture/adr/0002-admin-suspended-product-status.md)
 
-## เหลือให้ทีมทำต่อ
+## Left for the team to do
 
-2 ข้อท้ายที่ยังไม่ติ๊กเป็นงานประสานงาน ไม่ใช่งานในโค้ด — ต้องแจ้งใน Jira เอง
+The 2 unticked items at the end are coordination work, not code work — they have to be raised in Jira by hand
 
-**Dev 3** — story ที่มีเงื่อนไขเพิ่มจากเดิม:
+**Dev 3** — stories with conditions added:
 
-| Story | สิ่งที่เพิ่ม |
+| Story | What was added |
 | --- | --- |
-| ADM-005 | ปิด → `SUSPENDED`, เปิดกลับ → `ACTIVE`/`OUT_OF_STOCK` ตามสต็อก, เขียน `admin_actions` ใน transaction เดียวกัน |
-| PROD-002 | สินค้า `SUSPENDED` แก้ไข/เปลี่ยนสถานะ/soft-delete ไม่ได้ — guard เช็คที่สถานะปัจจุบัน ไม่ใช่สถานะปลายทาง |
-| PROD-005 | auto-flip ต้องข้าม `SUSPENDED` ⚠️ พลาดง่ายที่สุด ถ้าลืมคือระบบพังเงียบๆ |
-| CART-001 | เพิ่มลงตะกร้าได้เฉพาะ `ACTIVE` |
+| ADM-005 | Suspend → `SUSPENDED`, reactivate → `ACTIVE`/`OUT_OF_STOCK` based on stock, write `admin_actions` in the same transaction |
+| PROD-002 | A `SUSPENDED` product can't be edited/have its status changed/be soft-deleted — the guard checks the current status, not the target status |
+| PROD-005 | auto-flip must skip `SUSPENDED` ⚠️ the easiest to get wrong; forgetting it breaks the system silently |
+| CART-001 | Only `ACTIVE` items can be added to the cart |
 
-**Dev 1 / Dev 3** — confirm dialog ตอนลบสินค้าต้องบอกว่า "ลบแล้วกู้คืนไม่ได้" และเสนอ `INACTIVE` เป็นทางเลือก ปุ่ม "ปิดการขาย" ควรเด่นกว่าปุ่ม "ลบ"
+**Dev 1 / Dev 3** — the confirm dialog when deleting a product must say "Deleted listings cannot be restored" and offer `INACTIVE` as the alternative; the "Pause listing" button should be more prominent than "Delete"

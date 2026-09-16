@@ -1,285 +1,285 @@
-# SRS Change Request — รอบตามโค้ดให้ทัน (v6 → v7)
+# SRS Change Request — catching the SRS up with the code (v6 → v7)
 
-- **สถานะ:** ✅ **ปิดแล้ว** — โค้ดอยู่ใน `dev` แล้ว และ SRS แก้ครบทั้ง 8 จุดใน `BidNest-Auction and Marketplace-v7.pdf` เรียบร้อย
-- **สร้างเมื่อ:** 2026-08-29 · **ปิดเมื่อ:** 2026-08-29
-- **ทีมเห็นชอบ:** 2026-08-29 — ตกลงรับทั้ง 8 จุดตามที่เสนอ และตัดสินสามข้อที่ค้างไว้ครบแล้ว ดูหัวข้อ "ข้อที่ตกลงกันแล้ว" ท้ายเอกสาร
-- **ผู้เสนอ:** Dev 4 (Auction & Real-time) — รวบรวมแทนทั้งทีม เพราะจุดที่ค้างมาจากหลาย module
-- **SRS ฉบับปัจจุบัน:** `BidNest-Auction and Marketplace-v7.pdf` (ฉบับก่อนหน้า v6 ถูกลบออกแล้ว)
-- **ข้อกำหนดที่กระทบ:** CHAT-004 (ข้อใหม่), AUTH-007, WAT-001/002, CART-004, CART-005, AI-001, §5.1, §5.2
+- **Status:** ✅ **Closed** — the code is in `dev`, and all 8 SRS changes are done in `BidNest-Auction and Marketplace-v7.pdf`
+- **Created:** 2026-08-29 · **Closed:** 2026-08-29
+- **Team approval:** 2026-08-29 — accepted all 8 changes as proposed and settled all three open questions; see the "Agreed decisions" section at the end of the document
+- **Proposed by:** Dev 4 (Auction & Real-time) — compiled on behalf of the whole team, since the backlog came from several modules
+- **Current SRS:** `BidNest-Auction and Marketplace-v7.pdf` (the previous v6 has been removed)
+- **Affected requirements:** CHAT-004 (new), AUTH-007, WAT-001/002, CART-004, CART-005, AI-001, §5.1, §5.2
 
-> เอกสารนี้เก็บไว้เป็นบันทึกว่าแก้อะไรไปบ้างและทำไม ไม่ต้องทำอะไรต่อแล้ว รูปแบบเดียวกับ [srs-change-request-adm-005.md](./srs-change-request-adm-005.md) และ [srs-change-request-cart-003.md](./srs-change-request-cart-003.md)
-> ต่างกันที่สองฉบับก่อนตั้งชื่อตาม requirement เดียว ส่วนฉบับนี้เป็น **รอบเก็บตกรวม** ของทุกอย่างที่เกิดขึ้นหลัง v6 จึงตั้งชื่อตามเวอร์ชันแทน
-> ข้อความในโค้ดบล็อกคือข้อความที่ถูกนำไปใส่ใน SRS v7 จริง **เหตุผลของแต่ละจุดอยู่ในหัวข้อ "เหตุผลประกอบ" ท้ายเอกสาร**
+> This document is kept as a record of what was changed and why; nothing further needs doing. Same format as [srs-change-request-adm-005.md](./srs-change-request-adm-005.md) and [srs-change-request-cart-003.md](./srs-change-request-cart-003.md)
+> The difference is that the two earlier ones were named after a single requirement, while this one is a **catch-all round** for everything that happened after v6, so it is named after the version instead
+> The text in the code blocks is what actually went into SRS v7 (the SRS is written in Thai; the blocks here are English translations). **The reasoning for each change is in the "Supporting rationale" section at the end of the document**
 
 ---
 
-# ส่วนที่ 1 — ที่มา
+# Part 1 — Background
 
-v6 export เมื่อ 25 ส.ค. หลังจากนั้นทีมยังเขียนโค้ดต่ออีก 4 วัน และมี **migration ใหม่ 5 ตัว** ที่เอกสารยังไม่รู้จัก
+v6 was exported on Aug 25. After that the team kept coding for another 4 days, adding **5 new migrations** the document did not know about
 
-| migration | มาจากงานอะไร |
+| migration | From which work |
 | --- | --- |
-| `20260824061652_add_product_watchlists` | ติดตามสินค้าในร้าน (ต่อยอด WAT-001/002) |
-| `20260824132605_add_trusted_devices` | จำ browser ที่ยืนยันรหัสแล้ว (AUTH-007) |
-| `20260825130238_add_auction_chat_and_seller_auto_reply` | แชทฝั่งประมูล + auto-reply ผู้ขาย (CHAT-004) |
-| `20260826091306_add_support_escalation` | ส่งต่อบทสนทนา AI ให้ Admin (AI-001) |
-| `20260827093921_order_item_for_auction` | ผู้ชนะประมูลจ่ายเงิน (CART-004/005) |
+| `20260824061652_add_product_watchlists` | Watching shop products (extending WAT-001/002) |
+| `20260824132605_add_trusted_devices` | Remembering browsers that have verified the code (AUTH-007) |
+| `20260825130238_add_auction_chat_and_seller_auto_reply` | Auction-side chat + seller auto-reply (CHAT-004) |
+| `20260826091306_add_support_escalation` | Handing AI conversations over to an Admin (AI-001) |
+| `20260827093921_order_item_for_auction` | Auction winners paying (CART-004/005) |
 
-จุดที่หนักที่สุดคือ **CHAT-004 ไม่มีอยู่ใน SRS เลย** — §4.4b มีแค่ CHAT-001/002/003 กับ NOT-008 แต่โค้ดมีทั้ง endpoint, ตาราง, หน้าจอ และ commit ที่อ้าง ID นี้ 4 ครั้ง เท่ากับตอนนี้มี requirement ที่ implement เสร็จแล้วแต่ไม่มีใครเขียนเกณฑ์การยอมรับไว้ให้ตรวจ
+The biggest gap was that **CHAT-004 didn't exist in the SRS at all** — §4.4b only had CHAT-001/002/003 and NOT-008, yet the code had the endpoint, the tables, the screens and 4 commits citing this ID. That meant a fully implemented requirement with no acceptance criteria written down for anyone to check against
 
-รอบนี้จึงทำทีเดียวให้จบทั้งหมด แทนที่จะทยอยแก้ทีละข้อแล้ว export PDF ใหม่ห้ารอบ
-
----
-
-# ส่วนที่ 2 — ข้อความสำเร็จรูปสำหรับ copy วาง
-
-มี 8 จุด เรียงตามลำดับหน้าใน SRS **จุดที่ 3 คือการเพิ่มข้อใหม่ ที่เหลือเป็นการเติมต่อท้ายของเดิม ไม่มีจุดไหนต้องลบข้อความเดิมทิ้ง**
-
-## แก้ที่ 1 — AUTH-007 (บังคับ)
-
-**ตำแหน่ง:** หน้า 3 · หัวข้อ `4.1 การยืนยันตัวตน` · ตารางแถว **AUTH-007** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** เติมข้อความนี้ต่อท้ายข้อความเดิม (ไม่ต้องลบของเดิม)
-
-```
-นอกจากนี้ ระบบจำ browser ที่เคยตอบรหัสถูกต้องแล้วได้ ถ้าผู้ใช้เลือก "จำอุปกรณ์นี้" ตอนกรอกรหัส การ login ครั้งถัดไปของบัญชีเดิมจาก browser เดิมจะผ่านโดยไม่ต้องขอรหัสอีก จนกว่าจะครบอายุที่ตั้งไว้ (ค่าเริ่มต้น 30 วัน กำหนดด้วย TRUSTED_DEVICE_TTL_DAYS) รหัสยังคงบังคับเสมอสำหรับการ login ครั้งแรกจาก browser ใหม่ ระบบเก็บเฉพาะค่า hash ของ token ประจำอุปกรณ์ ไม่เก็บตัว token และ token ที่เป็นของบัญชีอื่นต้องใช้เปิดบัญชีนี้ไม่ได้ อุปกรณ์ที่จำไว้ทั้งหมดต้องถูกยกเลิกเมื่อผู้ใช้รีเซ็ตรหัสผ่าน (AUTH-005) การจำอุปกรณ์แทนได้เฉพาะปัจจัยที่สองเท่านั้น ไม่แทนรหัสผ่าน ทุกครั้งที่ login ยังต้องตรวจรหัสผ่านตามปกติก่อนเสมอ อีกทางหนึ่ง ผู้ใช้สิทธิ์ ADMIN login ด้วยรหัสผ่านอย่างเดียวโดยไม่ต้องใช้รหัสจากอีเมลได้ เมื่อ environment นั้นเปิดสวิตช์ ADMIN_SKIP_2FA ไว้ ค่าเริ่มต้นของสวิตช์นี้คือปิด และมีไว้เพื่อความสะดวกของเครื่อง developer เป็นหลัก ผู้ใช้ทั่วไปไม่ได้รับการยกเว้นนี้ไม่ว่ากรณีใด และทุกครั้งที่ admin เข้าโดยไม่ใช้รหัสต้องบันทึกลง log
-```
-
-## แก้ที่ 2 — WAT-001/002 (บังคับ)
-
-**ตำแหน่ง:** หน้า 5 · หัวข้อ `4.3 การประมูล, Watchlist, การแจ้งเตือน และ Live Arena` · ตารางแถว **WAT-001/002 Watchlist** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** เติมข้อความนี้ต่อท้ายข้อความเดิม
-
-```
-นอกจากรายการประมูลแล้ว ผู้ใช้กดติดตามสินค้าในร้าน (product) ได้ด้วยกลไกเดียวกัน โดยเก็บแยกตารางของตัวเองและใช้ composite key user_id + product_id เช่นเดียวกัน กดติดตามซ้ำต้องไม่เกิดรายการซ้ำและไม่ถือเป็นข้อผิดพลาด โดยยังคงวันที่ติดตามครั้งแรกไว้เพื่อไม่ให้ลำดับในรายการสลับไปมา ยกเลิกติดตามสิ่งที่ไม่ได้ติดตามอยู่ก็ไม่ถือเป็นข้อผิดพลาดเช่นกัน ติดตามได้เฉพาะสินค้าที่เผยแพร่อยู่เท่านั้น คือสถานะชุดเดียวกับที่ผู้ซื้อทั่วไปมองเห็นในหน้าค้นหา และหน้ารายการที่ติดตามแสดงทั้งรายการประมูลและสินค้า โดยแบ่งหน้าแบบเดียวกับหน้าค้นหา
-```
-
-## แก้ที่ 3 — CHAT-004 (บังคับ · เป็นข้อใหม่)
-
-**ตำแหน่ง:** หน้า 6 · หัวข้อ `4.4b การสนทนาระหว่างผู้ซื้อ-ผู้ขาย (Buyer-Seller Chat)` · **เพิ่มแถวใหม่ต่อจากแถว CHAT-003 ซึ่งเป็นแถวสุดท้ายของตารางนี้**
-
-**วิธีแก้:** เพิ่ม 1 แถว โดยกรอกทั้งสองช่องตามนี้
-
-**ช่อง ID / ชื่อ requirement**
-
-```
-CHAT-004 แชทฝั่งประมูล และข้อความตอบกลับอัตโนมัติของผู้ขาย
-```
-
-**ช่อง เกณฑ์การยอมรับ**
-
-```
-ผู้ซื้อกดปุ่มสอบถามผู้ขายจากหน้ารายละเอียดประมูล เพื่อเปิดห้องสนทนากับผู้ขายของรายการนั้นได้ เช่นเดียวกับที่ CHAT-001 ให้ทำกับสินค้าในร้าน ห้องสนทนา 1 ห้องผูกกับสินค้าอย่างเดียวหรือประมูลอย่างเดียวเสมอ ไม่ผูกทั้งสองอย่างพร้อมกัน และการเปิดซ้ำกับคู่สนทนาเดิมของประมูลเดิมต้องกลับไปที่ห้องเดิมทุกครั้ง โดยบังคับด้วย unique auction_id + buyer_id + seller_id เปิดห้องได้เฉพาะประมูลที่เผยแพร่แล้วในสถานะที่ผู้ซื้อทั่วไปมองเห็น ผู้ขายเปิดห้องคุยกับรายการของตัวเองไม่ได้ การส่งข้อความ การแจ้งเตือน New Message (NOT-008) และการจำกัดสิทธิ์ให้เห็นเฉพาะคู่สนทนาสองคน ใช้กติกาเดียวกับ CHAT-002 ทุกประการ นอกจากนี้ ผู้ขายตั้งข้อความตอบกลับอัตโนมัติของร้านไว้ล่วงหน้าได้ 1 ข้อความ ยาวไม่เกิน 500 ตัวอักษร เมื่อคำสั่งซื้อของผู้ซื้อรายใดชำระเงินสำเร็จเป็นสถานะ PAID ระบบจะส่งข้อความนั้นเข้าห้องสนทนาของสินค้าในคำสั่งซื้อนั้นให้อัตโนมัติในนามผู้ขาย 1 ครั้งต่อ 1 คำสั่งซื้อ เพราะคำสั่งซื้อ 1 ใบเป็นของผู้ขายรายเดียวอยู่แล้วตาม CART-003 ถ้าผู้ขายไม่ได้ตั้งข้อความไว้ หรือลบข้อความทิ้งโดยบันทึกเป็นค่าว่าง จะไม่มีการส่งข้อความใดๆ และไม่ถือเป็นข้อผิดพลาด การส่งข้อความอัตโนมัติที่ล้มเหลวต้องไม่ทำให้การชำระเงินที่สำเร็จไปแล้วล้มเหลวตาม และต้องไม่แสดงข้อผิดพลาดใดๆ ให้ผู้ซื้อเห็น ส่วนคำสั่งซื้อที่มาจากการชนะประมูลตาม CART-004 จะไม่ส่งข้อความอัตโนมัติ เพราะข้อความนี้ผูกกับห้องสนทนาของสินค้า และผู้ชนะประมูลมีห้องสนทนากับผู้ขายอยู่แล้วจากตอนประมูล
-```
-
-## แก้ที่ 4 — CART-004 (บังคับ)
-
-**ตำแหน่ง:** หน้า 7 · หัวข้อ `4.5 ตะกร้าสินค้าและการชำระเงิน (จำลอง)` · ตารางแถว **CART-004 การชำระเงินแบบจำลอง** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** เติมข้อความนี้ต่อท้ายข้อความเดิม
-
-```
-นอกจากการชำระเงินจากตะกร้าแล้ว ผู้ชนะประมูลชำระค่ารายการที่ชนะผ่านหน้าชำระเงินเดียวกันนี้ได้ โดยส่ง auction_id มาแทน cart_item_ids และส่งทั้งสองอย่างพร้อมกันไม่ได้ เพราะเป็นการระบุสองสิ่งที่ต่างกันว่ากำลังจะซื้ออะไร ราคาที่เรียกเก็บมาจาก sold_price ของประมูลนั้นเท่านั้น ไม่รับตัวเลขราคาจากฝั่ง client เช่นเดียวกับที่ราคาสินค้าในตะกร้าไม่รับจาก client และผู้ที่ชำระได้ต้องเป็น winner_user_id ของประมูลนั้นเท่านั้น ประมูลที่ยังไม่จบ หรือจบแบบไม่ได้ขาย คือสถานะไม่ใช่ SOLD ชำระไม่ได้ ระบบต้องตอบข้อความปฏิเสธเหมือนกันทั้งกรณีที่ไม่มีประมูลนั้นอยู่จริงและกรณีที่ประมูลนั้นไม่ใช่ของผู้ขอ เพื่อไม่ให้ผู้ที่ถือ id อยู่เดาได้ว่ารายการนั้นมีอยู่จริงหรือขายไปแล้วหรือไม่ ประมูล 1 รายการต้องชำระเงินได้ครั้งเดียวตลอดไป บังคับด้วย unique index บน order_items.auction_id เพื่อกันการจ่ายซ้ำจากการเปิดลิงก์ชำระเงินซ้ำหรือการกดพร้อมกันสองครั้ง กรณีที่ระบบตรวจพบว่ามีการชำระไปแล้วต้องปฏิเสธก่อนเรียกเก็บเงิน และหากสองคำขอชนกันพอดีจนหลุดไปถึงชั้นฐานข้อมูล ต้องตอบเป็นความขัดแย้งพร้อม checkout_session_id ให้ไปตรวจสอบย้อนหลังได้ ไม่ใช่ข้อผิดพลาดทั่วไป ขั้นตอนที่เหลือทั้งหมดหลังจากนั้น ทั้งการเรียก MockPaymentProvider การบันทึก payment_transactions การสร้าง Order สถานะ PAID การ snapshot ที่อยู่ลง order_addresses การสร้าง Shipment และการแจ้งเตือน ใช้เส้นทางเดียวกับการชำระจากตะกร้าทุกประการ และอยู่ภายใต้ checkout_session_id ชุดเดียวกัน
-```
-
-## แก้ที่ 5 — CART-005 (บังคับ)
-
-**ตำแหน่ง:** หน้า 7 · ตารางแถว **CART-005** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** เติมข้อความนี้ต่อท้ายข้อความเดิม
-
-```
-คำสั่งซื้อที่มาจากการชนะประมูลตาม CART-004 ต้องแสดงชื่อรายการประมูลที่ชนะและราคาปิดที่ต้องชำระ ทั้งบนหน้าสรุปก่อนจ่ายและบนใบเสร็จหลังจ่าย เพื่อให้ผู้ซื้อเห็นชัดว่ากำลังจ่ายค่าอะไร ไม่ใช่แสดงเป็นรายการสินค้าที่ว่างเปล่าเพราะบรรทัดนั้นไม่มี product_id
-```
-
-## แก้ที่ 6 — AI-001 (บังคับ)
-
-**ตำแหน่ง:** หน้า 8 · หัวข้อ `4.7 AI Features: Customer Service Chatbot, Price Estimator และ Negotiator` · ตารางแถว **AI-001** · ช่อง **เกณฑ์การยอมรับ**
-
-**วิธีแก้:** เติมข้อความนี้ต่อท้ายข้อความเดิม
-
-```
-เมื่อ AI ตอบไม่ได้ติดต่อกันครบ 3 ครั้ง หรือผู้ใช้พิมพ์ขอคุยกับเจ้าหน้าที่โดยตรง เช่น "คุยกับแอดมิน" หรือ "ติดต่อเจ้าหน้าที่" ระบบจะเสนอปุ่มสำหรับส่งต่อให้ Admin โดยไม่ต้องรอให้ AI ตอบพลาดครบสามครั้งก่อน กดแล้วบทสนทนานั้นเปลี่ยนสถานะเป็น ESCALATED และเข้าคิวรอ Admin สถานะของบทสนทนามี 3 ค่า คือ AI_ONLY เป็นค่าเริ่มต้น, ESCALATED และ RESOLVED ระบบต้องตรวจเงื่อนไขการส่งต่อซ้ำที่ฝั่ง server ไม่เชื่อค่าที่ client ส่งมา และการกดซ้ำหรือกดตอนที่ส่งต่อไปแล้วต้องไม่สร้างคิวซ้ำ เมื่อบทสนทนาอยู่ในสถานะ ESCALATED ระบบจะไม่เรียก AI อีก ข้อความของผู้ใช้จะถูกส่งถึง Admin โดยตรง ฝั่ง Admin เห็นคิวบทสนทนาที่รออยู่ กดรับผิดชอบบทสนทนาโดยบันทึกไว้ที่ assigned_admin_id ตอบกลับ และกดปิดเป็น RESOLVED ได้ ถ้าผู้ใช้พิมพ์เข้ามาอีกหลังปิดไปแล้ว บทสนทนาต้องกลับมาเป็น ESCALATED อีกครั้งโดยอัตโนมัติ ทั้งสองฝั่งเห็นข้อความใหม่แบบ realtime และบทสนทนาถูกบันทึกลงฐานข้อมูล ผู้ใช้จึงกลับมาอ่านย้อนหลังได้แม้ปิดหน้าต่างไปแล้ว
-```
-
-## แก้ที่ 7 — §5.1 ตารางสรุป Entity (บังคับ)
-
-**ตำแหน่ง:** หน้า 9-10 · หัวข้อ `5.1 แบบจำลองข้อมูล` · ตาราง Entity หลักใน V1
-
-**วิธีแก้:** มี 5 จุดย่อย ทุกจุดเป็นการ **เติมต่อท้ายรายการเดิมในช่องนั้น** ไม่ต้องลบของเดิม
-
-**7.1 แถว Identity** — เติมต่อท้าย หลังคำว่า `password_reset_tokens`
-
-```
-, trusted_devices (เก็บ hash ของ token ประจำ browser, วันหมดอายุ, เวลาที่ใช้ล่าสุด และเวลาที่ถูกยกเลิก — AUTH-007)
-```
-
-**7.2 แถว E-commerce** — เติมต่อท้าย หลังคำว่า `shipment_events`
-
-```
-; order_items มี product_id และ auction_id เป็น nullable ทั้งคู่ โดย 1 บรรทัดผูกกับอย่างใดอย่างหนึ่งเสมอ และมี unique index บน auction_id เพื่อให้ประมูล 1 รายการถูกจ่ายได้ครั้งเดียว (CART-004); conversations มี product_id และ auction_id เป็น nullable ทั้งคู่ในรูปแบบเดียวกัน พร้อม unique อีกชุดคือ auction_id+buyer_id+seller_id (CHAT-004); users มีคอลัมน์ auto_reply_message สำหรับข้อความตอบกลับอัตโนมัติของผู้ขาย (CHAT-004)
-```
-
-**7.3 แถว Engagement** — เติมต่อท้าย หลังคำว่า `watchlists`
-
-```
-, product_watchlists (composite key user_id+product_id แบบเดียวกับ watchlists แต่แยกตาราง เพราะสินค้ากับประมูลอยู่คนละตาราง)
-```
-
-**7.4 แถว Engagement ต่อ** — เติมต่อท้าย ที่ท้ายคำอธิบายของ `support_chat_sessions/support_chat_messages`
-
-```
-โดย support_chat_sessions มี status เป็น AI_ONLY/ESCALATED/RESOLVED และ assigned_admin_id ชี้ไปที่ผู้ใช้สิทธิ์ ADMIN ที่รับผิดชอบบทสนทนานั้น ส่วน role ของข้อความเพิ่มค่า ADMIN นอกเหนือจาก USER/ASSISTANT (AI-001)
-```
-
-**7.5 แถวข้อกำหนดความถูกต้อง (Integrity)** — เติมต่อท้าย หลังประโยคที่พูดถึง unique ของห้องสนทนาที่ `(product_id, buyer_id, seller_id)`
-
-```
-สำหรับห้องสนทนาฝั่งประมูลใช้ unique อีกชุดคือ (auction_id, buyer_id, seller_id) แยกจากกัน; การชำระเงินของผู้ชนะประมูลกันการจ่ายซ้ำด้วย unique บน order_items.auction_id ซึ่ง Postgres ถือว่าค่า NULL ต่างกันเสมอ ข้อจำกัดนี้จึงมีผลเฉพาะบรรทัดที่เป็นประมูล ไม่กระทบบรรทัดสินค้าปกติ
-```
-
-## แก้ที่ 8 — §5.2 REST และ Event (บังคับ)
-
-**ตำแหน่ง:** หน้า 10 · หัวข้อ `5.2 REST และ WebSocket`
-
-**วิธีแก้:** มี 2 จุดย่อย ทั้งคู่เติมต่อท้าย
-
-**8.1 รายการ REST endpoint** — เติมต่อท้าย หลัง `/admin`
-
-```
-, /auctions/:id/conversations (เปิดห้องสนทนาฝั่งประมูล — CHAT-004), /users/me/auto-reply (ข้อความตอบกลับอัตโนมัติของผู้ขาย — CHAT-004), /products/:id/watchlist และ /watchlist/products (ติดตามสินค้าในร้าน — WAT-001/002), /support/chat/:sessionId/escalate และ /admin/support/sessions (ส่งต่อบทสนทนาให้ Admin — AI-001)
-```
-
-**8.2 รายการ Event** — เติมต่อท้าย หลัง `notification:created`
-
-```
-, support:message และ support:inbox_updated (ข้อความและคิวบทสนทนาฝั่ง Admin — AI-001)
-```
+So this round did everything in one go, instead of fixing items one at a time and exporting a new PDF five times
 
 ---
 
-# ส่วนที่ 3 — สิ่งที่ implement ไปแล้ว
+# Part 2 — Ready-to-paste text
 
-โค้ดทุกจุดอยู่ใน `dev` แล้ว เอกสารนี้เป็นการเขียนเกณฑ์ตามหลัง ไม่ใช่การเสนอของใหม่
+There are 8 changes, in SRS page order. **Change 3 adds a new requirement; the rest append to existing text. None of them delete existing text**
+
+## Change 1 — AUTH-007 (required)
+
+**Location:** page 3 · section `4.1 Authentication` · table row **AUTH-007** · **Acceptance criteria** cell
+
+**How:** append this text to the end of the existing text (don't delete the existing text)
+
+```
+In addition, the system can remember a browser that has already answered the code correctly. If the user chooses "Remember this device" when entering the code, later logins to the same account from the same browser succeed without asking for the code again until the configured lifetime runs out (30 days by default, set with TRUSTED_DEVICE_TTL_DAYS). The code is still always required for the first login from a new browser. The system stores only the hash of the device token, never the token itself, and a token belonging to another account must not open this account. All remembered devices must be revoked when the user resets their password (AUTH-005). Remembering a device replaces only the second factor, never the password; every login still checks the password first as usual. Separately, a user with the ADMIN role can log in with the password alone, without the emailed code, when that environment has the ADMIN_SKIP_2FA switch turned on. The switch is off by default and exists mainly for the convenience of developer machines; regular users never get this exemption under any circumstances, and every admin login that skips the code must be logged
+```
+
+## Change 2 — WAT-001/002 (required)
+
+**Location:** page 5 · section `4.3 Auctions, Watchlist, Notifications and Live Arena` · table row **WAT-001/002 Watchlist** · **Acceptance criteria** cell
+
+**How:** append this text to the end of the existing text
+
+```
+Besides auctions, users can also watch shop products using the same mechanism, stored in a separate table of its own and likewise using the composite key user_id + product_id. Watching again must not create a duplicate and is not an error, keeping the original watch date so the order of the list does not shuffle; unwatching something that is not being watched is not an error either. Only published products can be watched, i.e. the same set of statuses regular buyers can see on the search page, and the watched list shows both auctions and products, paginated the same way as the search page
+```
+
+## Change 3 — CHAT-004 (required · a new requirement)
+
+**Location:** page 6 · section `4.4b Buyer-Seller Chat` · **add a new row after the CHAT-003 row, which is the last row of this table**
+
+**How:** add 1 row, filling in both cells as follows
+
+**ID / requirement name cell**
+
+```
+CHAT-004 Auction-side chat and seller auto-reply messages
+```
+
+**Acceptance criteria cell**
+
+```
+A buyer can press the ask-the-seller button on an auction detail page to open a conversation with that listing's seller, just as CHAT-001 allows for shop products. A conversation is always tied to either a product or an auction, never both at once, and reopening with the same participants for the same auction must always return to the same conversation, enforced by unique auction_id + buyer_id + seller_id. A conversation can only be opened for published auctions in statuses regular buyers can see, and a seller cannot open a conversation about their own listing. Sending messages, the New Message notification (NOT-008) and restricting visibility to the two participants follow exactly the same rules as CHAT-002. In addition, a seller can set 1 shop auto-reply message in advance, at most 500 characters. When a buyer's order is paid successfully and becomes PAID, the system automatically sends that message into the conversation for the product in that order on the seller's behalf, once per order, since each order already belongs to a single seller per CART-003. If the seller has not set a message, or deleted it by saving an empty value, nothing is sent and it is not an error. A failed auto-reply must not cause an already successful payment to fail, and must not show any error to the buyer. Orders that come from winning an auction under CART-004 do not send the auto-reply, because the message is tied to the product's conversation, and the auction winner already has a conversation with the seller from the auction
+```
+
+## Change 4 — CART-004 (required)
+
+**Location:** page 7 · section `4.5 Cart and payment (simulated)` · table row **CART-004 Simulated payment** · **Acceptance criteria** cell
+
+**How:** append this text to the end of the existing text
+
+```
+Besides paying from the cart, an auction winner can pay for the item they won through the same checkout page, by sending auction_id instead of cart_item_ids; both cannot be sent together, because they specify two different things being bought. The amount charged comes only from that auction's sold_price, never a price number from the client, just as cart prices are never taken from the client, and only that auction's winner_user_id may pay. An auction that has not ended, or ended without selling (status is not SOLD), cannot be paid for. The system must return the same rejection message both when the auction does not exist and when the auction does not belong to the requester, so someone holding an id cannot guess whether the listing exists or has sold. An auction can only ever be paid for once, enforced by a unique index on order_items.auction_id, to prevent double payment from reopening the payment link or clicking twice at the same time. When the system detects it has already been paid, it must reject before charging; and if two requests collide exactly and slip through to the database layer, it must respond with a conflict that includes the checkout_session_id for later investigation, not a generic error. Every remaining step after that — calling MockPaymentProvider, recording payment_transactions, creating the PAID Order, snapshotting the address into order_addresses, creating the Shipment and sending notifications — follows exactly the same path as paying from the cart, under the same checkout_session_id
+```
+
+## Change 5 — CART-005 (required)
+
+**Location:** page 7 · table row **CART-005** · **Acceptance criteria** cell
+
+**How:** append this text to the end of the existing text
+
+```
+Orders that come from winning an auction under CART-004 must show the name of the won auction and the closing price to be paid, both on the summary page before paying and on the receipt afterwards, so the buyer clearly sees what they are paying for, rather than an empty product line because that line has no product_id
+```
+
+## Change 6 — AI-001 (required)
+
+**Location:** page 8 · section `4.7 AI Features: Customer Service Chatbot, Price Estimator and Negotiator` · table row **AI-001** · **Acceptance criteria** cell
+
+**How:** append this text to the end of the existing text
+
+```
+When the AI fails to answer 3 times in a row, or the user types a direct request to talk to staff such as "talk to admin" or "contact staff", the system offers a button to hand over to an Admin, without waiting for the AI to miss three times first. Pressing it changes the conversation status to ESCALATED and queues it for an Admin. A conversation has 3 statuses: AI_ONLY (the default), ESCALATED and RESOLVED. The system must re-check the handover conditions on the server rather than trusting values sent by the client, and pressing again, or pressing after it has already been handed over, must not create a duplicate queue entry. While a conversation is ESCALATED, the system no longer calls the AI; the user's messages go straight to the Admin. On the Admin side, admins see the queue of waiting conversations, take ownership of a conversation (recorded in assigned_admin_id), reply, and close it as RESOLVED. If the user writes again after it was closed, the conversation must automatically go back to ESCALATED. Both sides see new messages in real time, and conversations are saved to the database, so users can come back and read them even after closing the window
+```
+
+## Change 7 — §5.1 Entity summary table (required)
+
+**Location:** pages 9-10 · section `5.1 Data model` · the V1 core entity table
+
+**How:** there are 5 sub-changes, all of them **appending to the end of the existing list in that cell** — don't delete the existing text
+
+**7.1 Identity row** — append after the word `password_reset_tokens`
+
+```
+, trusted_devices (stores the hash of the per-browser token, expiry date, last-used time and revocation time — AUTH-007)
+```
+
+**7.2 E-commerce row** — append after the word `shipment_events`
+
+```
+; order_items has both product_id and auction_id as nullable, with each line always tied to exactly one of them, and a unique index on auction_id so an auction can only be paid for once (CART-004); conversations has both product_id and auction_id as nullable in the same pattern, with a second unique set, auction_id+buyer_id+seller_id (CHAT-004); users has an auto_reply_message column for the seller's auto-reply message (CHAT-004)
+```
+
+**7.3 Engagement row** — append after the word `watchlists`
+
+```
+, product_watchlists (composite key user_id+product_id, same as watchlists but in a separate table, because products and auctions live in separate tables)
+```
+
+**7.4 Engagement row, continued** — append at the end of the description of `support_chat_sessions/support_chat_messages`
+
+```
+where support_chat_sessions has a status of AI_ONLY/ESCALATED/RESOLVED and assigned_admin_id points to the ADMIN user responsible for that conversation, and message roles gain an ADMIN value besides USER/ASSISTANT (AI-001)
+```
+
+**7.5 Integrity requirements row** — append after the sentence about the uniqueness of conversations on `(product_id, buyer_id, seller_id)`
+
+```
+auction-side conversations use a separate second unique set, (auction_id, buyer_id, seller_id); auction winner payments prevent double payment with a unique index on order_items.auction_id, and since Postgres always treats NULL values as distinct, this constraint only applies to auction lines and does not affect regular product lines
+```
+
+## Change 8 — §5.2 REST and Events (required)
+
+**Location:** page 10 · section `5.2 REST and WebSocket`
+
+**How:** there are 2 sub-changes, both appended
+
+**8.1 REST endpoint list** — append after `/admin`
+
+```
+, /auctions/:id/conversations (open an auction-side conversation — CHAT-004), /users/me/auto-reply (seller auto-reply message — CHAT-004), /products/:id/watchlist and /watchlist/products (watching shop products — WAT-001/002), /support/chat/:sessionId/escalate and /admin/support/sessions (handing conversations over to an Admin — AI-001)
+```
+
+**8.2 Event list** — append after `notification:created`
+
+```
+, support:message and support:inbox_updated (messages and the conversation queue on the Admin side — AI-001)
+```
+
+---
+
+# Part 3 — What has been implemented
+
+All of the code is already in `dev`; this document writes the criteria after the fact, it does not propose anything new
 
 ## CHAT-004
 
-| จุด | สิ่งที่ทำ |
+| Where | What was done |
 | --- | --- |
 | `apps/api/src/chat/chat.service.ts` | `openAuctionConversation`, `getAutoReplyMessage`, `setAutoReplyMessage`, `sendPurchaseAutoReply` |
 | `apps/api/src/chat/auction-conversation.controller.ts` | `POST /auctions/:id/conversations` |
-| `apps/api/src/chat/auto-reply.controller.ts` | `GET` และ `PATCH /users/me/auto-reply` |
-| `apps/api/src/order/checkout.service.ts` | เรียก `sendPurchaseAutoReply` หลัง commit และข้ามให้เมื่อบรรทัดนั้นไม่มี `productId` |
-| `apps/web/src/components/auction/negotiate-button.tsx` | ปุ่มสอบถามผู้ขายฝั่งประมูล |
-| `apps/web/src/components/chat/auto-reply-settings.tsx` · `apps/web/src/app/sell/settings/page.tsx` | หน้าตั้งข้อความตอบกลับอัตโนมัติ |
-| migration `20260825130238` | `conversations.auction_id`, `product_id` เป็น nullable, `users.auto_reply_message` |
+| `apps/api/src/chat/auto-reply.controller.ts` | `GET` and `PATCH /users/me/auto-reply` |
+| `apps/api/src/order/checkout.service.ts` | Calls `sendPurchaseAutoReply` after commit, skipping lines that have no `productId` |
+| `apps/web/src/components/auction/negotiate-button.tsx` | The auction-side ask-the-seller button |
+| `apps/web/src/components/chat/auto-reply-settings.tsx` · `apps/web/src/app/sell/settings/page.tsx` | The auto-reply settings page |
+| migration `20260825130238` | `conversations.auction_id`, `product_id` made nullable, `users.auto_reply_message` |
 
 ## AUTH-007
 
-| จุด | สิ่งที่ทำ |
+| Where | What was done |
 | --- | --- |
-| `apps/api/src/auth/trusted-device.service.ts` | `isTrusted` / `remember` / `revoke` / `revokeAll` เก็บเฉพาะ SHA-256 ของ token |
-| `apps/api/src/auth/auth.service.ts` | ทางแยกใน `login` (admin skip → trusted device → ส่ง OTP) และการจำอุปกรณ์ใน `verifyTwoFactor` หลังตอบรหัสถูก |
-| `apps/api/src/config/env.validation.ts` | `ADMIN_SKIP_2FA` ค่าเริ่มต้น false และ `TRUSTED_DEVICE_TTL_DAYS` |
-| `apps/web/src/lib/auth/device-cookie.ts` | เก็บ token ฝั่ง browser |
-| migration `20260824132605` | ตาราง `trusted_devices` |
+| `apps/api/src/auth/trusted-device.service.ts` | `isTrusted` / `remember` / `revoke` / `revokeAll`, storing only the SHA-256 of the token |
+| `apps/api/src/auth/auth.service.ts` | The branching in `login` (admin skip → trusted device → send OTP) and remembering the device in `verifyTwoFactor` after a correct code |
+| `apps/api/src/config/env.validation.ts` | `ADMIN_SKIP_2FA`, default false, and `TRUSTED_DEVICE_TTL_DAYS` |
+| `apps/web/src/lib/auth/device-cookie.ts` | Stores the token on the browser side |
+| migration `20260824132605` | The `trusted_devices` table |
 
-## WAT-001/002 ฝั่งสินค้า
+## WAT-001/002, product side
 
-| จุด | สิ่งที่ทำ |
+| Where | What was done |
 | --- | --- |
-| `apps/api/src/product-watchlist/` | module ใหม่ทั้งชุด — `POST` / `DELETE /products/:productId/watchlist`, `GET /watchlist/products`, `GET /watchlist/products/count` |
-| `apps/web/src/components/shop/product-watch-button.tsx` · `product-watchlist-view.tsx` | ปุ่มติดตามและหน้ารายการ |
-| migration `20260824061652` | ตาราง `product_watchlists` |
+| `apps/api/src/product-watchlist/` | A whole new module — `POST` / `DELETE /products/:productId/watchlist`, `GET /watchlist/products`, `GET /watchlist/products/count` |
+| `apps/web/src/components/shop/product-watch-button.tsx` · `product-watchlist-view.tsx` | The watch button and the list page |
+| migration `20260824061652` | The `product_watchlists` table |
 
-## CART-004 / CART-005 ฝั่งผู้ชนะประมูล
+## CART-004 / CART-005, auction winner side
 
-| จุด | สิ่งที่ทำ |
+| Where | What was done |
 | --- | --- |
-| `apps/api/src/order/dtos/checkout.dto.ts` | เพิ่ม `auctionId?` เป็น optional และระบุว่าใช้ร่วมกับ `cartItemIds` ไม่ได้ |
-| `apps/api/src/order/checkout.service.ts` | `priceAuction` ตรวจเจ้าของ/สถานะ/การจ่ายซ้ำ และ `runOrderTransaction` แปลง P2002 เป็น 409 |
-| `apps/web/src/components/checkout/checkout-view.tsx` | โหมด `AuctionCheckout` อ่านจาก `?auction=<id>` |
-| `apps/web/src/components/auction/auction-complete-screen.tsx` | ปุ่มพาผู้ชนะไป `/checkout?auction=<id>` |
-| migration `20260827093921` | `order_items.auction_id` พร้อม unique และ `product_id` เป็น nullable |
+| `apps/api/src/order/dtos/checkout.dto.ts` | Added `auctionId?` as optional, stating it cannot be combined with `cartItemIds` |
+| `apps/api/src/order/checkout.service.ts` | `priceAuction` checks owner/status/double payment, and `runOrderTransaction` turns P2002 into 409 |
+| `apps/web/src/components/checkout/checkout-view.tsx` | `AuctionCheckout` mode, read from `?auction=<id>` |
+| `apps/web/src/components/auction/auction-complete-screen.tsx` | A button taking the winner to `/checkout?auction=<id>` |
+| migration `20260827093921` | `order_items.auction_id` with unique, and `product_id` made nullable |
 
-## AI-001 การส่งต่อให้ Admin
+## AI-001 handover to an Admin
 
-| จุด | สิ่งที่ทำ |
+| Where | What was done |
 | --- | --- |
-| `apps/api/src/support-chat/support-chat.service.ts` | `ESCALATION_THRESHOLD = 3`, รายการวลีขอคุยกับคนจริง, `escalate()` ที่ตรวจซ้ำฝั่ง server |
-| `apps/api/src/admin/support.service.ts` · `support.controller.ts` | คิว, `claim`, ตอบกลับ, `resolve` |
-| `apps/web/src/components/admin/admin-support-thread.tsx` · `support-session-list.tsx` | หน้าจอฝั่ง Admin |
-| migration `20260826091306` | `support_chat_sessions.status` / `assigned_admin_id`, enum `SupportSessionStatus`, ค่า `ADMIN` ใน `ChatRole` |
+| `apps/api/src/support-chat/support-chat.service.ts` | `ESCALATION_THRESHOLD = 3`, the list of ask-for-a-human phrases, `escalate()` re-checking on the server |
+| `apps/api/src/admin/support.service.ts` · `support.controller.ts` | The queue, `claim`, replies, `resolve` |
+| `apps/web/src/components/admin/admin-support-thread.tsx` · `support-session-list.tsx` | The Admin-side screens |
+| migration `20260826091306` | `support_chat_sessions.status` / `assigned_admin_id`, enum `SupportSessionStatus`, the `ADMIN` value in `ChatRole` |
 
 ---
 
-# ส่วนที่ 4 — ERD ที่ต้องแก้ตาม
+# Part 4 — ERD changes to follow
 
-**✅ sync ครบแล้วทั้ง 6 จุด** — ตอนเสนอ `docs/architecture/erd/bidnest-erd-v1.dbml` sync ล่าสุดแค่ commit `fa0f3cb` (ที่อยู่จัดส่งแบบ 6 ช่อง) และค้างอยู่ตามรายการนี้
+**✅ All 6 items are synced** — when this was proposed, `docs/architecture/erd/bidnest-erd-v1.dbml` had last been synced at commit `fa0f3cb` (the 6-field shipping address) and was behind on the following
 
-- ขาดตาราง `product_watchlists`
-- ขาดตาราง `trusted_devices`
-- `conversations` ขาด `auction_id` และ `product_id` ต้องเป็น nullable พร้อม unique ชุดที่สอง
-- `users` ขาด `auto_reply_message`
-- `order_items` ขาด `auction_id` พร้อม unique และ `product_id` ต้องเป็น nullable
-- `support_chat_sessions` ขาด `status` / `assigned_admin_id`, ขาด enum `support_session_status` และค่า `ADMIN` ใน enum `chat_role`
+- missing the `product_watchlists` table
+- missing the `trusted_devices` table
+- `conversations` missing `auction_id`, and `product_id` needed to be nullable with a second unique set
+- `users` missing `auto_reply_message`
+- `order_items` missing `auction_id` with unique, and `product_id` needed to be nullable
+- `support_chat_sessions` missing `status` / `assigned_admin_id`, missing enum `support_session_status` and the `ADMIN` value in enum `chat_role`
 
-**ไม่แตะ `schema.prisma`** — ทั้งหมดนี้คือการทำเอกสารให้ตรงกับ schema ที่ migrate ไปแล้ว ไม่ใช่การเปลี่ยน schema
+**`schema.prisma` untouched** — all of this is making the documentation match the schema that was already migrated, not changing the schema
 
 ---
 
 # Checklist
 
-- [x] ทีมเห็นชอบข้อความทั้ง 8 จุด โดยเฉพาะการรับ **CHAT-004 เป็น requirement อย่างเป็นทางการ** — ตกลง 2026-08-29
-- [x] โค้ดทุกจุดอยู่ใน `dev` แล้ว
-- [x] แก้ 8 จุดในส่วนที่ 2 ที่ไฟล์ `.docx` ต้นฉบับ
-- [x] export PDF ด้วย `Save As → PDF` **ไม่ใช่** `Print to PDF` (เหตุผลอยู่ใน change request ของ ADM-005)
-- [x] วาง PDF ใหม่เป็น `BidNest-Auction and Marketplace-v7.pdf` แล้วลบ v6 ออก
-- [x] ตรวจ v7 เทียบ v6 — จำนวน requirement ต้องเป็น **59 ข้อ** (58 เดิม + CHAT-004) และ §7.2 ต้องไม่ขยับลำดับ เพราะ `apps/api/test/http/06-admin.http` อ้างเลขข้อในนั้นอยู่
-  - ตรวจแล้ว 2026-08-29 · **ได้ 59 แถวพอดี** — นับเป็น "แถวในตาราง" ไม่ใช่จำนวนรหัส เพราะมี 3 แถวที่รวมหลายรหัสไว้ด้วยกัน (`NOT-001..004`, `WAT-001/002`, `LIV-003/004/005`) ถ้านับแยกทุกรหัสจะได้ 65
-  - `CHAT-004` อยู่ใน §4.4b แล้ว · ไม่มี `WAT-003` โผล่มา · `ADMIN_SKIP_2FA` และ `TRUSTED_DEVICE_TTL_DAYS` อยู่ใน AUTH-007 ตามที่ตกลง
-  - **§7.2 ข้อ 8 ยังเป็นเรื่องเดิม** — "Admin ปิดการขาย … ผู้ขายพยายามเปิดกลับเอง แก้ไข และลบ ทั้งสามอย่างต้องถูกปฏิเสธ" ตรงกับคอมเมนต์ใน `06-admin.http:43` ลำดับไม่ขยับ
-- [x] sync ERD ตามส่วนที่ 4
-- [x] ไล่แก้ path และเวอร์ชัน v6 → v7 ใน `CLAUDE.md`, `docs/KICKOFF_GUIDE.md`, `docs/team-role/dev2-backend-security-workflow.md`, `dev2-checklist.md`, `dev3-ecommerce-workflow.md`, `dev4-auction-workflow.md`, `apps/api/test/http/06-admin.http`
-- [ ] เพิ่ม story CHAT-004 และอัปเดต AUTH-007 / WAT / CART-004 / CART-005 / AI-001 ใน Jira · *ยังไม่ได้ทำ*
+- [x] The team approved the text of all 8 changes, in particular accepting **CHAT-004 as an official requirement** — agreed 2026-08-29
+- [x] All of the code is in `dev`
+- [x] Made the 8 changes from Part 2 in the original `.docx` file
+- [x] Exported the PDF with `Save As → PDF`, **not** `Print to PDF` (the reason is in the ADM-005 change request)
+- [x] Put the new PDF in place as `BidNest-Auction and Marketplace-v7.pdf` and removed v6
+- [x] Checked v7 against v6 — the requirement count must be **59** (the original 58 + CHAT-004), and §7.2 must not change order, because `apps/api/test/http/06-admin.http` cites an item number in it
+  - Checked 2026-08-29 · **exactly 59 rows** — counted as "table rows", not IDs, because 3 rows combine several IDs (`NOT-001..004`, `WAT-001/002`, `LIV-003/004/005`); counting every ID separately gives 65
+  - `CHAT-004` is now in §4.4b · no `WAT-003` appeared · `ADMIN_SKIP_2FA` and `TRUSTED_DEVICE_TTL_DAYS` are in AUTH-007 as agreed
+  - **§7.2 item 8 is still the same item** — "The Admin suspends a listing … the seller tries to reopen it, edit it and delete it; all three must be rejected", matching the comment at `06-admin.http:43`, order unchanged
+- [x] Synced the ERD per Part 4
+- [x] Updated the v6 → v7 paths and versions in `CLAUDE.md`, `docs/KICKOFF_GUIDE.md`, `docs/team-role/dev2-backend-security-workflow.md`, `dev2-checklist.md`, `dev3-ecommerce-workflow.md`, `dev4-auction-workflow.md`, `apps/api/test/http/06-admin.http`
+- [ ] Add the CHAT-004 story and update AUTH-007 / WAT / CART-004 / CART-005 / AI-001 in Jira · *not done yet*
 
-ADR-0001 และ ADR-0002 **ไม่ต้องแก้** — บรรทัด "อ้างอิง: SRS v4" คือบันทึกว่าตอนตัดสินใจอิงฉบับไหน เป็นข้อมูลย้อนหลังที่ต้องคงไว้ตามธรรมเนียม ADR เช่นเดียวกับบรรทัดประวัติใน change request ฉบับก่อนๆ
-
----
-
-# ข้อที่ตกลงกันแล้ว
-
-สามข้อนี้เคยเป็นคำถามค้างตอนเสนอ ทีมตัดสินครบแล้วเมื่อ **2026-08-29** และ v7 ถูก export ตามผลด้านล่างนี้
-
-1. **CHAT-004 เป็น requirement ใหม่อย่างเป็นทางการ** ✅ — ไม่รวมเข้ากับ CHAT-001 เพราะจะได้ข้อที่ยาวมากและปนสองเรื่องเข้าด้วยกัน คือแชทฝั่งประมูล กับข้อความตอบกลับอัตโนมัติ ผลคือ v7 มี requirement รวม **59 ข้อ**
-2. **ADMIN_SKIP_2FA เขียนไว้ใน SRS** ✅ — อยู่ในเกณฑ์การยอมรับของ AUTH-007 ตามข้อความในแก้ที่ 1 แม้จะเป็นสวิตช์ระดับ environment ไม่ใช่ฟีเจอร์ที่ผู้ใช้เห็น แต่มันลดความปลอดภัยของบัญชีที่มีสิทธิ์สูงสุด จึงต้องตรวจสอบได้จากเอกสาร ไม่ใช่รู้กันเองจาก `.env.example`
-3. **`product_watchlists` ใช้ WAT-001/002 เดิม ไม่แยกรหัสใหม่** ✅ — เขียนเป็นข้อความต่อท้ายเกณฑ์เดิมตามแก้ที่ 2 เพราะเป็นกลไกเดียวกันกับการติดตามประมูล ไม่ได้เพิ่ม WAT-003 จำนวน requirement จึงมาจาก CHAT-004 ข้อเดียว
+ADR-0001 and ADR-0002 **need no changes** — the "References: SRS v4" line records which edition the decision was based on at the time, historical information that must be kept per ADR convention, just like the history lines in the earlier change requests
 
 ---
 
-# เหตุผลประกอบ
+# Agreed decisions
 
-## ทำไม CHAT-004 ถึงไม่ควรปล่อยไว้แบบไม่มีในเอกสาร
+These three were open questions at proposal time; the team settled them all on **2026-08-29**, and v7 was exported according to the outcomes below
 
-workflow ของ dev ทุกคนเขียนตรงกันว่า **ใช้ช่อง "เกณฑ์การยอมรับ" ของ SRS เป็นตัวตัดสินว่า requirement ผ่านหรือไม่** ฟีเจอร์ที่ไม่มีในเอกสารจึงไม่มีเกณฑ์ให้ตรวจ ใครมารับช่วงต่อจะไม่รู้ว่า "ถูกต้อง" แปลว่าอะไร และตอนส่งงานก็ไม่มีอะไรยืนยันว่าทำครบ
+1. **CHAT-004 is an official new requirement** ✅ — not merged into CHAT-001, because that would make one very long item mixing two topics: auction-side chat and auto-reply messages. As a result, v7 has **59 requirements** in total
+2. **ADMIN_SKIP_2FA is written into the SRS** ✅ — it is in AUTH-007's acceptance criteria per the text in Change 1. Even though it is an environment-level switch rather than a user-facing feature, it weakens the security of the most privileged accounts, so it has to be auditable from the documentation, not tribal knowledge from `.env.example`
+3. **`product_watchlists` uses the existing WAT-001/002, no new ID** ✅ — written as text appended to the existing criteria per Change 2, because it is the same mechanism as watching auctions. No WAT-003 was added, so the only new requirement is CHAT-004
 
-## ทำไม auto-reply ถึงข้ามให้กับคำสั่งซื้อจากการประมูล
+---
 
-ข้อความตอบกลับอัตโนมัติต้องมีห้องสนทนาไปแปะ และห้องสนทนาผูกกับสินค้าหนึ่งชิ้น ส่วนรายการประมูลไม่ใช่สินค้าเพราะอยู่คนละตาราง ถ้าจะให้ส่งได้ต้องไปสร้าง product เงาขึ้นมา ซึ่งจะโผล่ในหน้าค้นหา เสียมากกว่าได้ และผู้ชนะประมูลมีห้องสนทนากับผู้ขายอยู่แล้วจากตอนประมูล จึงไม่มีใครถูกทิ้งไว้โดยติดต่อผู้ขายไม่ได้
+# Supporting rationale
 
-## ทำไม order_items ถึงใช้ nullable FK สองตัว แทนคอลัมน์เดียวแบบ polymorphic
+## Why CHAT-004 shouldn't be left undocumented
 
-เป็นรูปแบบเดียวกับที่ `conversations` ใช้อยู่แล้วสำหรับ "สินค้าหรือประมูล อย่างใดอย่างหนึ่ง" ทำให้ยังมี foreign key จริงทั้งสองทาง ฐานข้อมูลยังบังคับความถูกต้องให้ได้ ต่างจาก polymorphic ที่ต้องไปเช็คเอาเองในโค้ด
+Every dev's workflow says the same thing: **the SRS "Acceptance criteria" cell decides whether a requirement passes**. A feature that isn't in the document has no criteria to check against; whoever takes it over won't know what "correct" means, and at hand-in there's nothing to confirm it's complete
 
-## ทำไมการจ่ายซ้ำถึงต้องกันที่ระดับ unique index ไม่ใช่แค่เช็คในโค้ด
+## Why the auto-reply is skipped for auction orders
 
-การเช็คในโค้ดกันได้แค่กรณีเปิดลิงก์ซ้ำตามปกติ แต่ถ้าสองคำขอวิ่งชนกันพอดี ทั้งคู่จะผ่านการเช็คไปพร้อมกันแล้วเรียกเก็บเงินสองครั้งจากรายการเดียว unique index คือสิ่งเดียวที่กันกรณีนี้ได้จริง ส่วนการเช็คในโค้ดยังต้องมีอยู่ เพราะมันเกิดขึ้น **ก่อน** ตัดเงิน จึงให้คำตอบที่อ่านรู้เรื่องแทนที่จะตัดเงินไปแล้วค่อยพัง
+An auto-reply needs a conversation to go into, and a conversation is tied to one product. An auction listing isn't a product, since it lives in a separate table; sending one would mean creating a shadow product, which would show up in search — more harm than good. And the auction winner already has a conversation with the seller from the auction, so nobody is left unable to reach the seller
 
-## ทำไม trusted device ถึงเก็บแค่ hash
+## Why order_items uses two nullable FKs instead of a single polymorphic column
 
-เหมือน refresh token — ถ้าฐานข้อมูลรั่ว คนที่ได้ตารางไปต้องเอาไปใช้ต่อไม่ได้ และใช้ SHA-256 ไม่ใช่ bcrypt เพราะ token เป็นค่าสุ่ม 256 bit ไม่มีรหัสผ่านที่คนตั้งเองให้ต้องถ่วงเวลาการเดา
+It is the same pattern `conversations` already uses for "either a product or an auction", so real foreign keys still exist in both directions and the database still enforces correctness — unlike a polymorphic column, which has to be checked by hand in code
 
-## ทำไมการส่งต่อให้ Admin ถึงต้องตรวจซ้ำที่ server
+## Why double payment has to be prevented with a unique index, not just a code check
 
-คำตอบรอบก่อนหน้าส่งค่าบอกสถานะกลับไปให้ client ใช้ตัดสินใจว่าจะแสดงปุ่มไหม ถ้า server เชื่อค่านั้นตอนกดปุ่มด้วย ใครก็ยิงตรงเข้ามาแล้วเข้าคิวหา Admin ได้โดยไม่ต้องคุยกับ AI เลย
+A code check only stops the normal case of reopening the link. If two requests race each other exactly, both pass the check at the same time and charge twice for one listing; the unique index is the only thing that truly prevents this. The code check still has to exist, because it happens **before** charging, so it gives a readable answer instead of charging and then failing
+
+## Why trusted devices store only a hash
+
+Like refresh tokens — if the database leaks, whoever gets the table must not be able to use it. SHA-256 is used rather than bcrypt because the token is a random 256-bit value; there is no human-chosen password whose guessing needs slowing down
+
+## Why the handover to an Admin has to be re-checked on the server
+
+The previous response sends a status value back for the client to decide whether to show the button. If the server also trusted that value when the button is pressed, anyone could call the endpoint directly and get into the Admin queue without talking to the AI at all

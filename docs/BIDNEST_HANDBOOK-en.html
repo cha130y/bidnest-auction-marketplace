@@ -1,0 +1,2202 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>BidNest Handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground: #F1F5F4;
+    --surface: #FFFFFF;
+    --surface-sunk: #E7EEED;
+    --ink: #0F2429;
+    --ink-soft: #375156;
+    --muted: #62797E;
+    --line: #CBD9D8;
+    --line-soft: #DEE8E7;
+    --accent: #0E5F6B;
+    --accent-soft: #DCEDEE;
+    --signal: #A85F16;
+    --signal-soft: #F7E9D8;
+    --good: #2C6A4C;
+    --good-soft: #DCEBE2;
+    --stop: #9A3B33;
+    --stop-soft: #F5E1DF;
+
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, Consolas, "Courier New", monospace;
+
+    --wrap: 1180px;
+    --read: 70ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0B1618;
+      --surface: #122327;
+      --surface-sunk: #0E1D20;
+      --ink: #E3EDEC;
+      --ink-soft: #B6C9C9;
+      --muted: #8AA2A5;
+      --line: #24403F;
+      --line-soft: #1B3234;
+      --accent: #5BBECD;
+      --accent-soft: #14343A;
+      --signal: #E0A25C;
+      --signal-soft: #33261A;
+      --good: #6FBF93;
+      --good-soft: #16301F;
+      --stop: #DE8A80;
+      --stop-soft: #331C1B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0B1618;
+    --surface: #122327;
+    --surface-sunk: #0E1D20;
+    --ink: #E3EDEC;
+    --ink-soft: #B6C9C9;
+    --muted: #8AA2A5;
+    --line: #24403F;
+    --line-soft: #1B3234;
+    --accent: #5BBECD;
+    --accent-soft: #14343A;
+    --signal: #E0A25C;
+    --signal-soft: #33261A;
+    --good: #6FBF93;
+    --good-soft: #16301F;
+    --stop: #DE8A80;
+    --stop-soft: #331C1B;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .masthead {
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .masthead__inner {
+    max-width: var(--wrap);
+    margin: 0 auto;
+    padding: 56px 24px 40px;
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 4.4vw, 46px);
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .masthead p { max-width: var(--read); margin: 0 0 12px; color: var(--ink-soft); }
+  .masthead__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+
+  /* language switch */
+  .masthead .langs {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em;
+    color: var(--muted); margin: -4px 0 18px;
+  }
+  .langs b { color: var(--ink); font-weight: 500; }
+  .langs a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .langs a:hover { border-bottom-color: var(--accent); }
+
+  .shell {
+    max-width: var(--wrap);
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+
+  .toc { position: sticky; top: 24px; padding-top: 48px; font-size: 14px; }
+  .toc__title {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .toc a {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: var(--ink-soft);
+    border-left: 2px solid transparent;
+  }
+  .toc a:hover { background: var(--ground); color: var(--ink); }
+  .toc a[aria-current="true"] {
+    background: var(--accent-soft);
+    color: var(--ink);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .toc .num { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+  main { padding-top: 48px; min-width: 0; }
+
+  section { padding-top: 40px; margin-bottom: 20px; scroll-margin-top: 20px; }
+  section + section { border-top: 1px solid var(--line-soft); }
+
+  h2 {
+    font-size: clamp(23px, 2.6vw, 29px);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  h2 .num {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 6px;
+  }
+  h3 { font-size: 18px; margin: 36px 0 8px; letter-spacing: -0.005em; }
+  h4 { font-size: 15px; margin: 24px 0 6px; color: var(--ink-soft); }
+  p { max-width: var(--read); margin: 0 0 14px; }
+  .lede { font-size: 17px; color: var(--ink-soft); max-width: var(--read); }
+  ul, ol { max-width: var(--read); padding-left: 22px; margin: 0 0 14px; }
+  li { margin-bottom: 5px; }
+  strong { font-weight: 600; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.875em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    padding: 1px 5px;
+    word-break: break-word;
+  }
+
+  .code {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin: 0 0 18px;
+    overflow: hidden;
+  }
+  .code__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 10px 7px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--surface-sunk);
+  }
+  .code__label {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .code__copy {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 9px;
+    cursor: pointer;
+  }
+  .code__copy:hover { border-color: var(--accent); color: var(--accent); }
+  .code pre {
+    margin: 0;
+    padding: 14px;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: 13.5px;
+    line-height: 1.75;
+    tab-size: 2;
+    color: var(--ink);
+  }
+  .code pre .c { color: var(--muted); }
+
+  .tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    margin: 0 0 18px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    background: var(--surface-sunk);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td code { background: transparent; border: 0; padding: 0; color: var(--ink-soft); }
+  .nowrap { white-space: nowrap; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .chip--accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  .chip--signal { background: var(--signal-soft); border-color: transparent; color: var(--signal); }
+  .chip--good { background: var(--good-soft); border-color: transparent; color: var(--good); }
+  .chip--stop { background: var(--stop-soft); border-color: transparent; color: var(--stop); }
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 0 0 18px;
+    max-width: var(--read);
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note ul { margin-bottom: 0; }
+  .note--signal { border-left-color: var(--signal); }
+  .note--stop { border-left-color: var(--stop); }
+  .note__tag {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .steps { list-style: none; padding: 0; margin: 0 0 8px; counter-reset: step; max-width: none; }
+  .steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 26px 44px;
+    margin: 0 0 0 13px;
+    border-left: 1px solid var(--line);
+  }
+  .steps > li:last-child { border-left-color: transparent; padding-bottom: 4px; }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: -13px;
+    top: 1px;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--ground);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .steps h4 { margin: 2px 0 8px; font-size: 16px; color: var(--ink); }
+  .steps p { max-width: var(--read); }
+
+  .feature {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 20px 22px;
+    margin: 0 0 20px;
+  }
+  .feature__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .feature__head h3 { margin: 0; font-size: 19px; }
+  .feature p { max-width: none; }
+  .feature .tablewrap { border-radius: 6px; background: var(--ground); }
+  .feature .tablewrap th { background: var(--surface-sunk); }
+  .path {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    color: var(--ink-soft);
+    background: var(--surface-sunk);
+    border-radius: 6px;
+    padding: 9px 12px;
+    margin: 0 0 14px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .path b { color: var(--signal); font-weight: 600; }
+
+  figure { margin: 0 0 20px; }
+  figure svg { width: 100%; height: auto; display: block; min-width: 640px; }
+  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; max-width: var(--read); }
+  .frame {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 18px;
+    overflow-x: auto;
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+    gap: 14px;
+    margin: 0 0 18px;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 14px 16px;
+  }
+  .card h4 { margin: 0 0 6px; color: var(--ink); font-size: 15px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--ink-soft); max-width: none; }
+
+  footer.end {
+    max-width: var(--wrap);
+    margin: 0 auto;
+    padding: 26px 24px 64px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer.end p { max-width: var(--read); }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; gap: 0; }
+    .toc { position: static; padding: 32px 0 20px; border-bottom: 1px solid var(--line-soft); }
+    .toc ol { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    main { padding-top: 8px; }
+  }
+
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <p class="eyebrow">BidNest · Auction &amp; Marketplace · Team handbook</p>
+    <h1>The whole project in one read, enough to explain it to someone else</h1>
+    <p class="langs"><a href="BIDNEST_HANDBOOK.html" lang="th">ภาษาไทย</a> · <b>English</b></p>
+    <p class="lede">
+      One document for people who have just joined the project, and for teammates who want to understand the parts they didn't build —
+      setting up from scratch · the commands you use every day · how each feature connects across the web and the server ·
+      testing with confidence · <strong>why this stack was chosen</strong> · how to release to production
+    </p>
+    <p class="lede">
+      Every path in this handbook was read from the real code in <code>apps/api</code> and <code>apps/web</code>, not written from documents alone.
+      When the content disagrees, treat <strong>the SRS as the requirement</strong> and tell the team where the code or the documentation has drifted
+    </p>
+    <div class="masthead__meta">
+      <span class="chip chip--accent">pnpm monorepo</span>
+      <span class="chip">Next.js 16 + NestJS 11</span>
+      <span class="chip">PostgreSQL 17 · Prisma 7</span>
+      <span class="chip">Socket.IO 2 namespace</span>
+      <span class="chip">5 devs · 14 days</span>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="toc" aria-label="Contents">
+    <p class="toc__title">Contents</p>
+    <ol>
+      <li><a href="#ch1"><span class="num">01</span><span>What this system is</span></a></li>
+      <li><a href="#ch2"><span class="num">02</span><span>Parts and owners</span></a></li>
+      <li><a href="#ch3"><span class="num">03</span><span>First-time setup</span></a></li>
+      <li><a href="#ch4"><span class="num">04</span><span>Daily work</span></a></li>
+      <li><a href="#ch5"><span class="num">05</span><span>How the features connect</span></a></li>
+      <li><a href="#ch6"><span class="num">06</span><span>Testing</span></a></li>
+      <li><a href="#ch7"><span class="num">07</span><span>Why it was built this way</span></a></li>
+      <li><a href="#ch8"><span class="num">08</span><span>Going to production</span></a></li>
+      <li><a href="#ch9"><span class="num">09</span><span>Quick reference</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="ch1">
+      <h2><span class="num">Chapter 01</span>What this system is</h2>
+      <p class="lede">
+        BidNest is a marketplace that combines <strong>two ways of reaching a price</strong> in one system —
+        <strong>real-time auctions</strong> and <strong>a buy-now shop</strong> —
+        sharing the same user accounts, cart, payment and shipping
+      </p>
+      <p>
+        One user can be both a buyer and a seller on a single account, with no separate shop sign-up,
+        and whether an item comes from an auction or from the shop,
+        <strong>it all ends up in the same place</strong>: order → payment → shipping → delivered
+      </p>
+
+      <h3>Where the two paths meet</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>The auction path</h4>
+          <p>Seller creates a draft → publishes → the system opens it on schedule → people bid against each other → the system closes it on schedule → a winner → <strong>the winner pays at the checkout page</strong></p>
+        </div>
+        <div class="card">
+          <h4>The shop path</h4>
+          <p>Seller lists a product with stock and price → buyer adds it to the cart → <strong>pays at the same checkout page</strong></p>
+        </div>
+      </div>
+      <p>
+        The meeting point is a single <code>POST /orders/checkout</code>, which accepts cart items, a won auction lot and a price successfully negotiated with the AI,
+        and writes them as orders in the same format — which is why the <code>order_items</code> table
+        has both a <code>product_id</code> and an <code>auction_id</code> column, with only one of them set at a time
+      </p>
+
+      <h3>V1 scope (very important when answering questions)</h3>
+      <div class="note note--stop">
+        <span class="note__tag">Where the story ends</span>
+        <p>
+          V1 ends when <strong>the auction closes and the item is shipped</strong> — there are no refunds or cancellations after payment yet.
+          <code>SOLD</code> and <code>UNSOLD</code> are true end states and never go back,
+          and payment is <strong>simulated</strong>, not yet connected to a real payment gateway
+          (paying a total of exactly <code>666.00</code> is always declined, for testing the FAILED path)
+        </p>
+      </div>
+
+      <h3>All capabilities at a glance</h3>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Module</th><th>What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="nowrap">Authentication</td><td>Email sign-up/login · Google and LINE sign-in · emailed OTP required on every entry path · trusted devices · password reset</td></tr>
+            <tr><td class="nowrap">Auctions</td><td>Draft → completeness check → preview → publish · the system opens and closes them on schedule · the home page has 4 views (hot / ending soon / starting soon / recently ended)</td></tr>
+            <tr><td class="nowrap">Bidding + live rooms</td><td>Real-time bidding over WebSocket · protection against duplicate bids from repeated clicks · anti-sniping (automatic extensions) · lobby + arena + results page</td></tr>
+            <tr><td class="nowrap">Shop</td><td>List products with stock · search and filter · multi-shop cart · one payment split into orders per seller · shipment status tracked as a timeline</td></tr>
+            <tr><td class="nowrap">AI (Gemini)</td><td>Suggests a starting price for auction drafts · responds to negotiation offers against the seller's floor price · support chat that hands over to an admin when it can't answer</td></tr>
+            <tr><td class="nowrap">Notifications + chat</td><td>In-app notifications for 8 events · buyer–seller chat tied to the product/auction being discussed · seller auto-reply</td></tr>
+            <tr><td class="nowrap">Back office</td><td>Suspend users · manage categories · cancel auctions · suspend/reactivate product listings · order overview · take over support chats · every action goes to the audit log with a reason</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ch2">
+      <h2><span class="num">Chapter 02</span>Parts and owners</h2>
+      <p class="lede">
+        The one rule that explains the whole system: <strong>the browser never talks to the database or external services directly</strong>
+        everything goes through the single <code>apps/api</code> layer
+      </p>
+
+      <figure>
+        <div class="frame">
+          <svg viewBox="0 0 880 300" role="img" aria-label="System components diagram: the browser talks to apps/web, which talks to apps/api, which talks to PostgreSQL and external services, with Socket.IO connecting the browser directly to apps/api">
+            <defs>
+              <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-soft)"></path>
+              </marker>
+              <marker id="ar-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--signal)"></path>
+              </marker>
+            </defs>
+
+            <path d="M100 60 L100 30 L560 30 L560 60" fill="none" stroke="var(--signal)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar-sig)"></path>
+            <text x="330" y="22" text-anchor="middle" font-family="var(--f-mono)" font-size="12" fill="var(--signal)">Socket.IO — /auctions · /user</text>
+
+            <rect x="20" y="60" width="160" height="64" rx="8" fill="var(--surface-sunk)" stroke="var(--line)"></rect>
+            <text x="100" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">Browser</text>
+            <text x="100" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">React 19</text>
+
+            <rect x="240" y="60" width="180" height="64" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"></rect>
+            <text x="330" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">apps/web · Next.js</text>
+            <text x="330" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">:3000 · NextAuth v5</text>
+
+            <rect x="470" y="60" width="180" height="64" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"></rect>
+            <text x="560" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">apps/api · NestJS</text>
+            <text x="560" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">:4000 · all rules here</text>
+
+            <rect x="700" y="60" width="160" height="64" rx="8" fill="var(--surface-sunk)" stroke="var(--line)"></rect>
+            <text x="780" y="88" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">PostgreSQL 17</text>
+            <text x="780" y="107" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">:5433 · Prisma</text>
+
+            <line x1="182" y1="92" x2="236" y2="92" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+            <line x1="422" y1="92" x2="466" y2="92" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+            <line x1="652" y1="92" x2="696" y2="92" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+            <text x="209" y="50" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">HTTPS</text>
+            <text x="444" y="50" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">REST</text>
+            <text x="674" y="50" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">SQL</text>
+
+            <line x1="560" y1="126" x2="560" y2="186" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ar)"></line>
+
+            <rect x="400" y="190" width="320" height="72" rx="8" fill="var(--surface-sunk)" stroke="var(--line)" stroke-dasharray="4 4"></rect>
+            <text x="560" y="216" text-anchor="middle" font-family="var(--f-body)" font-size="14" font-weight="600" fill="var(--ink)">External services</text>
+            <text x="560" y="238" text-anchor="middle" font-family="var(--f-mono)" font-size="11.5" fill="var(--muted)">Cloudinary · Gemini (AI) · SMTP (OTP email)</text>
+            <text x="560" y="255" text-anchor="middle" font-family="var(--f-mono)" font-size="11" fill="var(--muted)">All 3 optional · their routes return 503</text>
+          </svg>
+        </div>
+        <figcaption>
+          The orange dashed line is the real-time channel — the browser connects Socket.IO straight to <code>apps/api</code>, not through Next.js.
+          Same color rule as the Workflow diagrams: <strong>orange = done by the system, nobody clicks</strong>
+        </figcaption>
+      </figure>
+
+      <h3>Folder structure</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">Repo structure</span></div>
+        <pre>apps/
+  web/                    Next.js — every web page (buyer, seller, admin)
+    src/app/              App Router — 1 folder = 1 page
+    src/components/       UI components, split by module
+    src/lib/api/          every caller of apps/api lives here
+  api/                    NestJS — all of the system's rules live here
+    prisma/               schema.prisma + migrations + seed
+    src/                  24 modules (auth, auction, bid, live, cart, order, ai-tools, admin, ...)
+    test/                 e2e specs + .http files + Postman collection
+packages/
+  config/                 shared config
+  contracts/              types shared between web and api
+infra/docker/             compose.dev.yml — Postgres + Maildev for dev machines
+scripts/                  dev.mjs, dev-preflight.mjs, check-setup.mjs
+docs/                     SRS, ERD, ADRs, workflow diagrams, team guides
+Dockerfile                image of apps/api for deployment — built from the repo root</pre>
+      </div>
+
+      <h3>Who owns what</h3>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Dev</th><th>Scope</th><th>Main code</th><th>branch</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 1</span></td>
+              <td>Frontend &amp; UI — design system, layout, shared components</td>
+              <td><code>apps/web/src/components</code><br><code>apps/web/src/app/design-system</code></td>
+              <td><code>feat/frontend-dev1</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 2</span></td>
+              <td>Backend core &amp; security — <strong>owner of the schema and migrations</strong></td>
+              <td><code>api/src/auth</code> · <code>users</code> · <code>common</code> (guards)</td>
+              <td><code>feat/auth-dev2</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 3</span></td>
+              <td>E-commerce — products, cart, orders, shipping, buyer-seller chat</td>
+              <td><code>api/src/product</code> · <code>cart</code> · <code>order</code> · <code>shipment</code> · <code>chat</code></td>
+              <td><code>feat/ecommerce-dev3</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 4</span></td>
+              <td>Auction &amp; real-time — auctions, bidding, live rooms, watchlist</td>
+              <td><code>api/src/auction</code> · <code>bid</code> · <code>live</code> · <code>realtime</code> · <code>watchlist</code></td>
+              <td><code>feat/auction-dev4</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--accent">Dev 5</span></td>
+              <td>AI — price estimates, negotiation, support chat + back-office skeleton</td>
+              <td><code>api/src/ai-tools</code> · <code>support-chat</code></td>
+              <td><code>feat/ai-dev5</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="note__tag">Cross-boundary rule</span>
+        <p>
+          If your work needs code that is someone else's responsibility and they haven't finished it, <strong>mock it and wait</strong>.
+          Don't write it for them — the merges will collide and the person who owns the work loses it.
+          The <code>api/src/admin</code> module gathers the actions of every feature in one place, so it is the most common cross-module touch point — talk before editing
+        </p>
+      </div>
+    </section>
+
+    <section id="ch3">
+      <h2><span class="num">Chapter 03</span>First-time setup</h2>
+      <p class="lede">
+        Do this whole set <strong>once per machine</strong>; after that you only need the commands in chapter 04
+      </p>
+
+      <h3>Prerequisites</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What you need</th><th>Version</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td>Node.js</td><td class="nowrap"><strong>24</strong></td><td>Runs both web and api — <strong>the same in all 4 places</strong>: dev machines · CI · Railway (the <code>Dockerfile</code> uses <code>node:24</code>) · Vercel · declared in <code>engines.node</code> in the root <code>package.json</code>, and <code>pnpm check:setup</code> warns if your machine differs</td></tr>
+            <tr><td>pnpm</td><td class="nowrap">11</td><td>The monorepo's package manager — <strong>never use npm/yarn</strong></td></tr>
+            <tr><td>Docker Desktop</td><td class="nowrap">—</td><td>Runs Postgres + Maildev locally</td></tr>
+            <tr><td>Git</td><td class="nowrap">—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <h4>Clone and install dependencies</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre>git clone https://github.com/&lt;org&gt;/bidnest-auction-marketplace.git
+cd bidnest-auction-marketplace
+pnpm install</pre>
+          </div>
+        </li>
+        <li>
+          <h4>Create the .env files for both apps</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre>cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local</pre>
+          </div>
+          <p>
+            Each app needs its own copy, because <code>apps/api</code> only reads <code>.env</code> from its own folder,
+            and Next.js only reads <code>.env.local</code> from its own folder — a single file at the root has no effect on either
+          </p>
+          <p>
+            Then open <code>apps/web/.env.local</code> and set your own <code>AUTH_SECRET</code> (without it, Next.js refuses to run)
+          </p>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">Generate AUTH_SECRET</span><button class="code__copy" type="button">copy</button></div>
+            <pre>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"</pre>
+          </div>
+        </li>
+        <li>
+          <h4>Start Postgres + Maildev and create the tables</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre>docker compose -f infra/docker/compose.dev.yml up -d
+pnpm --dir apps/api exec prisma migrate deploy</pre>
+          </div>
+          <p>
+            <code>docker compose up</code> only starts an empty Postgres; it doesn't create the tables.
+            You have to apply the migrations yourself — once is enough, because compose sets <code>restart: unless-stopped</code>
+            and the data lives in a volume that doesn't go away
+          </p>
+        </li>
+        <li>
+          <h4>Load the starter data</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre><span class="c"># test accounts + categories + starter products (also required for e2e)</span>
+pnpm --dir apps/api exec prisma db seed
+
+<span class="c"># for lots of sample data, so the site looks like the real thing</span>
+pnpm --dir apps/api seed:mock</pre>
+          </div>
+        </li>
+        <li>
+          <h4>Switch to your own branch</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">Pick just your own line</span><button class="code__copy" type="button">copy</button></div>
+            <pre>git switch feat/frontend-dev1
+git switch feat/auth-dev2
+git switch feat/ecommerce-dev3
+git switch feat/auction-dev4
+git switch feat/ai-dev5</pre>
+          </div>
+        </li>
+        <li>
+          <h4>Run it and check everything is up</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+            <pre><span class="c"># check the machine has everything first (Node, pnpm, Docker, .env)</span>
+pnpm check:setup
+
+<span class="c"># run web + api together</span>
+pnpm dev</pre>
+          </div>
+          <p><strong>Done when:</strong> <code>http://localhost:3000</code> shows the home page and <code>http://localhost:4000/docs</code> shows Swagger</p>
+        </li>
+      </ol>
+
+      <h3>Ports and screens to know</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Open at</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>localhost:3000</code></td><td>The website (Next.js)</td></tr>
+            <tr><td class="nowrap"><code>localhost:4000</code></td><td>API (NestJS)</td></tr>
+            <tr><td class="nowrap"><code>localhost:4000/docs</code></td><td>Swagger — every endpoint, with a way to try them out</td></tr>
+            <tr><td class="nowrap"><code>localhost:4000/health</code></td><td>The health check Railway uses</td></tr>
+            <tr><td class="nowrap"><code>localhost:1080</code></td><td><strong>Maildev — read OTPs and password-reset emails here</strong>; dev machines don't actually send email</td></tr>
+            <tr><td class="nowrap"><code>localhost:5433</code></td><td>PostgreSQL (not 5432 — avoids clashing with a Postgres installed on your machine)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Test accounts from the seed</h3>
+      <p>Every account uses the same password, <code>Test1234</code>. Log in through the real <code>/login</code> page, then read the OTP in Maildev</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Email</th><th>role</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>admin@bidnest.test</code></td><td class="nowrap"><span class="chip chip--stop">ADMIN</span></td><td>The whole back office — <strong>cannot buy or sell</strong></td></tr>
+            <tr><td class="nowrap"><code>seller-a@bidnest.test</code></td><td class="nowrap"><span class="chip">USER</span></td><td>Seller A — owns 2 starter products</td></tr>
+            <tr><td class="nowrap"><code>seller-b@bidnest.test</code></td><td class="nowrap"><span class="chip">USER</span></td><td>Seller B — owns the other 2 starter products</td></tr>
+            <tr><td class="nowrap"><code>buyer@bidnest.test</code></td><td class="nowrap"><span class="chip">USER</span></td><td>The main buyer used in most tests</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">Dev-machine-only shortcut</span>
+        <p>
+          <code>apps/api/.env.example</code> sets <code>ADMIN_SKIP_2FA=true</code>, so admins can log in with just the password, without waiting for an OTP
+          — <strong>never turn it on in production</strong>, because the seed passwords can be read from the code
+        </p>
+      </div>
+
+      <h3>Keys you can run without</h3>
+      <p>The system only truly requires <code>DATABASE_URL</code> and the two JWT secrets; everything else has defaults. These three are optional — it boots without them, only the routes that use them answer 503</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Variable</th><th>What happens without it</th><th>Where to get it</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>CLOUDINARY_*</code></td><td>Image upload doesn't work (other features are fine)</td><td>cloudinary.com — <strong>everyone signs up for their own key</strong></td></tr>
+            <tr><td class="nowrap"><code>GEMINI_API_KEY</code></td><td>Support chat / price estimates answer 503</td><td>aistudio.google.com/apikey (free)</td></tr>
+            <tr><td class="nowrap"><code>GOOGLE_CLIENT_ID</code><br><code>LINE_CHANNEL_ID</code></td><td>The social login buttons don't show (password login works normally)</td><td>Google Cloud Console / LINE Developers</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ch4">
+      <h2><span class="num">Chapter 04</span>Daily work</h2>
+
+      <h3>Every time you start work</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+        <pre>git switch dev &amp;&amp; git pull
+git switch feat/auction-dev4   <span class="c"># change to your own branch</span>
+git merge dev
+pnpm check
+pnpm dev</pre>
+      </div>
+      <p>
+        You need to <code>git merge dev</code> every day, because everyone's branch was cut on kickoff day —
+        without merging you're working on old code and can't connect to the real things others have built.
+        And you need <code>pnpm check</code> after merging, because a clean merge only means there were no line-level conflicts,
+        not that the code still works (CI only runs when a PR is opened, not when you merge locally)
+      </p>
+
+      <h3>Extra commands, only when a condition applies</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">See what the merge just brought in</span><button class="code__copy" type="button">copy</button></div>
+        <pre>git diff --name-only HEAD@{1} HEAD -- pnpm-lock.yaml apps/api/prisma/migrations</pre>
+      </div>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">A filename shows up = run the matching line</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># pnpm-lock.yaml shows up = someone added/updated a package</span>
+pnpm install
+
+<span class="c"># files under apps/api/prisma/migrations/ show up = a new migration from someone else</span>
+pnpm --dir apps/api exec prisma migrate deploy
+
+<span class="c"># can't connect to the database / just restarted and Docker isn't up yet</span>
+docker compose -f infra/docker/compose.dev.yml up -d</pre>
+      </div>
+
+      <h3>Common commands</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>pnpm dev</code></td><td>Runs web (:3000) + api (:4000) together</td></tr>
+            <tr><td class="nowrap"><code>pnpm dev:web</code> / <code>pnpm dev:api</code></td><td>Runs one side at a time</td></tr>
+            <tr><td class="nowrap"><code>pnpm check</code></td><td><strong>typecheck both apps + test + lint — run it every time before submitting work</strong></td></tr>
+            <tr><td class="nowrap"><code>pnpm test</code> / <code>pnpm lint</code></td><td>Runs only the tests or only lint</td></tr>
+            <tr><td class="nowrap"><code>pnpm check:setup</code></td><td>Checks the machine has everything</td></tr>
+            <tr><td class="nowrap"><code>pnpm --dir apps/api exec prisma studio</code></td><td>Opens a UI for browsing the database</td></tr>
+            <tr><td class="nowrap"><code>pnpm --dir apps/api seed:mock</code></td><td>Loads sample data for testing</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Commit / branch / PR rules</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Topic</th><th>Format</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">branch</td><td><code>feat/&lt;module&gt;-dev&lt;n&gt;</code>, e.g. <code>feat/auction-dev4</code></td></tr>
+            <tr><td class="nowrap">commit</td><td><code>&lt;type&gt;(&lt;requirement-id&gt;): short English description</code><br>e.g. <code>feat(AUTH-001): add local registration endpoint</code><br>Types: <code>feat</code> <code>fix</code> <code>refactor</code> <code>test</code> <code>docs</code> <code>chore</code> <code>ci</code><br>Infra work not tied to any requirement can skip the requirement-id</td></tr>
+            <tr><td class="nowrap">PR</td><td>The base branch is always <code>dev</code> (never merge straight into <code>main</code>) · title and description in English</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">Never</span>
+        <p>Never commit <code>.env</code> files, and never hardcode secrets / API keys in the code</p>
+      </div>
+      <p>
+        Files that need the owner's approval before merge (per CODEOWNERS):
+        <code>CLAUDE.md</code> · <code>docs/requirements/</code> · <code>docs/architecture/</code> ·
+        <code>docs/team-role/</code> · <code>apps/api/prisma/</code> · <code>.github/</code> · <code>package.json</code>
+      </p>
+    </section>
+
+    <section id="ch5">
+      <h2><span class="num">Chapter 05</span>How the features connect</h2>
+      <p class="lede">
+        This chapter is the heart of the document — it answers what <strong>the screen you see</strong> calls,
+        what <strong>the server</strong> does next, and which table <strong>the data</strong> lands in.
+        After reading it you'll be able to walk through the path of a feature you didn't build
+      </p>
+
+      <h3>The web side and the server side connect through 4 channels</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>1 · REST through a single apiFetch</h4>
+          <p>
+            Every API call from the web app goes through one place, <code>apps/web/src/lib/api/client.ts</code>.
+            It attaches the bearer token, turns NestJS errors into messages the UI can show,
+            and sets <code>cache: "no-store"</code>, because nothing in this API can be cached by URL
+          </p>
+        </div>
+        <div class="card">
+          <h4>2 · session cookie ↔ bearer token</h4>
+          <p>
+            NextAuth holds the browser session (an httpOnly cookie), while <code>apps/api</code> owns the real tokens.
+            Tokens are never stored in localStorage · when the access token expires, apiFetch reads the session again and retries <strong>once</strong>
+          </p>
+        </div>
+        <div class="card">
+          <h4>3 · Socket.IO 2 namespace</h4>
+          <p>
+            <code>/auctions</code> = auction rooms, publicly readable, no token needed ·
+            <code>/user</code> = each person's private channel, which requires authentication at connection time or is cut off immediately
+          </p>
+        </div>
+        <div class="card">
+          <h4>4 · A single Prisma schema</h4>
+          <p>
+            <code>apps/api/prisma/schema.prisma</code> is the single source of truth for the data structure.
+            Every module reads and writes through Prisma · <strong>Dev 2 owns the schema and migrations</strong>; don't change them without asking
+          </p>
+        </div>
+      </div>
+
+      <div class="note note--signal">
+        <span class="note__tag">The most common point of confusion for newcomers</span>
+        <p>
+          The <code>apps/web/src/app/api/</code> folder is <strong>not</strong> the system's API —
+          it's Next.js route handlers that exist only to handle cookies
+          (exchanging tokens with LINE, storing the OAuth pending token, storing the trusted-device token).
+          All the business rules always live in <code>apps/api</code> on port 4000
+        </p>
+      </div>
+
+      <h3>How to read the tables in this chapter</h3>
+      <p>
+        Each row is one path, read from left to right as
+        <strong>which screen</strong> → <strong>which endpoint it calls</strong> → <strong>which table the data lands in</strong>.
+        Paths nobody clicks, which the system runs on its own, are marked <span class="chip chip--signal">system-driven</span>
+      </p>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>Authentication</h3>
+          <span class="chip chip--accent">Dev 2</span>
+          <span class="chip">AUTH-001 … AUTH-008</span>
+        </div>
+        <p>
+          Every entry path — password, Google, LINE — <strong>always ends at the emailed OTP</strong> (AUTH-007),
+          so there's no way around two-factor verification. A side effect to remember:
+          <strong>if email can't be sent, nobody can log in at all</strong>
+        </p>
+        <p class="path">/login → POST /auth/login → <b>OTP sent</b> → enter the code → POST /auth/2fa/verify → token pair issued → NextAuth creates the session</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Calls</th><th>Written to</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/register</code></td><td><code>POST /auth/register</code></td><td><code>users</code>, <code>user_profiles</code></td></tr>
+              <tr><td class="nowrap"><code>/login</code> stage 1</td><td><code>POST /auth/login</code> · <code>POST /auth/2fa/resend</code></td><td><code>two_factor_codes</code> + sends the email</td></tr>
+              <tr><td class="nowrap"><code>/login</code> stage 2</td><td><code>POST /auth/2fa/verify</code></td><td><code>user_sessions</code>, <code>trusted_devices</code></td></tr>
+              <tr><td class="nowrap"><code>/login/oauth</code></td><td><code>POST /auth/google/callback</code> · <code>/auth/line/callback</code>, followed by <code>/verify</code></td><td><code>auth_accounts</code> + the same tables as above</td></tr>
+              <tr><td class="nowrap"><code>/forgot-password</code></td><td><code>POST /auth/forgot-password</code></td><td><code>password_reset_tokens</code></td></tr>
+              <tr><td class="nowrap"><code>/reset-password</code></td><td><code>POST /auth/reset-password</code></td><td>Revokes <code>user_sessions</code> on every device</td></tr>
+              <tr><td class="nowrap"><code>/profile</code></td><td><code>GET /users/me</code> · <code>PATCH /users/me</code></td><td><code>user_profiles</code></td></tr>
+              <tr><td class="nowrap">Every page <span class="chip chip--signal">system-driven</span></td><td><code>POST /auth/refresh</code></td><td><code>user_sessions</code> — the old token is used up in the same transaction</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>Three things this module does that affect every other module</h4>
+        <ul>
+          <li><strong>The guard re-reads the account from the DB on every request</strong> — an account that was just suspended can no longer use its existing token (ADM-002)</li>
+          <li><strong>Trusted devices</strong> — a browser that has entered the code before can skip the OTP until it expires (30 days by default); a password reset clears every device</li>
+          <li><strong>ADMIN can't buy or sell</strong> — the buying/selling endpoints deliberately exclude the ADMIN role with <code>@Roles</code></li>
+        </ul>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>Auctions · bidding · live rooms · watchlist</h3>
+          <span class="chip chip--accent">Dev 4</span>
+          <span class="chip">AUC · BID · LIV · WAT</span>
+        </div>
+        <p>
+          What sets this module apart is that <strong>time is in charge, not people</strong> —
+          a timer in <code>auction-lifecycle.service.ts</code> runs every 10 seconds,
+          opening auctions whose start time has come and closing those that have expired, up to 50 at a time
+        </p>
+        <p class="path">DRAFT → publish → SCHEDULED → <b>system opens on schedule</b> → ACTIVE → <b>system closes on schedule</b> → SOLD / UNSOLD</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Calls</th><th>Written to</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/sell</code> · <code>/sell/[id]/edit</code></td><td><code>POST /auctions/drafts</code> · <code>PATCH /auctions/:id</code> · <code>POST /auctions/:id/images</code></td><td><code>auctions</code>, <code>auction_images</code></td></tr>
+              <tr><td class="nowrap"><code>/sell/[id]</code></td><td><code>GET /auctions/drafts/:id/validation</code> · <code>/preview</code> · <code>POST /auctions/drafts/:id/publish</code></td><td><code>auctions</code>, <code>auction_events</code></td></tr>
+              <tr><td class="nowrap"><code>/sell/auctions</code></td><td><code>GET /auctions/mine</code> · <code>POST /auctions/:id/cancel</code></td><td><code>auctions</code></td></tr>
+              <tr><td class="nowrap"><code>/auctions</code></td><td><code>GET /auctions</code> · <code>GET /auctions/stats</code> · <code>GET /categories</code></td><td>Read-only</td></tr>
+              <tr><td class="nowrap"><code>/auctions/[id]</code></td><td><code>GET /auctions/:id</code> · <code>/lobby</code> · <code>/arena</code> · <code>POST /auctions/:id/participants</code></td><td><code>auction_participants</code></td></tr>
+              <tr><td class="nowrap">Bid button</td><td><code>POST /auctions/:id/bids</code> · <code>GET /auctions/:id/bids</code></td><td><code>bids</code>, <code>auction_extensions</code>, <code>notifications</code></td></tr>
+              <tr><td class="nowrap"><code>/auctions/[id]/result</code></td><td><code>GET /auctions/:id/arena</code></td><td>Reads the result after closing</td></tr>
+              <tr><td class="nowrap"><code>/watchlist</code> · heart button</td><td><code>POST</code>/<code>DELETE /auctions/:id/watchlist</code> · <code>GET /watchlist</code></td><td><code>watchlists</code></td></tr>
+              <tr><td class="nowrap"><span class="chip chip--signal">system-driven</span> every 10 s</td><td>—</td><td><code>auctions.status</code>, <code>auction_events</code>, <code>notifications</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>Three rules you have to explain correctly</h4>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Rule</th><th>What the code actually does</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="nowrap">Minimum bid<br><span class="chip">BID-001</span></td>
+                <td>The first bid must be <strong>≥ the starting price</strong> · from the second bid on, it must be <strong>≥ the current price + the bid increment</strong></td>
+              </tr>
+              <tr>
+                <td class="nowrap">Anti-sniping<br><span class="chip">BID-004</span></td>
+                <td>A bid in the <strong>last 2 minutes</strong> pushes the close out by another <strong>2 minutes</strong>, up to <strong>5 times</strong> — after that it closes on time even if people are still bidding</td>
+              </tr>
+              <tr>
+                <td class="nowrap">Reserve price<br><span class="chip">AUC-003</span></td>
+                <td>The reserve figure <strong>never leaves the server</strong>; buyers only see whether it has been "reached" · not reached at close = <code>UNSOLD</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>How real-time works</h4>
+        <p>
+          The browser joins the <code>auction:&lt;id&gt;</code> room through the <code>/auctions</code> namespace.
+          The server broadcasts 6 events into that room, and the web side (<code>use-auction-room.ts</code>)
+          <strong>doesn't paste the payload onto the screen directly, but calls <code>GET /arena</code> to re-read the whole set</strong>,
+          because the price, leader, next minimum bid, closing time and extension quota must all stay consistent together
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>event</th><th>When it happens</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>auction:bid</code></td><td>Someone placed a bid successfully</td></tr>
+              <tr><td class="nowrap"><code>auction:extension</code></td><td>Anti-sniping pushed the close out</td></tr>
+              <tr><td class="nowrap"><code>auction:presence</code></td><td>Someone joined/left the room</td></tr>
+              <tr><td class="nowrap"><code>auction:started</code></td><td>The timer opened the auction</td></tr>
+              <tr><td class="nowrap"><code>auction:ended</code></td><td>The timer closed it and decided the result</td></tr>
+              <tr><td class="nowrap"><code>auction:cancelled</code></td><td>The seller or an admin cancelled it</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <span class="note__tag">Why the auction room socket doesn't need login</span>
+          <p>
+            Because published auctions are already public data (AUC-005), and this room sends the same data as the public <code>GET</code>.
+            You can send a token too, but it doesn't change what you see — it only lets the system know who closed their tab, so the viewer count stays accurate.
+            <strong>Bidding still goes through HTTP and the guard as usual; the socket doesn't accept bids</strong>
+          </p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>Shop · cart · orders · shipping</h3>
+          <span class="chip chip--accent">Dev 3</span>
+          <span class="chip">PROD · CART · SHIP</span>
+        </div>
+        <p>
+          This side is more straightforward than auctions, with no timer — everything happens because someone clicks.
+          The most complex part is that <strong>one cart can hold items from several shops, but an order belongs to a single seller</strong>,
+          so paying is done once and then split into several orders by seller
+        </p>
+        <p class="path">Cart (several shops) → <b>pay once</b> → split into per-seller orders → each order has its own shipment</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Calls</th><th>Written to</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/shop</code> · <code>/shop/[id]</code></td><td><code>GET /products</code> · <code>GET /products/:id</code> · <code>GET /categories</code></td><td>Read-only</td></tr>
+              <tr><td class="nowrap"><code>/sell/products/*</code></td><td><code>POST /products</code> · <code>PATCH /products/:id</code> · <code>/status</code> · <code>/stock</code> · <code>POST /products/:id/images</code></td><td><code>products</code>, <code>product_images</code></td></tr>
+              <tr><td class="nowrap"><code>/cart</code></td><td><code>GET /cart</code> · <code>POST /cart/items</code> · <code>PATCH</code>/<code>DELETE /cart/items/:id</code></td><td><code>carts</code>, <code>cart_items</code></td></tr>
+              <tr><td class="nowrap"><code>/checkout</code></td><td><code>POST /orders/checkout</code> — accepts 3 kinds: <code>cartItemIds</code> · <code>auctionId</code> · <code>offerAcceptToken</code> (one at a time)</td><td><code>orders</code>, <code>order_items</code>, <code>order_addresses</code>, <code>payment_transactions</code>, <code>shipments</code></td></tr>
+              <tr><td class="nowrap"><code>/orders</code> · <code>/orders/[id]</code></td><td><code>GET /orders</code> · <code>GET /orders/:id</code> · <code>GET /orders/:id/shipment</code></td><td>Read-only</td></tr>
+              <tr><td class="nowrap"><code>/sell/orders/*</code></td><td><code>GET /orders/selling</code> · <code>PATCH /orders/:id/shipment</code></td><td><code>shipments</code>, <code>shipment_events</code>, <code>notifications</code></td></tr>
+              <tr><td class="nowrap">Negotiate button · “Awaiting payment” banner</td><td><code>POST /products/:id/offers</code> · <code>GET /offers/pending</code></td><td><code>offers</code> — see the AI module</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>What actually happens when you click pay</h4>
+        <ol>
+          <li><strong>Every price is recomputed on the server</strong> — not a single number sent from the browser is trusted</li>
+          <li>Checks the items are still on sale and stock is sufficient — if not, it responds with an error code (<code>ITEMS_UNAVAILABLE</code>) <strong>before charging</strong></li>
+          <li>Calls the simulated payment provider — a total of exactly <code>666.00</code> is always declined (<code>PAYMENT_DECLINED</code>)</li>
+          <li>Deducts stock conditionally on <code>stockQty &gt;= quantity</code> — if two people pay at once, the loser rolls back entirely, so stock can't be oversold</li>
+          <li>Writes orders split by seller + creates shipments + removes the items from the cart</li>
+          <li>Notifies the buyer and every seller in that round (NOT-005) and pushes it over the <code>/user</code> socket</li>
+        </ol>
+        <p>
+          A won auction lot takes exactly the same path; the only difference is that the price comes from the <code>soldPrice</code> the system wrote when the auction closed,
+          and the right to pay comes from <code>winnerUserId</code> — there's no field in the request a buyer could use to change the price,
+          and <code>order_items.auction_id</code> is unique, so the same lot can't be paid for twice
+        </p>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>Notifications · buyer–seller chat</h3>
+          <span class="chip chip--accent">Dev 3</span>
+          <span class="chip chip--accent">Dev 4</span>
+          <span class="chip">NOT · CHAT</span>
+        </div>
+        <p>
+          These two features are <strong>shared destinations</strong> that other modules call into — any module can write a notification row,
+          and every row always travels two ways: <strong>stored in the <code>notifications</code> table</strong> (so it can be viewed later)
+          and <strong>sent over the <code>/user</code> socket</strong> (so the bell pops up immediately)
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Calls</th><th>socket</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/notifications</code> · bell</td><td><code>GET /notifications</code> · <code>/unread-count</code> · <code>PATCH /notifications/:id/read</code> · <code>/read-all</code></td><td><code>notification:created</code></td></tr>
+              <tr><td class="nowrap"><code>/chat</code> · <code>/chat/[id]</code></td><td><code>GET /conversations</code> · <code>GET</code>/<code>POST /conversations/:id/messages</code></td><td><code>message:sent</code></td></tr>
+              <tr><td class="nowrap">"Chat with seller" button</td><td><code>POST /products/:id/conversations</code> · <code>POST /auctions/:id/conversations</code></td><td>—</td></tr>
+              <tr><td class="nowrap"><code>/sell/settings</code></td><td><code>GET</code>/<code>PATCH /users/me/auto-reply</code></td><td>—</td></tr>
+              <tr><td class="nowrap">Order page</td><td>—</td><td><code>order:status_changed</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          There are 8 notification types: <code>OUTBID</code> · <code>AUCTION_WON</code> · <code>AUCTION_ENDED</code> ·
+          <code>AUCTION_CANCELLED</code> · <code>ORDER_PLACED</code> · <code>SHIPMENT_UPDATE</code> ·
+          <code>DELIVERED</code> · <code>NEW_MESSAGE</code>
+        </p>
+        <div class="note">
+          <span class="note__tag">A detail that is often explained wrong</span>
+          <p>
+            <code>OUTBID</code> goes <strong>only to the person who was just overtaken</strong>, not to everyone who has ever bid —
+            people further down were already overtaken in earlier rounds, and re-alerting them every time the price moves would make the bell useless.
+            Bidding over your own bid doesn't count as overtaking anyone · the notification row is written in the same transaction as the bid row,
+            so a recorded bid always has its notification alongside it
+          </p>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>AI — price estimates · negotiation · support chat</h3>
+          <span class="chip chip--accent">Dev 5</span>
+          <span class="chip">AI-001 · AI-002 · AI-003</span>
+        </div>
+        <p>
+          All three call Google Gemini through a single <code>gemini-client.service.ts</code>.
+          It boots without a key; only the routes that use it answer 503
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Feature</th><th>Calls</th><th>Written to</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><span class="chip">AI-001</span> Support chat</td><td><code>POST /support/chat</code> · <code>GET /support/chat/:id</code> · <code>POST /support/chat/:id/messages</code> · <code>/escalate</code></td><td><code>support_chat_sessions</code>, <code>support_chat_messages</code></td></tr>
+              <tr><td class="nowrap"><span class="chip">AI-002</span> Price estimate</td><td><code>POST /auctions/drafts/:id/price-estimate</code></td><td><code>ai_requests</code></td></tr>
+              <tr><td class="nowrap"><span class="chip">AI-003</span> Price negotiation</td><td><code>POST /products/:id/offers</code> · <code>GET /offers/pending</code></td><td><code>offers</code>, <code>ai_requests</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>How a negotiation is decided</h4>
+        <p>
+          The seller sets an acceptable <strong>floor price</strong>, which <strong>the buyer never sees</strong> — the comparison happens only on the server —
+          and it responds with one of 3 outcomes:
+        </p>
+        <ul>
+          <li><code>ACCEPTED</code> — the offer is ≥ the listed price <strong>or ≥ the price the system countered with in the previous round</strong></li>
+          <li><code>COUNTERED</code> — the offer is between the floor and the listed price; the system counters at the average of the two</li>
+          <li><code>REJECTED</code> — the offer is below the floor, or asks for more than the stock</li>
+        </ul>
+        <p>
+          The bold condition in the first item is what lets a negotiation <strong>end</strong> — a counter is the average of the offer and the sticker price,
+          so it's always below the sticker price. Without counting its own counter, offering exactly the counter would just get a new counter, round after round,
+          getting closer to the sticker price but never reaching it · accepting a counter <strong>is not subject to the 5-minute cooldown</strong>, because that number came from the server itself,
+          so sending it back reveals nothing about the floor · the floor check still sits above every rule
+        </p>
+        <h4>What happens after a successful negotiation</h4>
+        <p>
+          ACCEPTED unlocks that price for <strong>15 minutes, usable once</strong>, tied to the buyer, the product and the quantity offered
+          — but checkout still has to be completed; <strong>a successful negotiation is not a successful purchase</strong>
+        </p>
+        <p>
+          During those 15 minutes, <code>GET /offers/pending</code> returns the offers that can still be paid (with a token re-signed on every read),
+          and <code>PayableOffersBanner</code> shows them on the product page, cart, checkout and order list
+          — you can leave the page and come back to pay without negotiating again · the filter is a single line, <code>expiresAt &gt; now</code>,
+          because using the token pushes <code>expiresAt</code> into the past, so one condition excludes both “expired” and “already paid” at once
+        </p>
+        <h4>When the support chat hands over to an admin</h4>
+        <p>
+          The AI answers from a prepared question bank (<code>faq-knowledge-base.ts</code>). When it can't answer, or the user asks to talk to a person,
+          the session is escalated and shows up in the admin inbox immediately via the <code>support:inbox_updated</code> socket
+          — every online admin is in this shared room from the moment they connect, without opening any page first
+        </p>
+      </div>
+
+      <div class="feature">
+        <div class="feature__head">
+          <h3>Back office</h3>
+          <span class="chip chip--accent">Dev 5 (shell)</span>
+          <span class="chip">ADM-001 … ADM-006</span>
+        </div>
+        <p>
+          The back office has no rules of its own — it is <strong>the place where every module's actions are gathered</strong> in one spot.
+          What every action has in common: <strong>whenever an admin does anything, a row is written to <code>admin_actions</code> with a reason, every time</strong>
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Screen</th><th>Calls</th><th>Affects which module</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap"><code>/admin</code></td><td><code>GET /admin/overview</code></td><td>Reads across every module</td></tr>
+              <tr><td class="nowrap"><code>/admin/users</code></td><td><code>GET /admin/users</code> · <code>PATCH /admin/users/:id/suspend</code> · <code>/reactivate</code></td><td>auth — once suspended, existing tokens stop working immediately</td></tr>
+              <tr><td class="nowrap"><code>/admin/products</code></td><td><code>GET /admin/products</code> · <code>PATCH /admin/products/:id/deactivate</code> · <code>/reactivate</code></td><td>e-commerce (see ADR-0002)</td></tr>
+              <tr><td class="nowrap"><code>/admin/auctions</code></td><td><code>GET /admin/auctions</code> · <code>PATCH /admin/auctions/:id/cancel</code></td><td>auction — broadcasts <code>auction:cancelled</code> to the room</td></tr>
+              <tr><td class="nowrap"><code>/admin/orders</code></td><td><code>GET /admin/orders</code></td><td>Read-only</td></tr>
+              <tr><td class="nowrap"><code>/admin/categories</code></td><td><code>GET /categories/admin</code> · <code>POST /categories</code> · <code>PATCH /categories/:id</code> · <code>/activate</code> · <code>/deactivate</code></td><td>Shared by auctions and the shop (see ADR-0001)</td></tr>
+              <tr><td class="nowrap"><code>/admin/support</code></td><td><code>GET /admin/support/sessions</code> · <code>PATCH /:id/claim</code> · <code>/resolve</code> · <code>POST /:id/messages</code></td><td>AI</td></tr>
+              <tr><td class="nowrap"><code>/admin/audit-log</code></td><td><code>GET /admin/actions</code></td><td>Reads all of <code>admin_actions</code></td></tr>
+              <tr><td class="nowrap"><code>/admin/account</code></td><td><code>PATCH /admin/users/me/password</code></td><td>auth</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note note--signal">
+          <span class="note__tag">How admins are appointed</span>
+          <p>
+            <strong>No endpoint can change a user's role, on purpose</strong> — someone who is to become an admin first signs up through the website as usual,
+            and is then promoted with the <code>promote-admins.ts</code> script, which reads the list from <code>ADMIN_EMAILS</code>
+          </p>
+        </div>
+      </div>
+
+      <h3>Two full paths — for explaining to others</h3>
+
+      <h4>Path 1 · auction all the way to receiving the item</h4>
+      <ol class="steps">
+        <li>
+          <h4>Seller creates a draft</h4>
+          <p><code>/sell</code> → <code>POST /auctions/drafts</code> → a new row in <code>auctions</code> with status <code>DRAFT</code> · images are uploaded via <code>POST /uploads/images</code> to Cloudinary, and the URLs are stored in <code>auction_images</code></p>
+        </li>
+        <li>
+          <h4>Completeness check, then publish</h4>
+          <p><code>GET /auctions/drafts/:id/validation</code> says what's still missing · click publish → <code>POST /auctions/drafts/:id/publish</code> → status becomes <code>SCHEDULED</code></p>
+        </li>
+        <li>
+          <h4>The system opens the auction <span class="chip chip--signal">nobody clicks</span></h4>
+          <p>The timer sees the start time has come → changes it to <code>ACTIVE</code> → broadcasts <code>auction:started</code> to the room</p>
+        </li>
+        <li>
+          <h4>People join the room and bid</h4>
+          <p>
+            <code>/auctions/[id]</code> connects the socket to the <code>auction:&lt;id&gt;</code> room · click bid → <code>POST /auctions/:id/bids</code>
+            → everything is checked and written in a single transaction → broadcasts <code>auction:bid</code> →
+            every screen in the room calls <code>GET /arena</code> to re-read the whole state · the person who was overtaken gets an <code>OUTBID</code> notification
+          </p>
+        </li>
+        <li>
+          <h4>The system closes and decides <span class="chip chip--signal">nobody clicks</span></h4>
+          <p>
+            Time runs out (including time added by anti-sniping) → the timer changes it to <code>SOLD</code> or <code>UNSOLD</code> depending on whether the reserve was met
+            → writes <code>soldPrice</code> and <code>winnerUserId</code> → broadcasts <code>auction:ended</code> → notifies the winner and the seller
+          </p>
+        </li>
+        <li>
+          <h4>The winner pays</h4>
+          <p>
+            <code>GET /auctions/won</code> says which lots are waiting for payment → the <code>/checkout</code> page → <code>POST /orders/checkout</code>
+            → the order + shipment are created exactly like a shop purchase
+          </p>
+        </li>
+        <li>
+          <h4>The seller ships</h4>
+          <p>
+            <code>/sell/orders/[id]</code> → <code>PATCH /orders/:id/shipment</code>, one status at a time
+            <code>PROCESSING</code> → <code>SHIPPED</code> → <code>IN_TRANSIT</code> → <code>DELIVERED</code>
+            Each time writes <code>shipment_events</code> + notifies the buyer + pushes <code>order:status_changed</code>
+          </p>
+        </li>
+      </ol>
+
+      <h4>Path 2 · buy now from the shop</h4>
+      <ol class="steps">
+        <li>
+          <h4>Seller lists a product</h4>
+          <p><code>/sell/products/new</code> → <code>POST /products</code> → <code>products</code> + <code>product_images</code>, with stock and price</p>
+        </li>
+        <li>
+          <h4>Buyer finds it and adds it to the cart</h4>
+          <p><code>/shop</code> → <code>GET /products</code> (search + category filter) → <code>POST /cart/items</code> · one cart can hold items from several shops</p>
+        </li>
+        <li>
+          <h4>Wants it cheaper — makes an offer for the AI to decide</h4>
+          <p>
+            <code>POST /products/:id/offers</code> → answers <code>ACCEPTED</code> / <code>COUNTERED</code> / <code>REJECTED</code>
+            by comparing against the seller's floor price · after a COUNTER, “Accept this price” can be clicked right away, with no cooldown
+          </p>
+        </li>
+        <li>
+          <h4>Payment</h4>
+          <p>
+            <strong>Cart items:</strong> <code>/checkout</code> → <code>POST /orders/checkout</code> → every price recomputed → stock deducted →
+            <strong>split into per-seller orders</strong> → cart cleared → everyone notified
+          </p>
+          <p>
+            <strong>A negotiated price:</strong> <code>/checkout?offer=&lt;offerId&gt;</code> → the screen reads the offer from <code>GET /offers/pending</code>
+            and sends <code>offerAcceptToken</code> with checkout → the unit price comes from that offer, <strong>without also applying the quantity discount</strong> (PROD-007, they don't stack)
+          </p>
+        </li>
+        <li>
+          <h4>Tracking until it arrives</h4>
+          <p>The buyer watches at <code>/orders/[id]</code> · the seller updates at <code>/sell/orders/[id]</code> — the same path as step 7 of the auction path</p>
+        </li>
+      </ol>
+
+      <h3>Where different people's modules meet</h3>
+      <p>Know these 5 points and you'll understand why <code>dev</code> has to be merged every day</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Connection point</th><th>Sender</th><th>Receiver</th></tr></thead>
+          <tbody>
+            <tr><td>An auction closes and the winner has to pay</td><td class="nowrap">auction (Dev 4)</td><td class="nowrap">order / checkout (Dev 3)</td></tr>
+            <tr><td>Every module writes notification rows</td><td class="nowrap">auction · order · shipment · chat</td><td class="nowrap">notification + socket <code>/user</code></td></tr>
+            <tr><td>The guards and roles every endpoint shares</td><td class="nowrap">auth / common (Dev 2)</td><td class="nowrap">every module</td></tr>
+            <tr><td>One category set used by both auctions and the shop</td><td class="nowrap">categories (ADR-0001)</td><td class="nowrap">auction (Dev 4) · product (Dev 3)</td></tr>
+            <tr><td>Admin actions that act across modules</td><td class="nowrap">admin</td><td class="nowrap">auction · product · auth · support</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ch6">
+      <h2><span class="num">Chapter 06</span>Testing</h2>
+      <p class="lede">
+        This chapter covers two things decided at different moments — <strong>choosing the right tool</strong> is decided when you are about to write a new test file,
+        while <strong>running every layer</strong> is decided when you are about to submit work
+      </p>
+
+      <h3>Which tool — decided by two questions</h3>
+      <p>
+        This project has 4 testing tools, and they <strong>don't compete</strong> — each one has its own place.
+        When writing a new test file, ask these two questions in order and the answer falls out, with no need to argue about preferences
+      </p>
+      <div class="grid2">
+        <div class="card">
+          <h4>Question 1 · which app is the file in → gives you <em>the runner</em></h4>
+          <p>
+            In <code>apps/web</code> = <strong>Vitest</strong> · in <code>apps/api</code> = <strong>Jest</strong>
+            — this isn't a matter of taste; each app already has its own config, and picking the wrong one = the file never runs
+          </p>
+        </div>
+        <div class="card">
+          <h4>Question 2 · what are you testing → gives you <em>the library on top</em></h4>
+          <p>
+            A plain function = nothing extra needed · a component the user clicks or types into = <strong>RTL</strong> ·
+            a real endpoint over HTTP = <strong>Supertest</strong>
+          </p>
+        </div>
+      </div>
+      <div class="note">
+        <span class="note__tag">A common misunderstanding</span>
+        <p>
+          <strong>RTL is not an alternative to Vitest, and Supertest is not an alternative to Jest</strong> —
+          both are used <em>together with</em> a runner, not instead of one ·
+          put simply: the runner is what starts the tests and says whether they pass or fail,
+          while RTL and Supertest are the tools used to <em>reach in and touch</em> the thing being tested
+        </p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What to test</th><th>Runner</th><th>library</th><th>Where the file goes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Plain web-side functions — price formatting, time-remaining calculations, list filtering</td>
+              <td class="nowrap"><span class="chip chip--accent">Vitest</span></td>
+              <td class="nowrap">—</td>
+              <td><code>apps/web/src/lib/&lt;name&gt;.test.ts</code></td>
+            </tr>
+            <tr>
+              <td>Components the user clicks, types into, or sees text change in</td>
+              <td class="nowrap"><span class="chip chip--accent">Vitest</span></td>
+              <td class="nowrap"><span class="chip">RTL</span></td>
+              <td><code>apps/web/src/components/&lt;module&gt;/&lt;name&gt;.test.tsx</code></td>
+            </tr>
+            <tr>
+              <td>Server-side rules — services, mappers, utils that don't touch the real database</td>
+              <td class="nowrap"><span class="chip chip--accent">Jest</span></td>
+              <td class="nowrap">— (mock Prisma)</td>
+              <td><code>apps/api/src/&lt;module&gt;/&lt;name&gt;.spec.ts</code></td>
+            </tr>
+            <tr>
+              <td>Real endpoints, called over HTTP against the real database</td>
+              <td class="nowrap"><span class="chip chip--accent">Jest</span></td>
+              <td class="nowrap"><span class="chip">Supertest</span></td>
+              <td><code>apps/api/test/&lt;name&gt;.e2e-spec.ts</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Why the two apps use different runners</h4>
+      <div class="grid2">
+        <div class="card">
+          <h4><code>apps/api</code> → Jest</h4>
+          <p>
+            It came with <code>nest new</code> on scaffold day, and e2e uses NestJS's <code>Test.createTestingModule()</code>,
+            which is tied to Nest's DI system — moving to another runner would mean rebuilding how modules are assembled from scratch
+            for nothing in return
+          </p>
+        </div>
+        <div class="card">
+          <h4><code>apps/web</code> → Vitest</h4>
+          <p>
+            Next.js 16 is pure ESM and uses the <code>@/*</code> alias · Vitest reads paths from <code>tsconfig.json</code>
+            itself via <code>resolve.tsconfigPaths</code> — so a path that resolves in the editor also resolves in tests
+            without declaring it again in the config file
+          </p>
+        </div>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">Don't swap them</span>
+        <p>
+          Don't drag Vitest into <code>apps/api</code> or Jest into <code>apps/web</code> just because you prefer one —
+          one app with two runners means whoever opens a file can't tell what it runs with,
+          and <code>pnpm test</code> at the root would silently fail to run everything
+        </p>
+      </div>
+
+      <h4>RTL — test what the user sees, not what the code does inside</h4>
+      <ul>
+        <li>
+          <strong>Find elements by what users find them by</strong> — <code>getByRole("button", { name: "Bid" })</code>
+          or <code>getByLabelText</code>, not a class or test id · if it can't be found by role, that usually means
+          <strong>people using a screen reader can't find it either</strong> — that's a real bug, not a test problem
+        </li>
+        <li>
+          <strong>Use <code>user-event</code>, not <code>fireEvent</code></strong> — <code>user-event</code>
+          simulates the sequence a real browser goes through (focus → keydown → input → change), while <code>fireEvent</code>
+          fires a single event, which can pass even when the real thing is broken
+        </li>
+        <li>
+          <strong>No need to call <code>cleanup</code> yourself</strong> — <code>apps/web/src/test/setup.ts</code>
+          already sets <code>afterEach(cleanup)</code>; without it, components from the previous test would linger in the DOM
+          and <code>getByRole</code> would find two and throw
+        </li>
+      </ul>
+
+      <h4>Supertest — hit an app assembled the same way as production</h4>
+      <div class="note note--stop">
+        <span class="note__tag">The line that makes tests lie if you forget it</span>
+        <p>
+          Every e2e file must call <code>configureApp(app)</code> after <code>createTestingModule</code> —
+          <code>ValidationPipe</code> and the exception filter are installed in <code>main.ts</code>,
+          <strong>not in <code>AppModule</code></strong>. A file that forgets this line runs an app with no input validation at all:
+          the tests are nicely green while the real thing accepts anything
+        </p>
+      </div>
+
+      <h4>What doesn't need tests</h4>
+      <p>
+        A test that protects nothing has a real cost, because it has to be fixed every time the code moves · these three can be let go:
+        <strong>constants and types</strong> (typecheck already catches them) ·
+        <strong>whether Prisma works</strong> (that's testing their library, not our code) ·
+        <strong>components that render fixed text unconditionally</strong> ·
+        the best value is wherever there are <strong>conditions or calculations</strong> — minimum bids, anti-sniping decisions, stock deduction
+      </p>
+
+      <h3>Which approach — at which layer a test pays off</h3>
+      <p>
+        Once the tool is right, there is a more important question left: <strong>at which layer should this be tested</strong> ·
+        one principle is enough — <strong>test at the lowest layer that can still genuinely prove what you are worried about</strong>
+      </p>
+      <p>
+        To apply it, ask yourself <strong>"if this breaks, where does it break"</strong> and test there —
+        not climbing to the top layer because it feels more real. Upper layers are much slower and break more often for reasons unrelated to our code
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What you fear will break</th><th>Test at layer</th><th>Why other layers can't catch it</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Wrong calculations — minimum bid, quantity discount, time remaining, the AI counter average</td>
+              <td class="nowrap"><span class="chip chip--good">unit</span></td>
+              <td>e2e catches it too, but far more slowly, and when it goes red it won't tell you which line is wrong</td>
+            </tr>
+            <tr>
+              <td>A button enabled/disabled at the wrong time · an error message not showing · the screen not responding to input</td>
+              <td class="nowrap"><span class="chip chip--good">component (RTL)</span></td>
+              <td>typecheck and <code>next build</code> only catch whether it renders, not what happens when you click</td>
+            </tr>
+            <tr>
+              <td>A migration fails to apply · a unique index collision · two people clicking at once driving stock negative · guards wired in the wrong order</td>
+              <td class="nowrap"><span class="chip chip--stop">e2e only</span></td>
+              <td><strong>unit tests can't catch these at all</strong>, because Prisma is mocked away — these are behaviors of the real database</td>
+            </tr>
+            <tr>
+              <td>A page that breaks at build time · a Server Component calling something it can't</td>
+              <td class="nowrap"><span class="chip">no test needed</span></td>
+              <td><code>next build</code> in CI already catches it — a duplicate test is paying for nothing</td>
+            </tr>
+            <tr>
+              <td>Paths spanning several pages — auction ends → go to checkout → get an order</td>
+              <td class="nowrap"><span class="chip chip--signal">still manual</span></td>
+              <td>e2e only covers the API side · this project has no tests driving a real browser yet</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">Rule against test bloat</span>
+        <p>
+          <strong>Don't test the same rule at two layers</strong> — if the minimum-bid calculation is tested at the unit level,
+          e2e should only test that it is <em>wired correctly</em> (hitting the real endpoint returns 400 with the right error code),
+          not re-test every case of the formula · e2e takes about 75 seconds per file, while unit tests finish in a few seconds
+          — duplicated tests don't add confidence, they add waiting time for everyone on every PR
+        </p>
+      </div>
+      <div class="note">
+        <span class="note__tag">When writing a test pays off most</span>
+        <p>
+          <strong>Right after finding a bug</strong> — write a test that is red because of that bug first, then fix the code until it is green,
+          because that is the only moment you know for sure the test catches the real thing · if you write it after the fix,
+          you'll never know whether it was ever really red · an example in this project is the commit
+          <code>fix(BID-001)</code>, which came with its own test in the same change
+        </p>
+      </div>
+
+      <h3>Layer 1 · pnpm check — the gate before submitting work</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">terminal</span><button class="code__copy" type="button">copy</button></div>
+        <pre>pnpm check</pre>
+      </div>
+      <p>One command bundling 4 things: typecheck of <code>apps/api</code> → typecheck of <code>apps/web</code> → <code>pnpm test</code> → <code>pnpm lint</code></p>
+
+      <h3>Layer 2 · unit tests — 57 files across both apps, no database needed</h3>
+      <p>
+        <strong>Server side, 49 files (Jest)</strong> — <code>*.spec.ts</code> placed next to the file it tests in <code>apps/api/src/</code>
+      </p>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">apps/api · Jest</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># run everything</span>
+pnpm --dir apps/api test
+
+<span class="c"># run only the file you're working on (part of the file name works)</span>
+pnpm --dir apps/api test bid.service
+
+<span class="c"># keep it running and re-run on every file change</span>
+pnpm --dir apps/api test:watch</pre>
+      </div>
+      <p>
+        <strong>Web side, 8 files (Vitest)</strong> — 5 plain-function files in <code>src/lib/</code>
+        and 3 component files in <code>src/components/</code> using RTL
+      </p>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">apps/web · Vitest</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># run everything</span>
+pnpm --dir apps/web test
+
+<span class="c"># run only the file you're working on</span>
+pnpm --dir apps/web test auction-search
+
+<span class="c"># keep it running and re-run on every file change</span>
+pnpm --dir apps/web test:watch</pre>
+      </div>
+      <p>
+        Neither side <strong>touches the real database</strong> — the api side mocks Prisma entirely, and the web side runs on jsdom,
+        so they are very fast and don't need Docker. They suit testing pure rules, such as the minimum-bid calculation, anti-sniping decisions
+        and the AI negotiator's decisions — but the trade-off is that they <strong>can't catch at all</strong> a migration that doesn't work
+        or a unique index collision when two people click at the same time
+      </p>
+      <div class="note note--signal">
+        <span class="note__tag">Why web-side vitest uses the jsdom environment even though some files test plain functions</span>
+        <p>
+          Because <code>lib/api/client.ts</code> reaches into <code>next-auth/react</code> through <code>authHeader()</code>,
+          and <code>lib/format.ts</code> formats through <code>Intl</code> — both need browser-like globals.
+          Set it to <code>node</code> and they break even though the code isn't wrong
+        </p>
+      </div>
+
+      <h3>Layer 3 · e2e — 20 specs, real HTTP against a real database</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">Prepare first (if you didn't in chapter 03)</span><button class="code__copy" type="button">copy</button></div>
+        <pre>docker compose -f infra/docker/compose.dev.yml up -d
+pnpm --dir apps/api exec prisma migrate deploy
+pnpm --dir apps/api exec prisma db seed</pre>
+      </div>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">Run e2e</span><button class="code__copy" type="button">copy</button></div>
+        <pre>pnpm --dir apps/api test:e2e</pre>
+      </div>
+      <ul>
+        <li><strong>Seed first</strong> — several specs look up users by the fixed UUIDs <code>seed.ts</code> writes, rather than creating them</li>
+        <li><strong>Maildev is required</strong> — the auth specs really read the OTP codes back from the Maildev inbox</li>
+        <li><code>force-maildev.ts</code> forces every run to send mail to Maildev — even if your local <code>.env</code> points at a real relay, nothing leaks out</li>
+        <li>Runs one file at a time (<code>maxWorkers: 1</code>), taking about 75 seconds</li>
+      </ul>
+
+      <h3>Layer 4 · manual requests — .http, Postman, Swagger</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Tool</th><th>Where</th><th>Good for</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>.http</code> files</td><td><code>apps/api/test/http/</code> — 15 files split by module</td><td>Sending one request at a time from VS Code / JetBrains</td></tr>
+            <tr><td class="nowrap">Postman</td><td><code>apps/api/test/postman/</code></td><td>People who prefer Postman — import the collection + environment</td></tr>
+            <tr><td class="nowrap">Swagger</td><td><code>localhost:4000/docs</code></td><td>Seeing which endpoints exist and what body shape they accept</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">Token tip for manual requests</span>
+        <p>
+          When the seed finishes it prints <code>@xToken = ...</code> lines at the very end — copy them straight into the top of the <code>.http</code> file.
+          Tokens expire in 15 minutes; once you start getting 401, seed again and paste over them. No need to log in for real, since login waits for an OTP
+        </p>
+      </div>
+
+      <h3>CI — what happens automatically when you open a PR</h3>
+      <p>Every PR into <code>dev</code> or <code>main</code> runs 3 jobs in parallel, taking about 4 minutes in total</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>job</th><th>What it does</th><th>What it catches that other layers can't</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap"><code>lint-and-test</code></td>
+              <td>lint → unit tests <strong>for both apps</strong> (Jest for api + Vitest for web) → <code>next build</code> of apps/web</td>
+              <td>Server Component errors that never show up during <code>pnpm dev</code>, because dev renders one page at a time as you open it</td>
+            </tr>
+            <tr>
+              <td class="nowrap"><code>docker-build</code></td>
+              <td>Builds the apps/api image (build only, no push)</td>
+              <td>A Dockerfile broken by a dependency needing a system package, or a moved path — lint and tests never open this file</td>
+            </tr>
+            <tr>
+              <td class="nowrap"><code>e2e</code></td>
+              <td>Starts Postgres + Maildev, then runs migrate → seed → e2e</td>
+              <td>Migrations that don't apply, unique indexes two requests race for, guards wired in the wrong order</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">The web side has tests now, but coverage is thin</span>
+        <p>
+          <code>apps/web</code> now has Vitest + RTL, and CI runs them through <code>pnpm test</code> just like the api side —
+          but for now they only cover <strong>plain functions and 8 files of individual components</strong>; there are no tests that walk a whole screen
+          or a whole user journey · <strong>features spanning several pages still have to be tried by hand before submitting</strong>,
+          and the remaining gates on this side are still typecheck + <code>next build</code>, as before
+        </p>
+      </div>
+    </section>
+
+    <section id="ch7">
+      <h2><span class="num">Chapter 07</span>Why it was built this way</h2>
+      <p class="lede">
+        Other chapters answer <strong>how to use it</strong> · this chapter answers <strong>why it is this one</strong> —
+        for answering questions during a presentation, and for making similar decisions next time
+      </p>
+      <div class="note">
+        <span class="note__tag">Testing is covered in another chapter</span>
+        <p>
+          The principles for choosing test tools (Vitest / Jest / RTL / Supertest) and for choosing the <em>layer</em> to test at
+          are both in <a href="#ch6">chapter 06</a>, because those decisions happen while writing tests, not while reading back
+        </p>
+      </div>
+
+      <h3>WebSocket — why auctions need it</h3>
+      <p>
+        The question to answer first is <strong>where REST alone falls short</strong> · the answer lies in the nature of the data:
+        auction prices change because of <strong>other people</strong>, not the person watching — REST can only answer when someone asks,
+        and someone watching an auction has no way of knowing when to ask
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Option</th><th>What you actually get</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap">Manual refresh</td>
+              <td>The user has to guess when the price moved — in the last minute of an auction room it is simply unusable</td>
+            </tr>
+            <tr>
+              <td class="nowrap">Polling every 1–2 s</td>
+              <td>1 viewer = dozens of empty requests per minute, and <strong>still slower</strong>, because news arrives up to one polling cycle late — paying more to get something worse</td>
+            </tr>
+            <tr>
+              <td class="nowrap"><span class="chip chip--good">WebSocket</span></td>
+              <td>The server speaks when something actually happens, with no empty requests, and it arrives immediately</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The deciding criterion is <strong>whether the data is pushed by events the viewer didn't cause</strong> —
+        auctions, notifications and chat meet it · the cart and the profile page don't, because they only change when their owner acts,
+        <strong>so sockets were not bolted onto every page</strong>
+      </p>
+
+      <h4>Why Socket.IO rather than raw WebSocket</h4>
+      <p>These 4 things are needed anyway; with raw WS you would have to write them all yourself</p>
+      <div class="grid2">
+        <div class="card">
+          <h4>Rooms</h4>
+          <p>Events must go only to people watching that auction, not everyone connected · raw WS needs its own connection registry</p>
+        </div>
+        <div class="card">
+          <h4>Automatic reconnection</h4>
+          <p>A network hiccup mid-auction is the worst possible moment · <code>use-auction-room.ts</code> sets a backoff of 1 s → up to 10 s</p>
+        </div>
+        <div class="card">
+          <h4>namespace</h4>
+          <p>Separates the public channel from the private one without opening extra ports or doing a handshake yourself</p>
+        </div>
+        <div class="card">
+          <h4>fallback</h4>
+          <p>Networks that block WebSocket fall back to long-polling on their own, without our code needing to know</p>
+        </div>
+      </div>
+      <p>
+        Plus, NestJS has <code>@nestjs/platform-socket.io</code> built in — a gateway is written as a class using the same DI
+        as any other service, with the same access to <code>PrismaService</code>, no manual wiring needed
+      </p>
+
+      <h4>Why there are 2 namespaces</h4>
+      <p>Because the two channels have <strong>opposite security properties</strong> — combining them would mean filtering per person inside one room, where a single mistake leaks data</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th><code>/auctions</code></th><th><code>/user</code></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap">Who can join</td>
+              <td><span class="chip">no token needed</span></td>
+              <td><span class="chip chip--stop">authenticate at connection</span></td>
+            </tr>
+            <tr>
+              <td class="nowrap">Why</td>
+              <td>Published auctions are public data (AUC-005), and the room sends the same data the public <code>GET</code> already sends — there is nothing to authorize</td>
+              <td>Every event is addressed to a single account, so a socket that can't authenticate has no reason to stay connected</td>
+            </tr>
+            <tr>
+              <td class="nowrap">Can a token be sent?</td>
+              <td>Yes, and it doesn't change what you see — it lets the system know who closed their tab, so the viewer count is right (LIV-001)</td>
+              <td>Required</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--signal">
+        <span class="note__tag">A deliberate detail</span>
+        <p>
+          <code>/user</code> authenticates <strong>at connection time, not when the join message is sent</strong> —
+          so there's never a moment when an unidentified socket sits on this namespace waiting to say who it is
+        </p>
+      </div>
+
+      <h4>The most important principle — the socket says "something changed", not "what it changed to"</h4>
+      <p>
+        Every handler in <code>use-auction-room.ts</code> calls the same <code>onChange()</code>,
+        and the screen then calls <code>GET /arena</code> to re-read the whole set — <strong>nowhere is an event's payload pasted onto the screen directly</strong>
+      </p>
+      <p>
+        The reason: the arena is a set of values that <strong>must be consistent as a whole</strong> — current price, leader, next minimum bid,
+        closing time and remaining extension quota · the API computes them together, and patching them in field by field is how a screen ends up
+        <strong>offering a bid the endpoint will reject</strong> · the cost is 1 request per event,
+        and what you get back is a state that is always correct as a whole
+      </p>
+      <div class="note note--stop">
+        <span class="note__tag">The socket doesn't take commands</span>
+        <p>
+          Bidding still goes through HTTP and the guard as usual — the socket only accepts the room-join message; everything else is one-way (outbound only).
+          The result is that <strong>no business rule has to be written in two places</strong>. If bids were also accepted over the socket,
+          every rule (minimum bid, duplicate-bid protection, user permissions) would need a second copy, and two copies inevitably drift apart one day
+        </p>
+      </div>
+
+      <h4>Presence is kept in memory on purpose</h4>
+      <p>
+        <code>presence-registry.ts</code> keeps which socket belongs to whom and which auction it is watching, purely in memory.
+        The reason is that it describes who is connected to <strong>this process</strong> — when the process dies, the sockets it held go with it,
+        so the data is naturally correct, with no one needing to clean it up
+      </p>
+      <p>
+        And it <strong>counts rather than flags</strong>, because one person can open the same auction in two tabs — closing one tab doesn't mean leaving the room
+      </p>
+      <div class="note note--signal">
+        <span class="note__tag">A limitation to know before scaling out</span>
+        <p>
+          Both presence and broadcasting are tied to a single process · <strong>the day <code>apps/api</code> runs as more than 1 instance,
+          a Socket.IO adapter (e.g. Redis) has to be added first</strong>, otherwise people connected to different instances won't see each other's events,
+          and the viewer count will only include people who happen to be on the same instance · there is no adapter in the code yet
+          (searching all of <code>apps/api/src</code> finds neither Redis nor <code>IoAdapter</code>) — <strong>it is designed for a single instance,
+          and this is the first thing to fix before adding instances</strong>. The actual replica count is set in Railway's dashboard,
+          not in the repo, so check there before concluding how many are running
+        </p>
+      </div>
+
+      <h3>Docker — why it is needed and what it really gives you</h3>
+      <p>
+        This project uses Docker in <strong>two completely different roles</strong> — tell them apart first, or you'll be confused about why our code is sometimes in a container and sometimes not
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>On a dev machine</th><th>In production</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap">File</td>
+              <td><code>infra/docker/compose.dev.yml</code></td>
+              <td><code>Dockerfile</code> + <code>docker-entrypoint.sh</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap">What's in the container</td>
+              <td><strong>The surroundings</strong> — Postgres + Maildev</td>
+              <td><strong>The app itself</strong> — <code>apps/api</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap">Where our code is</td>
+              <td>Runs directly on the machine with <code>pnpm dev</code> — edit a file and see the result immediately</td>
+              <td>Built into the image</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Role 1 · compose.dev.yml — making 5 machines identical</h4>
+      <p>
+        Without it, everyone installs Postgres themselves and ends up on different versions — <strong>"works on my machine, not on yours"</strong>
+        is the most expensive cost for a 5-person team with 14 days · every line in the compose file has a reason
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Setting</th><th>What problem it solves</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>postgres:17</code></td><td>Everyone gets exactly the same version, matching what Railway uses — bugs caused by SQL version differences show up locally</td></tr>
+            <tr><td class="nowrap"><code>127.0.0.1:<strong>5433</strong>:5432</code></td><td>5433 deliberately avoids clashing with a Postgres some people already have installed · bound to <code>127.0.0.1</code>, so the dev database never shows up on the LAN</td></tr>
+            <tr><td class="nowrap"><code>maildev</code></td><td><strong>Login in this system requires an emailed OTP on every entry path</strong> — without a local mail catcher, login can't be tested at all, and nobody has to share real SMTP credentials</td></tr>
+            <tr><td class="nowrap"><code>pg_data</code> volume</td><td>Data survives even if the container is deleted — no need to seed again every morning</td></tr>
+            <tr><td class="nowrap"><code>healthcheck: pg_isready</code></td><td>Says the database is <strong>actually ready for queries</strong>, not just that the container is up — so scripts can wait for the right moment</td></tr>
+            <tr><td class="nowrap"><code>restart: unless-stopped</code></td><td>Comes up by itself when you start the machine, no need to start it every day</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="note__tag">Why apps/web and apps/api aren't in compose too</span>
+        <p>
+          Because it would cost something dev needs every minute — <strong>hot reload</strong> · mounting source into a container
+          on Windows makes the watcher noticeably slower, in exchange for a sameness our code doesn't need,
+          since it already runs on Node 24 identically on every machine · <strong>so Docker wraps only the things that are hard to install and version-sensitive</strong>
+        </p>
+      </div>
+
+      <h4>Role 2 · Dockerfile — so the deploy target doesn't need to know about the monorepo</h4>
+      <p>
+        Railway doesn't need to know what a pnpm workspace is, or that <code>packages/contracts</code> exists —
+        it gets a single runnable image · the trade-off is that the Dockerfile has to know these things instead, and every line in it has a reason
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What was done</th><th>What happens without it</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">build context = <strong>the repo root</strong></td><td><code>pnpm-lock.yaml</code> and <code>pnpm-workspace.yaml</code> live at the root — this is why Railway's Root Directory field must be <strong>left empty</strong>, not set to <code>apps/api</code></td></tr>
+            <tr><td class="nowrap">multi-stage <code>deps</code> → <code>build</code> → <code>runtime</code></td><td>The deps stage copies only the manifest files first — editing source files <strong>doesn't reinstall everything</strong></td></tr>
+            <tr><td class="nowrap">Debian, not Alpine</td><td>The Prisma schema engine is a glibc binary · on musl it needs a different build and breaks <strong>at deploy time</strong>, the worst possible moment</td></tr>
+            <tr><td class="nowrap">Install <code>openssl</code> as well</td><td><code>node:*-slim</code> doesn't include it, but <code>prisma migrate deploy</code> needs it on every boot</td></tr>
+            <tr><td class="nowrap">Pin <code>pnpm@11.10.0</code> via npm</td><td>Corepack reads <code>devEngines</code> and refuses, because it only accepts an exact version while the repo specifies the range <code>^11.10.0</code></td></tr>
+            <tr><td class="nowrap">Copy all of <code>node_modules</code>, no prune</td><td>The Prisma CLI is a devDependency, but the entrypoint needs it — <strong>a few hundred MB of space traded for a container that migrates itself</strong>, making a redeploy a single step</td></tr>
+            <tr><td class="nowrap"><code>node:24</code> as the base</td><td>This version is what production actually runs · <strong>CI and the docs have been aligned with it</strong> — previously CI tested on 22 even though no environment ran 22 at all, meaning code passed CI without ever being proven on the version really in use · now this number is declared in one place, <code>engines.node</code>, which <strong>Vercel also reads to pick the runtime for <code>apps/web</code></strong>, so both platforms are controlled from the repo</td></tr>
+            <tr><td class="nowrap"><code>USER node</code></td><td>Nothing in this image needs root</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>The entrypoint does two things, and both matter</h4>
+      <ol class="steps">
+        <li>
+          <h4><code>prisma migrate deploy</code> before start</h4>
+          <p>
+            The database a freshly started container meets is often several migrations behind the code — that is the normal state after a deploy ·
+            <code>migrate deploy</code> applies only what's missing, never rewrites history, and <strong>takes an advisory lock first</strong>,
+            so two containers starting at the same time can't fight over the same migration
+          </p>
+        </li>
+        <li>
+          <h4><code>exec</code> node, not a plain call</h4>
+          <p>
+            <code>exec</code> makes the app replace the shell and become PID 1 — receiving <code>SIGTERM</code> from the platform directly ·
+            without it, the shell swallows the signal, graceful shutdown never runs, and the container gets killed
+            <strong>while requests are still in flight</strong>
+          </p>
+        </li>
+      </ol>
+
+      <h4>Why apps/web doesn't go into Docker</h4>
+      <p>
+        Vercel builds straight from source and expects the standard Next.js layout · putting it in a container would lose
+        the automatic preview deploys, image optimization and edge network that come for free —
+        <strong>wrap things to make them identical, but don't wrap what the platform already does better</strong>
+      </p>
+
+      <h3>The criteria behind all three decisions</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>Choose what solves a real problem</h4>
+          <p>WebSocket came in because polling is more expensive and slower, not because real-time sounds good — pages whose data changes only when their owner acts are still pure REST</p>
+        </div>
+        <div class="card">
+          <h4>Wrap only what's hard to install</h4>
+          <p>Docker wraps Postgres and Maildev on dev machines but not our code, because that would lose hot reload for nothing in return</p>
+        </div>
+        <div class="card">
+          <h4>Give the truth a single home</h4>
+          <p>Bidding rules live only behind HTTP, so the socket doesn't accept bids · the data structure lives only in <code>schema.prisma</code></p>
+        </div>
+        <div class="card">
+          <h4>Know when your choice will break</h4>
+          <p>In-memory presence is right for a single instance, and we wrote down clearly that an adapter is needed the day there is more than one</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="ch8">
+      <h2><span class="num">Chapter 08</span>Going to production</h2>
+
+      <h3>What lives where</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Part</th><th>host</th><th>deploys from branch</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>apps/api</code></td><td>Railway (Docker)</td><td><code>main</code> → production</td></tr>
+            <tr><td class="nowrap"><code>apps/web</code></td><td>Vercel</td><td><code>main</code> → production · <code>dev</code> → preview</td></tr>
+            <tr><td class="nowrap">PostgreSQL</td><td>Railway — a separate service in the same project</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--stop">
+        <span class="note__tag">No staging yet</span>
+        <p>
+          There is only production and Vercel previews · previews deploy from <code>dev</code> automatically, but <strong>get a new random URL every time</strong>
+          and point at the same API as production — fine for checking the UI, but <strong>not for testing Google/LINE login</strong>,
+          because a random URL can never be on the list registered with those two providers
+        </p>
+      </div>
+
+      <h3>Releasing, step by step</h3>
+      <ol class="steps">
+        <li>
+          <h4>Check what's waiting to be released</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">Read-only, doesn't create a PR, run it as often as you like</span><button class="code__copy" type="button">copy</button></div>
+            <pre>git fetch origin
+git log --merges --pretty='- %s' origin/main..origin/dev</pre>
+          </div>
+          <p>Nothing shows up = <code>main</code> has caught up with <code>dev</code>; nothing to release this time</p>
+        </li>
+        <li>
+          <h4>Open the release PR — the base must be main</h4>
+          <p>
+            Open the compare page <code>main...dev</code>, check the top of the page says <strong>base: main ← compare: dev</strong> and shows Able to merge ·
+            use the title format <code>chore: release dev to main - &lt;short summary&gt;</code> ·
+            a short 2–3 line description citing the child PR numbers is enough (just type <code>#153</code> and GitHub links it)
+          </p>
+          <p><strong>This is the only kind of PR that may have <code>main</code> as its base</strong>; feature branches always go into <code>dev</code></p>
+        </li>
+        <li>
+          <h4>Click Update branch right away, don't wait for CI</h4>
+          <p>Waiting for CI to finish before clicking Update wastes a whole round, because the commit being tested isn't the commit that will actually be merged · <strong>never choose Update with rebase</strong>, because it rewrites the whole history of <code>dev</code></p>
+        </li>
+        <li>
+          <h4>Wait for all 3 CI checks to go green, then get 1 approval</h4>
+          <p>Branch protection requires <code>lint-and-test</code> + <code>docker-build</code> + <code>e2e</code> and 1 approval — you can't merge on your own</p>
+        </li>
+        <li>
+          <h4>Click Merge, and Railway and Vercel deploy on their own <span class="chip chip--signal">automatic</span></h4>
+          <p><code>docker-entrypoint.sh</code> runs <code>prisma migrate deploy</code> itself before every start, so deploys don't need a separate migration step</p>
+        </li>
+        <li>
+          <h4>Check production is still breathing</h4>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">Git Bash — replace &lt;railway-domain&gt; with the real domain</span><button class="code__copy" type="button">copy</button></div>
+            <pre>curl https://&lt;railway-domain&gt;/health</pre>
+          </div>
+          <div class="code">
+            <div class="code__bar"><span class="code__label">PowerShell — curl here is an alias of Invoke-WebRequest, not the real curl</span><button class="code__copy" type="button">copy</button></div>
+            <pre>Invoke-RestMethod https://&lt;railway-domain&gt;/health</pre>
+          </div>
+          <p>
+            You must get <code>{"status":"ok"}</code> <strong>exactly like this, and nothing else</strong> — anything else means you hit the wrong server,
+            because Railway domains are public names anyone can claim, and hitting the wrong one can also return 200.
+            Finish by trying out at least 1 of the newly released features on the live site
+          </p>
+        </li>
+      </ol>
+
+      <h3>Production settings live in the dashboard, not in the repo</h3>
+      <p>
+        The <code>railway.json</code> file in the repo <strong>is not read</strong> — Railway's Config as Code has been deprecated.
+        That file is kept only as a record of what should be set; the real values have to be set by hand in the service's Settings
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Railway field</th><th>Must be set to</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">Builder</td><td><code>Dockerfile</code> — the default is Railpack, which doesn't build this monorepo correctly</td></tr>
+            <tr><td class="nowrap">Root Directory</td><td>Left empty, <strong>not</strong> <code>apps/api</code> (pnpm reads the workspace from the lockfile at the repo root)</td></tr>
+            <tr><td class="nowrap">Healthcheck Path</td><td><code>/health</code></td></tr>
+            <tr><td class="nowrap">Custom Start Command</td><td><strong>Left empty</strong> — setting it overrides the ENTRYPOINT, and migrations won't run</td></tr>
+            <tr><td class="nowrap">Region</td><td>Match the Postgres service, otherwise every query crosses continents</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Extra env vars production needs</h3>
+      <p>The system only truly requires <code>DATABASE_URL</code> + the two JWT secrets, and the rest have defaults, but production needs at least these as well</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Set in</th><th>Watch out</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>WEB_APP_URL</code></td><td>Railway</td><td>The Vercel domain · <strong>no trailing <code>/</code></strong>, or CORS blocks the whole site</td></tr>
+            <tr><td class="nowrap"><code>MAIL_*</code> or <code>SENDGRID_API_KEY</code></td><td>Railway</td><td>Must be a real relay · <strong>never point it at Maildev</strong>, because its dashboard shows OTPs to anyone who can reach it</td></tr>
+            <tr><td class="nowrap"><code>AUTH_URL</code> · <code>AUTH_SECRET</code> · <code>NEXT_PUBLIC_API_URL</code></td><td>Vercel</td><td><code>AUTH_URL</code> must have no trailing <code>/</code> · the production <code>AUTH_SECRET</code> must differ from your local one</td></tr>
+            <tr><td class="nowrap"><code>GOOGLE_CLIENT_ID</code> · <code>LINE_CHANNEL_ID</code></td><td>Both sides</td><td>Must match exactly · <code>LINE_CHANNEL_SECRET</code> goes in <strong>Vercel only</strong></td></tr>
+            <tr><td class="nowrap"><code>ADMIN_SKIP_2FA</code></td><td>—</td><td><strong>Don't set it</strong>; unset means off</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Traps that break things silently</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>Putting quotes in the dashboard</h4>
+          <p><code>.env</code> can have quotes because dotenv strips them, but <strong>Railway doesn't</strong> — a value entered as <code>"a@x.com"</code> becomes an email with the quotes attached. This applies to <strong>every variable</strong>, not just <code>ADMIN_EMAILS</code></p>
+        </div>
+        <div class="card">
+          <h4>NEXT_PUBLIC_* is baked in at build time</h4>
+          <p>After setting it in Vercel, <strong>you have to click Redeploy</strong> for the Google button to appear — it is not read at runtime</p>
+        </div>
+        <div class="card">
+          <h4>OTP email can't be sent = nobody can log in</h4>
+          <p>Users only see <code>Internal server error</code> · the real cause is in Railway's Deploy Logs; search for <code>Failed to deliver</code></p>
+        </div>
+        <div class="card">
+          <h4>Releasing a migration mixed with ordinary features</h4>
+          <p>Migrations are the hardest thing to roll back; a round that touches <code>schema.prisma</code> should be released on its own, so you immediately know what caused any breakage</p>
+        </div>
+      </div>
+
+      <h3>Commands run from Railway's Console tab</h3>
+      <div class="code">
+        <div class="code__bar"><span class="code__label">Railway → the API service → Console</span><button class="code__copy" type="button">copy</button></div>
+        <pre><span class="c"># promote already-registered accounts to ADMIN (reads the list from ADMIN_EMAILS)</span>
+node apps/api/dist/prisma/promote-admins.js
+
+<span class="c"># load the starter data (the image ships with the compiled seed)</span>
+node apps/api/dist/prisma/seed.js</pre>
+      </div>
+    </section>
+
+    <section id="ch9">
+      <h2><span class="num">Chapter 09</span>Quick reference</h2>
+
+      <h3>Every status in the system</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>For</th><th>Possible statuses</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap">Auction</td><td><code>DRAFT</code> → <code>SCHEDULED</code> → <code>ACTIVE</code> → <code>SOLD</code> / <code>UNSOLD</code> · <code>CANCELLED</code></td></tr>
+            <tr><td class="nowrap">Product</td><td><code>ACTIVE</code> · <code>INACTIVE</code> · <code>OUT_OF_STOCK</code> · <code>REMOVED</code> · <code>SUSPENDED</code> (set by an admin — the seller can't lift it)</td></tr>
+            <tr><td class="nowrap">Order</td><td><code>PENDING</code> · <code>PAID</code> · <code>CANCELLED</code></td></tr>
+            <tr><td class="nowrap">Payment</td><td><code>SUCCEEDED</code> · <code>FAILED</code></td></tr>
+            <tr><td class="nowrap">Negotiation offer</td><td><code>ACCEPTED</code> · <code>COUNTERED</code> · <code>REJECTED</code></td></tr>
+            <tr><td class="nowrap">Shipment</td><td><code>PROCESSING</code> → <code>SHIPPED</code> → <code>IN_TRANSIT</code> → <code>DELIVERED</code> · <code>CANCELLED</code></td></tr>
+            <tr><td class="nowrap">User</td><td><code>ACTIVE</code> · <code>SUSPENDED</code> · role: <code>USER</code> / <code>ADMIN</code></td></tr>
+            <tr><td class="nowrap">Support chat</td><td><code>AI_ONLY</code> → <code>ESCALATED</code> (handed to an admin) → <code>RESOLVED</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>All of Socket.IO</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>namespace</th><th>Room</th><th>Events the server sends</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nowrap"><code>/auctions</code><br><span class="chip">no login needed</span></td>
+              <td><code>auction:&lt;id&gt;</code></td>
+              <td><code>auction:bid</code> · <code>auction:extension</code> · <code>auction:presence</code> · <code>auction:started</code> · <code>auction:ended</code> · <code>auction:cancelled</code></td>
+            </tr>
+            <tr>
+              <td class="nowrap"><code>/user</code><br><span class="chip chip--stop">login required</span></td>
+              <td><code>user:&lt;id&gt;</code> · <code>conversation:&lt;id&gt;</code> · <code>support:&lt;id&gt;</code> · <code>support:admin-inbox</code></td>
+              <td><code>notification:created</code> · <code>order:status_changed</code> · <code>message:sent</code> · <code>support:message</code> · <code>support:inbox_updated</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Who owns each requirement ID</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>ID</th><th>Topic</th><th>Owner</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>AUTH-001…008</code></td><td>Sign-up, login, OTP, OAuth, password reset</td><td class="nowrap">Dev 2</td></tr>
+            <tr><td class="nowrap"><code>PROD-001…007</code></td><td>Product listing, search, stock, product status</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>CART-001…005</code></td><td>Cart, payment, orders</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>SHIP-001…003</code></td><td>Shipping</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>CHAT-001…004</code></td><td>Buyer–seller chat, auto-reply</td><td class="nowrap">Dev 3</td></tr>
+            <tr><td class="nowrap"><code>AUC-001…008</code></td><td>Auction lifecycle</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>BID-001…005</code></td><td>Bidding, duplicate-bid protection, anti-sniping</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>LIV-001…005</code></td><td>Live auction room</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>WAT-001…002</code></td><td>Watchlist</td><td class="nowrap">Dev 4</td></tr>
+            <tr><td class="nowrap"><code>NOT-001…008</code></td><td>Notifications for 8 events</td><td class="nowrap">Shared</td></tr>
+            <tr><td class="nowrap"><code>AI-001…003</code></td><td>Support chat, price estimates, negotiation</td><td class="nowrap">Dev 5</td></tr>
+            <tr><td class="nowrap"><code>ADM-001…006</code></td><td>Back-office actions + audit log</td><td class="nowrap">Shared</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Where to read next</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Document</th><th>Open when</th></tr></thead>
+          <tbody>
+            <tr><td class="nowrap"><code>docs/requirements/</code></td><td>You need a requirement's acceptance criteria — <strong>the reference when deciding whether work passes</strong></td></tr>
+            <tr><td class="nowrap"><code>docs/architecture/workflows/</code></td><td>You want to see the 14 workflow diagrams drawn from the real code (just open the HTML file, nothing to run)</td></tr>
+            <tr><td class="nowrap"><code>docs/architecture/erd/</code></td><td>You want to know which table data is stored in</td></tr>
+            <tr><td class="nowrap"><code>docs/architecture/adr/</code></td><td>You want to know why it was designed this way</td></tr>
+            <tr><td class="nowrap"><code>docs/KICKOFF_GUIDE.md</code></td><td>Machine setup, monorepo structure, CI, commit convention (full version)</td></tr>
+            <tr><td class="nowrap"><code>docs/DAILY_WORKFLOW.md</code></td><td>The daily commands in short form, for quick reference while working</td></tr>
+            <tr><td class="nowrap"><code>docs/RELEASE_GUIDE.md</code></td><td>Releasing to production in full, with every pitfall</td></tr>
+            <tr><td class="nowrap"><code>docs/team-role/</code></td><td>Each person's scope of work</td></tr>
+            <tr><td class="nowrap"><code>CLAUDE.md</code></td><td>The team's shared working rules</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Team tools: <a href="https://pitchayauds.atlassian.net/jira/software/projects/BN/boards/2">Jira</a> ·
+        <a href="https://www.figma.com/design/XjSmZZgT0IBPc8do84WaRa/Bidnest">Figma</a> ·
+        <a href="https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff">ERD online</a>
+      </p>
+    </section>
+
+  </main>
+</div>
+
+<footer class="end">
+  <p>
+    BidNest — Auction &amp; Marketplace · Team handbook · written from the code in <code>apps/api</code> and <code>apps/web</code>
+    Sibling document: <strong>BidNest Blueprints</strong> (14 workflow diagrams) in <code>docs/architecture/workflows/</code>
+  </p>
+  <p>
+    The content follows the code — when a flow actually changes (a new status, a change in the order data is written, a moved endpoint), update this page too
+  </p>
+  <p>
+    <strong>The source of truth lives in the repo at <code>docs/BIDNEST_HANDBOOK.html</code> (Thai, the primary edition) and <code>docs/BIDNEST_HANDBOOK-en.html</code> (this English edition)</strong> — just open the file in a browser.
+    Edit the Thai edition first, update this one to match, and go through a PR as usual, so the versions move with the code · the online link is a copy for quick sharing
+    that has to be updated by hand; <strong>when the copies disagree, trust the files in the repo</strong>
+  </p>
+</footer>
+
+<script>
+  (function () {
+    document.querySelectorAll(".code__copy").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var block = button.closest(".code");
+        if (!block) return;
+        var pre = block.querySelector("pre");
+        if (!pre) return;
+        var text = pre.innerText;
+        var done = function () {
+          button.textContent = "copied";
+          setTimeout(function () { button.textContent = "copy"; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () {
+            button.textContent = "copy failed";
+            setTimeout(function () { button.textContent = "copy"; }, 1600);
+          });
+          return;
+        }
+        var area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "absolute";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand("copy"); done(); } catch (e) { button.textContent = "copy failed"; }
+        document.body.removeChild(area);
+      });
+    });
+
+    var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+    var sections = links
+      .map(function (link) { return document.querySelector(link.getAttribute("href")); })
+      .filter(Boolean);
+    if (!sections.length || !("IntersectionObserver" in window)) return;
+
+    var mark = function (id) {
+      links.forEach(function (link) {
+        if (link.getAttribute("href") === "#" + id) link.setAttribute("aria-current", "true");
+        else link.removeAttribute("aria-current");
+      });
+    };
+    mark(sections[0].id);
+
+    var observer = new IntersectionObserver(
+      function (entries) {
+        var visible = entries
+          .filter(function (entry) { return entry.isIntersecting; })
+          .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+        if (visible.length) mark(visible[0].target.id);
+      },
+      { rootMargin: "-10% 0px -70% 0px", threshold: 0 }
+    );
+    sections.forEach(function (section) { observer.observe(section); });
+  })();
+</script>
+
+</body></html>

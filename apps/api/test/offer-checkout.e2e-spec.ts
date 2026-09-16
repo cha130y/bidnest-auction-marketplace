@@ -10,9 +10,9 @@ import { PrismaService } from './../src/prisma/prisma.service';
 /**
  * AI-003 + CART-004 — negotiating a price and then actually paying it.
  *
- * The SRS puts the two in one sentence: an accepted offer "ปลดล็อกราคาที่
- * ต่อรองได้ในช่วงเวลาสั้นๆ (15 นาที) ใช้ได้ครั้งเดียว... โดยผู้ซื้อยังต้อง
- * checkout ตามปกติ (CART-004)". Everything below is that sentence, in order:
+ * The SRS puts the two in one sentence: an accepted offer "unlocks the
+ * negotiated price for a short window (15 minutes), usable once... while the
+ * buyer still checks out as normal (CART-004)". Everything below is that sentence, in order:
  * the negotiation has to be able to end, the agreed price has to be what is
  * charged, and the permission to pay it has to be spent exactly once by
  * exactly the buyer it was issued to.
@@ -272,8 +272,8 @@ describe('Negotiated price checkout (e2e)', () => {
     expect(body.orders).toHaveLength(1);
     expect(body.orders[0].sellerId).toBe(sellerId);
 
-    // PROD-007 — "กรณีที่ใช้ AI ต่อรองราคา จะไม่ได้ส่วนลดเพิ่มเติมจากการลด
-    // ราคาปกติตามโปรโมชั่น (ไม่ทับซ้อนกัน)". Two units qualify for the 25%
+    // PROD-007 — "a price negotiated with the AI gets no further discount on
+    // top of the regular promotional discount (they do not stack)". Two units qualify for the 25%
     // rule, so the discount is live on this listing and deliberately not
     // applied: 1500.00 would be the promo answer, 2000.00 the undiscounted
     // list one, and neither is what was agreed.

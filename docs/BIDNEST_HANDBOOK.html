@@ -117,6 +117,15 @@
   .masthead p { max-width: var(--read); margin: 0 0 12px; color: var(--ink-soft); }
   .masthead__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
 
+  /* language switch */
+  .masthead .langs {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em;
+    color: var(--muted); margin: -4px 0 18px;
+  }
+  .langs b { color: var(--ink); font-weight: 500; }
+  .langs a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .langs a:hover { border-bottom-color: var(--accent); }
+
   .shell {
     max-width: var(--wrap);
     margin: 0 auto;
@@ -414,6 +423,7 @@
   <div class="masthead__inner">
     <p class="eyebrow">BidNest · Auction &amp; Marketplace · คู่มือทีม</p>
     <h1>คู่มือทั้งโปรเจกต์ อ่านจบแล้วเล่าต่อได้</h1>
+    <p class="langs"><b>ภาษาไทย</b> · <a href="BIDNEST_HANDBOOK-en.html" lang="en">English</a></p>
     <p class="lede">
       เอกสารเล่มเดียวสำหรับคนที่เพิ่งเข้าโปรเจกต์ และสำหรับคนในทีมที่อยากเข้าใจส่วนที่ตัวเองไม่ได้ทำ —
       ตั้งเครื่องตั้งแต่ศูนย์ · คำสั่งที่ใช้ทุกวัน · ฟีเจอร์แต่ละตัวต่อกันยังไงทั้งฝั่งหน้าเว็บและฝั่งเซิร์ฟเวอร์ ·
@@ -1818,7 +1828,7 @@ pnpm --dir apps/api exec prisma db seed</pre>
         <p>
           เพราะจะเสียสิ่งที่ dev ต้องใช้ทุกนาที — <strong>hot reload</strong> · การ mount source เข้า container
           บน Windows ทำให้ watcher ช้าลงชัดเจน แลกกับความ "เหมือนกัน" ที่โค้ดของเราไม่ได้ต้องการ
-          เพราะมันรันบน Node 22 เหมือนกันทุกเครื่องอยู่แล้ว · <strong>Docker จึงห่อเฉพาะของที่ลงยากและเวอร์ชันสำคัญ</strong>
+          เพราะมันรันบน Node 24 เหมือนกันทุกเครื่องอยู่แล้ว · <strong>Docker จึงห่อเฉพาะของที่ลงยากและเวอร์ชันสำคัญ</strong>
         </p>
       </div>
 

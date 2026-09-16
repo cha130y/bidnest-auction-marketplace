@@ -92,7 +92,7 @@ enum ProductStatus {
   INACTIVE
   OUT_OF_STOCK
   REMOVED
-  SUSPENDED // ADM-005 — admin สั่งปิดเท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้ (PROD-002)
+  SUSPENDED // ADM-005 — set by an admin only; the seller cannot move out of it (PROD-002)
 }
 
 enum OfferDecision {
@@ -360,7 +360,7 @@ model Auction {
   status             AuctionStatus    @default(DRAFT)
   currency           String           @default("THB") @db.Char(3)
   startingPrice      Decimal          @map("starting_price") @db.Decimal(18, 2)
-  reservePrice       Decimal?         @map("reserve_price") @db.Decimal(18, 2) // PRIVATE — ห้ามส่งกลับ API ฝั่งผู้ซื้อ (AUC-003)
+  reservePrice       Decimal?         @map("reserve_price") @db.Decimal(18, 2) // PRIVATE — never return it from buyer-facing APIs (AUC-003)
   minBidIncrement    Decimal          @map("min_bid_increment") @db.Decimal(18, 2)
   currentPrice       Decimal          @default(0) @map("current_price") @db.Decimal(18, 2)
   bidCount           Int              @default(0) @map("bid_count")
@@ -583,7 +583,7 @@ model Offer {
   offerAmount   Decimal       @map("offer_amount") @db.Decimal(18, 2)
   decision      OfferDecision
   counterAmount Decimal?      @map("counter_amount") @db.Decimal(18, 2)
-  expiresAt     DateTime?     @map("expires_at") // ACCEPT/COUNTER-accepted เท่านั้น — 15 นาที
+  expiresAt     DateTime?     @map("expires_at") // ACCEPT/COUNTER-accepted only — 15 minutes
   createdAt     DateTime      @default(now()) @map("created_at")
 
   buyer   User    @relation(fields: [buyerId], references: [id])
@@ -651,7 +651,7 @@ model OrderItem {
   /// this constrains auction lines only and leaves product lines alone.
   auctionId String? @unique @map("auction_id") @db.Uuid
   quantity  Int
-  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // ราคาปกติ, negotiated price ถ้า offer accept แล้ว, หรือ soldPrice ถ้ามาจากประมูล
+  unitPrice Decimal @map("unit_price") @db.Decimal(18, 2) // regular price, the negotiated price if an offer was accepted, or soldPrice if it came from an auction
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -721,8 +721,8 @@ model Message {
 model Shipment {
   id             String         @id @default(uuid()) @db.Uuid
   orderId        String         @unique @map("order_id") @db.Uuid
-  trackingNumber String?        @map("tracking_number") // สร้างอัตโนมัติตอนเข้าสถานะ SHIPPED
-  carrier        String? // ชื่อขนส่งจำลอง
+  trackingNumber String?        @map("tracking_number") // generated automatically on entering SHIPPED
+  carrier        String? // simulated carrier name
   status         ShipmentStatus @default(PROCESSING)
   createdAt      DateTime       @default(now()) @map("created_at")
 
@@ -736,7 +736,7 @@ model ShipmentEvent {
   id          Int            @id @default(autoincrement())
   shipmentId  String         @map("shipment_id") @db.Uuid
   actorUserId String?        @map("actor_user_id") @db.Uuid
-  eventType   ShipmentStatus @map("event_type") // reuse ShipmentStatus — ค่าตรงกันทุกตัวกับ shipments.status
+  eventType   ShipmentStatus @map("event_type") // reuse ShipmentStatus — every value matches shipments.status
   createdAt   DateTime       @default(now()) @map("created_at")
 
   shipment  Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
@@ -748,7 +748,7 @@ model ShipmentEvent {
 
 // ============================================================
 // ENGAGEMENT — WAT-001/002, LIV-001, NOT-001..008, ADM-001/004/005,
-//              AI-001 (บังคับ), AI-002/AI-003 (Optional)
+//              AI-001 (required), AI-002/AI-003 (Optional)
 // ============================================================
 
 model Watchlist {
@@ -782,7 +782,7 @@ model AuctionParticipant {
 model Notification {
   id             String           @id @default(uuid()) @db.Uuid
   userId         String           @map("user_id") @db.Uuid
-  auctionId      String?          @map("auction_id") @db.Uuid // nullable — บาง type ไม่เกี่ยวกับ auction
+  auctionId      String?          @map("auction_id") @db.Uuid // nullable — some types are not auction-related
   bidId          String?          @map("bid_id") @db.Uuid
   orderId        String?          @map("order_id") @db.Uuid // NOT-005..007
   conversationId String?          @map("conversation_id") @db.Uuid // NOT-008 (Optional)

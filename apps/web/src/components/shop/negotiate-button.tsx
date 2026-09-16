@@ -13,7 +13,7 @@ import { startProductConversation } from "@/lib/api/products"
  *
  * Labelled for what the button does rather than for what the buyer might do
  * next: it opens a chat thread, and nothing about it is specific to haggling.
- * The old "ต่อรองราคากับผู้ขาย" promised a price negotiation that the thread
+ * The old "Negotiate with the seller" promised a price negotiation that the thread
  * does not itself provide — the AI counter-offer form further down the panel
  * is the part that does — and it read as a different feature from the auction
  * side's button, which is the same component opening the same kind of thread.

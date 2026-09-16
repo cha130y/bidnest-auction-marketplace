@@ -70,7 +70,7 @@ export function fetchSupportChatHistory(
 }
 
 /**
- * "คุยกับแอดมิน" — only reachable once `escalated` has come back true from
+ * "Talk to admin" — only reachable once `escalated` has come back true from
  * `sendSupportChatMessage`, and only for a signed-in caller (there is no
  * `sessionId` at all for a guest, since nothing is persisted for one).
  */

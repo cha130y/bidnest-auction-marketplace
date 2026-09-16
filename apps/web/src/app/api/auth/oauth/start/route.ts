@@ -18,7 +18,7 @@ import {
  *                                        the browser holds for one moment
  *   { email }                            finishing an EMAIL_REQUIRED, token
  *                                        from the cookie
- *   { }                                  "ขอรหัสใหม่", everything from cookie
+ *   { }                                  "Request a new code", everything from cookie
  *
  * The API's own /auth/2fa/resend cannot serve the third: it takes an email and
  * a password, and an OAuth account has no password to give it. Re-running step

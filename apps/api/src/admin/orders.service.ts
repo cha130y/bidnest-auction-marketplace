@@ -8,11 +8,12 @@ const DEFAULT_PAGE_SIZE = 20;
 /**
  * ADM-006 — Order overview (owner: Dev 3)
  *
- * Read-only ตาม ADM-006 — ห้ามเพิ่มเมธอดที่เขียนข้อมูลลง orders ที่นี่
+ * Read-only per ADM-006 — do not add methods here that write to orders.
  *
- * ข้อควรระวังด้านความเป็นส่วนตัว (SRS §6): คืนเฉพาะข้อมูลระดับสรุปที่ ADM-006
- * ระบุไว้ (buyer, seller, สถานะ, ยอดรวม) — ห้ามคืนที่อยู่จัดส่งเต็ม หรือเนื้อหา
- * การสนทนา buyer/seller ซึ่ง §6 ห้าม admin เข้าถึงใน V1
+ * Privacy caution (SRS §6): return only the summary-level data ADM-006 names
+ * (buyer, seller, status, total) — never the full shipping address or the
+ * content of buyer/seller conversations, which §6 bars admins from accessing
+ * in V1.
  */
 @Injectable()
 export class AdminOrdersService {

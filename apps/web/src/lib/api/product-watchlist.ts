@@ -86,7 +86,7 @@ export const productWatchlistQueryKey = ["product-watchlist"] as const
  *
  * `limit` is the hearts' 100 rather than the tab's old 24: neither screen
  * paginates, so the larger page is strictly more of the list, and the tab's
- * "ติดตามอยู่ N รายการ" reads `meta.total` from the server either way.
+ * "Watching N items" reads `meta.total` from the server either way.
  */
 export function productWatchlistQueryOptions() {
   return {

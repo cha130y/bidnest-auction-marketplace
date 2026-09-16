@@ -249,7 +249,7 @@ function Form() {
           Two settings, not three fields. PROD-006's floor stands on its own,
           while PROD-007's two are refused unless both are filled — see
           ProductService.assertDiscountRuleIsComplete. A single three-column row
-          read as three peers, so a seller who filled only "ซื้อตั้งแต่" learned
+          read as three peers, so a seller who filled only "Minimum quantity" learned
           about the pairing from a 400 after saving.
         */}
         <div className="mt-4 space-y-5">

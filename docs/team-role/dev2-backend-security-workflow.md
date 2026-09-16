@@ -1,91 +1,91 @@
-# Dev 2 — Backend Core & Security Workflow (แม่แบบ slash command)
+# Dev 2 — Backend Core & Security Workflow (slash command template)
 
-> **เจ้าของแนวทาง:** Dev 2 (Backend Core & Security)
-> **ไฟล์นี้คืออะไร:** สำเนาของ slash command ส่วนตัว `/dev2` ที่ใช้อยู่จริง เอาขึ้น repo ไว้เป็น **แม่แบบให้เพื่อนในทีมก็อปไปปรับเป็นของตัวเอง**
-> **ไม่ใช่กติกาทีม** — กติกาที่ทั้งทีมยึดร่วมกันอยู่ใน `CLAUDE.md` เท่านั้น ไฟล์นี้เป็นแนวทางส่วนบุคคล ปรับได้ตามใจ
-> **คู่กับ:** `docs/team-role/dev2-checklist.md` (checklist ละเอียดรายข้อ) และ `docs/team-role/dev4-auction-workflow.md` (แม่แบบของ Dev 4)
-> **อ้างอิง:** SRS v7, Team Role Distribution v2
-
----
-
-## วิธีนำไปใช้
-
-1. สร้างไฟล์ `.claude/commands/<ชื่อที่อยากเรียก>.md` ในเครื่องตัวเอง (เช่น `dev2.md`)
-2. ก็อปเนื้อหาในบล็อกข้างล่างไปวาง แล้วแก้ให้ตรงกับ requirement / module ของตัวเอง
-   - เปลี่ยน `description:` ใน frontmatter
-   - เปลี่ยนรายการ requirement ในหัวข้อ "ลำดับ requirement"
-   - เปลี่ยน/ตัด "กติกาการเขียนโค้ด" ข้อที่เป็นเรื่องเฉพาะฝั่ง auth/security (ข้อ 4–8)
-3. เรียกใช้ด้วย `/<ชื่อนั้น>` ตอนคุยกับ Claude Code
-
-`.gitignore` กัน `.claude/*` ไว้แล้ว ไฟล์ command ในเครื่องตัวเองจะไม่ขึ้น git และไม่กระทบใคร
+> **Approach owner:** Dev 2 (Backend Core & Security)
+> **What this file is:** a copy of the personal slash command `/dev2` actually in use, put in the repo as **a template for teammates to copy and adapt as their own**
+> **Not a team rule** — the rules the whole team shares live only in `CLAUDE.md`; this file is a personal approach, adjust it as you like
+> **Pairs with:** `docs/team-role/dev2-checklist.md` (a detailed per-item checklist) and `docs/team-role/dev4-auction-workflow.md` (Dev 4's template)
+> **References:** SRS v7, Team Role Distribution v2
 
 ---
 
-## เนื้อหาแม่แบบ (ก็อปทั้งบล็อก รวม frontmatter)
+## How to use it
+
+1. Create the file `.claude/commands/<name-you-want>.md` on your own machine (e.g. `dev2.md`)
+2. Copy the content of the block below into it, then adapt it to your own requirements / module
+   - Change `description:` in the frontmatter
+   - Change the requirement list under "Requirement order"
+   - Change/remove the "Coding rules" items that are specific to auth/security (items 4–8)
+3. Invoke it with `/<that name>` when talking to Claude Code
+
+`.gitignore` already excludes `.claude/*`, so the command file on your machine won't reach git and won't affect anyone
+
+---
+
+## Template content (copy the whole block, including the frontmatter)
 
 ```markdown
 ---
-description: ทำ requirement ฝั่ง Auth และ Security ของ Dev 2 ทีละข้อ พร้อมหยุดเทสและถามก่อน commit
+description: Implement Dev 2's Auth and Security requirements one at a time, stopping to test and asking before committing
 ---
 
-# Workflow ของ Dev 2 — Backend Core & Security
+# Dev 2 Workflow — Backend Core & Security
 
-ทำ requirement ต่อไปนี้ **ทีละข้อ** ห้ามทำรวบหลาย requirement ในรอบเดียว
+Work through the following requirements **one at a time** — never bundle several requirements into one round
 
-## เอกสารอ้างอิง (อ่านก่อนเริ่มทุกครั้ง)
+## Reference documents (read before every start)
 
-- SRS: `docs/requirements/BidNest-Auction and Marketplace-v7.pdf` — ใช้ช่อง **"เกณฑ์การยอมรับ"** ของแต่ละ requirement เป็นเกณฑ์ตัดสินว่าผ่านหรือไม่ และ **§6** เป็นเกณฑ์ด้านความปลอดภัย
+- SRS: `docs/requirements/BidNest-Auction and Marketplace-v7.pdf` — use each requirement's **"Acceptance criteria"** cell to decide whether it passes, and **§6** as the security criteria
 - Team role: `docs/team-role/Team-role-dustribution-v2.pdf`
-- Checklist ของตัวเอง: `docs/team-role/dev2-checklist.md` — ติ๊กความคืบหน้าที่นี่
-- Schema: `apps/api/prisma/schema.prisma` — **Dev 2 เป็นเจ้าของไฟล์นี้และ migration ทั้งหมด**
-- ADR: `docs/architecture/adr/` — ADR-0001 (admin/category ใช้ชุดเดียว), ADR-0002 (product state machine)
-- Reference repo: https://github.com/cha130y/cbeave-auction-platform (อ่านผ่าน `gh api` ได้ ไม่ต้อง clone)
+- My own checklist: `docs/team-role/dev2-checklist.md` — tick off progress here
+- Schema: `apps/api/prisma/schema.prisma` — **Dev 2 owns this file and all migrations**
+- ADR: `docs/architecture/adr/` — ADR-0001 (one shared admin/category set), ADR-0002 (product state machine)
+- Reference repo: https://github.com/cha130y/cbeave-auction-platform (can be read via `gh api`, no need to clone)
 
-## ลำดับ requirement (ตาม Team-role ของ Dev 2)
+## Requirement order (per Dev 2's Team-role)
 
-ทำเรียงตามนี้ เพราะจัดให้ของที่ "คนอื่นรออยู่" มาก่อน
+Work in this order, which puts the things "others are waiting on" first
 
-1. **AUTH-002 + AUTH-007** — login แบบ local + OTP ทางอีเมล **ต้องทำคู่กัน** เพราะ 2FA เป็นข้อบังคับทุกบัญชี ไม่มีทาง login ผ่านโดยไม่ยืนยัน OTP
-2. **AUTH-008** — `JwtAuthGuard` + `RolesGuard` จริง ← **ปลดล็อกทั้งทีม ทำให้เร็วที่สุด** (ดูกติกาข้อ 6)
-3. **AUTH-004** — refresh session + logout (เพิกถอน token)
-4. **AUTH-005** — กู้คืนรหัสผ่านผ่านลิงก์ single-use
-5. **AUTH-003 + AUTH-006** — Google OAuth และ Line OAuth (ทั้งคู่ต้องผ่าน OTP ก่อนออก session)
-6. **USR-001** — โปรไฟล์ผู้ใช้ + ที่อยู่จัดส่งเริ่มต้น (Dev 3 ใช้ prefill ตอน checkout)
-7. **ADM-003** — จัดการหมวดหมู่ร่วม (scaffold อยู่ที่ `apps/api/src/categories/` แล้ว)
-8. **§6** — hardening รอบสุดท้าย: rate-limit, privacy interceptor, test coverage
+1. **AUTH-002 + AUTH-007** — local login + emailed OTP **must be done together**, because 2FA is mandatory for every account; there is no way to log in without verifying the OTP
+2. **AUTH-008** — the real `JwtAuthGuard` + `RolesGuard` ← **unblocks the whole team, do it as early as possible** (see rule 6)
+3. **AUTH-004** — refresh session + logout (revoking tokens)
+4. **AUTH-005** — password recovery via a single-use link
+5. **AUTH-003 + AUTH-006** — Google OAuth and Line OAuth (both must pass OTP before issuing a session)
+6. **USR-001** — user profile + default shipping address (Dev 3 uses it to prefill checkout)
+7. **ADM-003** — shared category management (scaffold already at `apps/api/src/categories/`)
+8. **§6** — final hardening round: rate-limiting, privacy interceptor, test coverage
 
-**AUTH-001** (สมัครสมาชิก) ทำเสร็จแล้ว อยู่ที่ `apps/api/src/auth/`
+**AUTH-001** (registration) is already done, in `apps/api/src/auth/`
 
-ถ้า requirement ไหนถูกทำไปแล้ว ให้ข้ามแล้วบอกว่าข้ามเพราะอะไร
+If a requirement has already been done, skip it and say why it was skipped
 
-## กติกาการเขียนโค้ด
+## Coding rules
 
-1. **ยึดโครงสร้างของ bidnest เป็นหลัก** — โครงสร้างโฟลเดอร์ การตั้งชื่อ และ convention ของ repo นี้มาก่อนเสมอ
-2. **cbeave ใช้เป็นแบบอ้างอิง ไม่ใช่ก็อปวาง** — ดู pattern (โครงสร้าง module, strategy/guard, การออก token) แล้วปรับให้เข้ากับ bidnest
+1. **bidnest's structure comes first** — this repo's folder structure, naming and conventions always take priority
+2. **cbeave is a reference, not something to copy-paste** — look at the patterns (module structure, strategy/guard, issuing tokens) and adapt them to bidnest
 
-   ⚠️ cbeave กับ bidnest **ไม่เหมือนกัน** — cbeave ใช้ `FACEBOOK` provider ส่วน bidnest ใช้ `LINE` (และ Line อาจไม่ส่งอีเมลมาให้เลย ระบุตัวตนด้วย `provider + provider_account_id` เท่านั้น), bidnest บังคับ 2FA ทุกช่องทาง login ซึ่ง cbeave ไม่มี ก็อปมาตรงๆ จะพัง ตรวจกับ `schema.prisma` ของ bidnest ทุกครั้ง
-3. **`schema.prisma` — Dev 2 เป็นเจ้าของ แต่ยังต้องแจ้งทีมก่อนแก้** (ตาม CLAUDE.md) เพราะทุกคนใช้ร่วมกัน แก้แล้วต้อง commit ไฟล์ migration ไปพร้อมกันเสมอ ห้าม commit `schema.prisma` เปล่าๆ โดยไม่มี migration
-4. **hash ทุก secret ก่อนลง DB** — รหัสผ่าน, รหัส OTP, refresh token, reset token (SRS §6) ใช้ `HashingService` ที่มีอยู่แล้ว อย่าสร้างตัวที่สอง
-5. **ห้าม log ค่าดิบของ OTP / reset token / รหัสผ่าน / refresh token เด็ดขาด** ไม่ว่าจะ log level ไหน และห้ามส่ง reset token กลับใน API response (AUTH-005, §6)
-6. **AUTH-008 ให้แทนที่ `MockAuthGuard` เท่านั้น ห้ามแก้ contract** — Dev 4 ทำ `apps/api/src/common/guards/mock-auth.guard.ts` ไว้เป็นตัวยืนชั่วคราว ทุก controller ของ Dev 3/4/5 ผูกกับ `@CurrentUser()`, `@Public()`, `@Roles()` และ type `AuthenticatedUser` ไว้หมดแล้ว งานของเราคือเปลี่ยนวิธี "ระบุตัวตน" จาก header `x-mock-user-id` เป็น Bearer token เท่านั้น **ถ้าไปแก้ชื่อ decorator หรือรูปร่าง `AuthenticatedUser` โค้ดของอีก 3 คนพังหมด** — ถ้าคิดว่าจำเป็นต้องแก้จริง ให้เสนอแล้วรอคำตอบ
-7. **AUTH-005 ห้ามบอกว่าอีเมลมีอยู่ในระบบหรือไม่** — response ต้องเหมือนกันเป๊ะทุกกรณี ทั้งข้อความ, status code และเวลาที่ตอบกลับ (กัน user enumeration)
-8. **ห้ามเขียนโค้ดแทน dev คนอื่น** — ถ้า requirement ต้องพึ่งโค้ดของคนอื่น ให้ตรวจในโค้ดก่อนว่ามีของจริงหรือยัง ถ้ายังไม่มีให้ mock หรือเว้นว่างไว้ก่อนแล้วรอเขา ห้ามสร้างให้ แล้วรายงานว่าข้อไหนเทสไม่ได้เพราะรออะไรอยู่
+   ⚠️ cbeave and bidnest **are not the same** — cbeave uses the `FACEBOOK` provider while bidnest uses `LINE` (and Line may not send an email at all, so identify users by `provider + provider_account_id` only), and bidnest enforces 2FA on every login path, which cbeave doesn't have. Copying directly will break; always check against bidnest's `schema.prisma`
+3. **`schema.prisma` — Dev 2 owns it, but still has to tell the team before changing it** (per CLAUDE.md), because everyone shares it. Always commit the migration files together with it; never commit `schema.prisma` alone without a migration
+4. **Hash every secret before it goes into the DB** — passwords, OTP codes, refresh tokens, reset tokens (SRS §6). Use the existing `HashingService`; don't create a second one
+5. **Never log the raw value of an OTP / reset token / password / refresh token**, at any log level, and never return a reset token in an API response (AUTH-005, §6)
+6. **AUTH-008 only replaces `MockAuthGuard` — don't change the contract** — Dev 4 built `apps/api/src/common/guards/mock-auth.guard.ts` as a temporary stand-in, and every controller of Dev 3/4/5 is already bound to `@CurrentUser()`, `@Public()`, `@Roles()` and the `AuthenticatedUser` type. Our job is only to change how identity is established, from the `x-mock-user-id` header to a Bearer token. **Renaming a decorator or changing the shape of `AuthenticatedUser` breaks the code of the other 3 people** — if you think a change is truly necessary, propose it and wait for an answer
+7. **AUTH-005 must never reveal whether an email exists in the system** — the response must be exactly the same in every case: message, status code and response time (prevents user enumeration)
+8. **Never write code on behalf of other devs** — if a requirement depends on someone else's code, first check the code for whether the real thing exists yet; if not, mock it or leave it empty and wait for them. Don't build it for them, and report which parts can't be tested and what they are waiting on
 
-## เมื่อจบแต่ละ requirement — หยุดก่อน
+## When each requirement is done — stop first
 
-**อย่าทำ requirement ถัดไปทันที** ให้ทำตามนี้:
+**Don't start the next requirement right away**; do this:
 
-1. เขียน/รัน test ตรวจว่าผ่าน **เกณฑ์การยอมรับใน SRS** ของ requirement นั้นครบทุกข้อ
-   - ใช้ mock data หรือ seed data ตามเหมาะสม
-   - งาน auth ต้องมีทั้ง unit test (service, guard, hashing) และ e2e ที่ยิงผ่าน HTTP จริง
-   - อีเมลที่ระบบส่ง (OTP, reset link) ตรวจได้ที่ Maildev `http://localhost:1080`
-   - ถ้ามี UI ฝั่ง frontend แล้ว ให้เทส **ทั้ง frontend และ backend พร้อมกัน**
-   - รัน `pnpm check` ให้ผ่านด้วย (typecheck + test + lint)
-   - ⚠️ `apps/api/generated/prisma` ถูก gitignore ไว้ ถ้า lint ฟ้อง `no-unsafe-*` รัวๆ ให้รัน `pnpm --filter api exec prisma generate` ก่อน
-2. รายงานผลเทสตามจริง — ข้อไหนผ่าน ข้อไหนไม่ผ่าน ข้อไหนยังไม่ได้เทสและเพราะอะไร
-3. **ถามก่อนว่าพร้อม commit + push หรือยัง** แล้วรอคำตอบ
-4. ถ้าตอบตกลง → commit + push + ร่าง PR title/description ตามรูปแบบใน CLAUDE.md
-   - commit message: `<type>(<requirement-id>): <คำอธิบายภาษาอังกฤษสั้นๆ>`
-   - PR base = `dev` เสมอ
-   - **ห้ามกดสร้าง/merge PR ให้เอง** — ส่ง URL กับข้อความให้ผู้ใช้กดเอง
+1. Write/run tests that check the requirement meets **every acceptance criterion in the SRS**
+   - Use mock data or seed data as appropriate
+   - Auth work needs both unit tests (service, guard, hashing) and e2e tests hitting real HTTP
+   - Emails the system sends (OTP, reset link) can be checked in Maildev at `http://localhost:1080`
+   - If there is already frontend UI, test **both frontend and backend together**
+   - Make `pnpm check` pass too (typecheck + test + lint)
+   - ⚠️ `apps/api/generated/prisma` is gitignored; if lint floods you with `no-unsafe-*`, run `pnpm --filter api exec prisma generate` first
+2. Report the test results truthfully — which pass, which fail, which haven't been tested and why
+3. **Ask first whether it is ready to commit + push**, and wait for the answer
+4. If the answer is yes → commit + push + draft the PR title/description in the format from CLAUDE.md
+   - commit message: `<type>(<requirement-id>): <short English description>`
+   - PR base = always `dev`
+   - **Never create/merge the PR yourself** — send the URL and text for the user to click
 ```

@@ -15,7 +15,7 @@ import { AdminSupportService } from './support.service';
 
 /**
  * Admin side of the AI-001 escalation flow (owner: Dev 5) — the queue an
- * admin works from once a user hits "คุยกับแอดมิน" in the chat widget.
+ * admin works from once a user hits "Talk to admin" in the chat widget.
  */
 @Roles('ADMIN')
 @Controller('admin/support/sessions')

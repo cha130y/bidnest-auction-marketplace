@@ -489,7 +489,7 @@ export class CheckoutService {
     // to ask "is this still good" without spending it. The cost is that a
     // payment refused further down — a declined card, a listing that sold out
     // in between — spends the offer with it. The SRS allows for exactly that
-    // ("ข้อเสนอที่ accept แล้วก็ยังอาจล้มเหลวได้หากสินค้าหมดไปก่อน"); splitting
+    // ("an accepted offer can still fail if the item sells out first"); splitting
     // verify from consume belongs in that service rather than being worked
     // around here.
     let payload: AcceptTokenPayload;
@@ -567,8 +567,8 @@ export class CheckoutService {
         quantity: offer.quantity,
         unitPrice: offer.offerAmount,
         // PROD-007 — a negotiated price does not also collect the quantity
-        // discount ("กรณีที่ใช้ AI ต่อรองราคา จะไม่ได้ส่วนลดเพิ่มเติม...
-        // ไม่ทับซ้อนกัน"), so this multiplies rather than going through
+        // discount ("a price negotiated with the AI gets no further discount...
+        // they do not stack"), so this multiplies rather than going through
         // `calculateLineTotal`, which is where that discount is applied.
         subtotal: offer.offerAmount.mul(offer.quantity)
       }

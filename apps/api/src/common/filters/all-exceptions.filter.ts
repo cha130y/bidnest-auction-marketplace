@@ -9,8 +9,8 @@ import {
 import { Request, Response } from 'express';
 
 /**
- * SRS section 6 — "ส่ง error ที่เป็นประโยชน์กลับไปโดยไม่หลุดรายละเอียดการ
- * implement ออกไป". HttpExceptions we raise on purpose are passed through as
+ * SRS section 6 — "return useful errors without leaking implementation
+ * details". HttpExceptions we raise on purpose are passed through as
  * written; anything else is logged in full server-side and reported to the
  * client as a bare 500 so stack traces and driver errors never leave the API.
  */

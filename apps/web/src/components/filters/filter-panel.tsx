@@ -33,7 +33,7 @@ type FilterPanelProps = {
   /**
    * The search field, as a render prop rather than a component.
    *
-   * The panel owns `q` — it has to, since "ใช้ตัวกรอง" submits it alongside the
+   * The panel owns `q` — it has to, since "Apply filters" submits it alongside the
    * categories and the price — but it must not own *what the field does while
    * you type*. The catalog's box previews matching products and jumps straight
    * to one (`searchProducts` + `/shop/:id`), which is meaningless on any other
@@ -48,7 +48,7 @@ type FilterPanelProps = {
     onChange: (value: string) => void
     onSubmit: () => void
   }) => ReactNode
-  /** "ช่วงราคา" on the catalog; an auction may want to name which price. */
+  /** "Price range" on the catalog; an auction may want to name which price. */
   priceLabel?: string
   /** Omitted hides the price block, for a list where price is not a filter. */
   showPrice?: boolean

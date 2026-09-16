@@ -25,7 +25,7 @@ const trimOrNull = ({ value }: { value: unknown }) => {
  * to show.
  */
 export class UpdateProfileDto {
-  @ApiPropertyOptional({ example: 'สมชาย', maxLength: 100 })
+  @ApiPropertyOptional({ example: 'Somchai', maxLength: 100 })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
@@ -33,7 +33,7 @@ export class UpdateProfileDto {
   @Transform(({ value }: { value: string }) => value?.trim())
   firstName?: string;
 
-  @ApiPropertyOptional({ example: 'ใจดี', maxLength: 100, nullable: true })
+  @ApiPropertyOptional({ example: 'Jaidee', maxLength: 100, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsString()
@@ -91,7 +91,7 @@ export class UpdateProfileDto {
    */
 
   @ApiPropertyOptional({
-    example: 'สมชาย ใจดี',
+    example: 'Somchai Jaidee',
     maxLength: 150,
     nullable: true
   })
@@ -103,7 +103,7 @@ export class UpdateProfileDto {
   recipientName?: string | null;
 
   @ApiPropertyOptional({
-    example: '123 ถนนสุขุมวิท',
+    example: '123 Sukhumvit Road',
     maxLength: 200,
     nullable: true
   })
@@ -115,7 +115,7 @@ export class UpdateProfileDto {
   line1?: string | null;
 
   @ApiPropertyOptional({
-    example: 'อาคาร A ชั้น 5',
+    example: 'Building A, 5th floor',
     maxLength: 200,
     nullable: true
   })
@@ -127,7 +127,7 @@ export class UpdateProfileDto {
   line2?: string | null;
 
   @ApiPropertyOptional({
-    example: 'กรุงเทพมหานคร',
+    example: 'Bangkok',
     maxLength: 100,
     nullable: true
   })
