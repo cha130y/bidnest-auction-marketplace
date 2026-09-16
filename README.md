@@ -1,74 +1,74 @@
 # BidNest — Auction & Marketplace
 
-แพลตฟอร์มซื้อขายที่รวมสองโหมดไว้ในระบบเดียว — **ประมูลแบบเรียลไทม์** และ **ร้านค้าซื้อทันที** —
-โดยใช้บัญชีผู้ใช้ ตะกร้า การชำระเงิน และการจัดส่งชุดเดียวกัน ผู้ใช้คนหนึ่งเป็นได้ทั้งผู้ซื้อและผู้ขายในบัญชีเดียว
+A marketplace that combines two modes in one system — **real-time auctions** and **a buy-now shop** —
+sharing the same user accounts, cart, payment and shipping. One user can be both a buyer and a seller on a single account.
 
-โปรเจกต์กลุ่ม 5 คน ระยะเวลา 14 วัน · pnpm monorepo (Next.js + NestJS + PostgreSQL)
+A 5-person group project, 14 days · pnpm monorepo (Next.js + NestJS + PostgreSQL)
 
-> **เพิ่งเข้าทีม / เครื่องใหม่?** ไปที่ [Setup เครื่องตัวเอง](docs/KICKOFF_GUIDE.md#setup-เครื่องตัวเอง--ทำครั้งแรกครั้งเดียว) ใน Kickoff Guide ให้จบก่อน
-> **กลับมาทำงานต่อ?** ใช้ [Workflow ประจำวัน](docs/DAILY_WORKFLOW.md)
+> **New to the team / new machine?** Finish [Set up your machine](docs/KICKOFF_GUIDE.md#set-up-your-machine--first-time-only) in the Kickoff Guide first
+> **Coming back to work?** Use the [Daily Workflow](docs/DAILY_WORKFLOW.md)
 
 ---
 
-## ระบบทำอะไรได้บ้าง
+## What the system does
 
-| โมดูล | ความสามารถ |
+| Module | Capabilities |
 | --- | --- |
-| **ยืนยันตัวตน** | สมัคร/เข้าสู่ระบบด้วยอีเมล, เข้าผ่าน Google และ LINE, ยืนยันสองชั้นด้วย OTP ทางอีเมล, จำอุปกรณ์ที่เชื่อถือ, รีเซ็ตรหัสผ่าน |
-| **ประมูล** | ผู้ขายสร้างร่าง → ตรวจความครบ → ดูตัวอย่าง → เผยแพร่ · ระบบเปิด-ปิดประมูลตามเวลาเอง · หน้าแรกแบ่งเป็น 4 มุมมอง (กำลังฮิต / ใกล้ปิด / ใกล้เริ่ม / เพิ่งจบ) |
-| **การบิดและห้องสด** | บิดแบบเรียลไทม์ผ่าน WebSocket · กันบิดซ้ำจากการกดย้ำ · ระบบกันยิงท้าย (บิดใน 2 นาทีสุดท้ายต่อเวลาอีก 2 นาที สูงสุด 5 ครั้ง) · ล็อบบี้ + สนามประมูล + หน้าประกาศผล |
-| **ร้านค้า** | ลงสินค้าพร้อมสต็อกและราคา · ค้นหาและกรอง · ตะกร้าหลายร้าน · ชำระเงินจำลองครั้งเดียวแล้วแตกออเดอร์ตามผู้ขาย · ติดตามสถานะจัดส่งเป็น timeline |
-| **AI (Gemini)** | ประเมินราคาเริ่มต้นให้ร่างประมูล · ตอบข้อเสนอต่อรองราคาโดยเทียบกับพื้นราคาที่ผู้ขายตั้งไว้ · แชทช่วยเหลือที่ส่งต่อให้แอดมินเมื่อตอบไม่ได้ |
-| **แจ้งเตือนและแชท** | แจ้งเตือนในแอป 8 เหตุการณ์ (โดนแซงราคา, ชนะประมูล, ออเดอร์ใหม่, สถานะจัดส่ง ฯลฯ) · แชทผู้ซื้อ–ผู้ขายผูกกับสินค้า/ประมูลที่กำลังคุยถึง |
-| **หลังบ้าน** | ระงับผู้ใช้ · จัดการหมวดหมู่ · ยกเลิกประมูล · ปิด/เปิดการขายสินค้า · ดูภาพรวมคำสั่งซื้อ · รับช่วงแชทช่วยเหลือ · ทุกคำสั่งบันทึกลง audit log พร้อมเหตุผล |
+| **Authentication** | Email sign-up/login, Google and LINE sign-in, two-factor verification with an emailed OTP, trusted devices, password reset |
+| **Auctions** | Seller creates a draft → completeness check → preview → publish · the system opens and closes auctions on schedule · the home page has 4 views (hot / ending soon / starting soon / recently ended) |
+| **Bidding and live rooms** | Real-time bidding over WebSocket · protection against duplicate bids from repeated clicks · anti-sniping (a bid in the last 2 minutes extends the auction by 2 minutes, up to 5 times) · lobby + arena + results page |
+| **Shop** | List products with stock and prices · search and filter · multi-shop cart · one simulated payment split into orders per seller · shipment status tracked as a timeline |
+| **AI (Gemini)** | Suggests a starting price for auction drafts · responds to price-negotiation offers against the seller's floor price · support chat that hands over to an admin when it can't answer |
+| **Notifications and chat** | In-app notifications for 8 events (outbid, auction won, new order, shipment status, etc.) · buyer–seller chat tied to the product/auction being discussed |
+| **Back office** | Suspend users · manage categories · cancel auctions · suspend/reactivate product listings · order overview · take over support chats · every action is written to the audit log with a reason |
 
-ดูผังการทำงานทั้งหมดได้ที่ [ผัง Workflow](docs/architecture/workflows/)
+See all the workflow diagrams in [Workflow diagrams](docs/architecture/workflows/)
 
 ---
 
 ## Tech stack
 
-| ส่วน | ใช้อะไร |
+| Part | Uses |
 | --- | --- |
 | Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 + shadcn/ui, TanStack Query, React Hook Form + Zod, NextAuth v5 |
 | Backend | NestJS 11, TypeScript, Prisma 7, class-validator, Passport + JWT, Throttler, Swagger |
-| ฐานข้อมูล | PostgreSQL 17 |
-| เรียลไทม์ | Socket.IO — namespace `/auctions` (ห้องประมูล) และ `/user` (แจ้งเตือน + แชท) |
+| Database | PostgreSQL 17 |
+| Realtime | Socket.IO — namespaces `/auctions` (auction rooms) and `/user` (notifications + chat) |
 | AI | Google Gemini (`@google/generative-ai`) |
-| บริการภายนอก | Cloudinary (รูปภาพ), SMTP ผ่าน Nodemailer (dev ใช้ Maildev) |
-| เครื่องมือ | pnpm 11 workspace, Node 24, Docker Compose, ESLint + Prettier, Husky + lint-staged |
-| การเทส | **web:** Vitest + Testing Library (jsdom) · **api unit:** Jest + ts-jest (mock Prisma) · **api e2e:** Jest + Supertest (Postgres + Maildev จริง) |
+| External services | Cloudinary (images), SMTP via Nodemailer (Maildev in dev) |
+| Tooling | pnpm 11 workspace, Node 24, Docker Compose, ESLint + Prettier, Husky + lint-staged |
+| Testing | **web:** Vitest + Testing Library (jsdom) · **api unit:** Jest + ts-jest (mocked Prisma) · **api e2e:** Jest + Supertest (real Postgres + Maildev) |
 
-**อย่าเปลี่ยน tech stack และอย่าแก้ `schema.prisma` โดยไม่ถามทีมก่อน** — ดู [CLAUDE.md](CLAUDE.md)
+**Don't change the tech stack or edit `schema.prisma` without asking the team first** — see [CLAUDE.md](CLAUDE.md)
 
 ---
 
-## โครงสร้างโปรเจกต์
+## Project structure
 
 ```
 apps/
-  web/                    Next.js — หน้าเว็บทั้งหมด (ผู้ซื้อ ผู้ขาย แอดมิน)
-  api/                    NestJS — กติกาทั้งหมดของระบบอยู่ที่นี่
+  web/                    Next.js — every web page (buyer, seller, admin)
+  api/                    NestJS — all of the system's rules live here
     prisma/               schema.prisma + migrations + seed
     src/                  24 modules (auth, auction, bid, live, cart, order, ai-tools, admin, ...)
 packages/
-  config/                 config ที่ใช้ร่วมกัน
-  contracts/              type ที่ใช้ร่วมกันระหว่าง web กับ api
-infra/docker/             compose.dev.yml — Postgres + Maildev สำหรับเครื่อง dev
+  config/                 shared config
+  contracts/              types shared between web and api
+infra/docker/             compose.dev.yml — Postgres + Maildev for dev machines
 scripts/                  dev.mjs, dev-preflight.mjs, check-setup.mjs
-docs/                     SRS, ERD, ADR, ผัง workflow, คู่มือทีม
-Dockerfile                image ของ apps/api สำหรับ deploy — build จากรากของ repo
+docs/                     SRS, ERD, ADRs, workflow diagrams, team guides
+Dockerfile                image of apps/api for deployment — built from the repo root
 ```
 
-เบราว์เซอร์ไม่คุยกับฐานข้อมูลหรือบริการภายนอกโดยตรง — ทุกอย่างผ่าน `apps/api` ชั้นเดียว
+The browser never talks to the database or external services directly — everything goes through the single `apps/api` layer
 
 ---
 
-## เริ่มต้นใช้งาน
+## Getting started
 
-### ครั้งแรกในเครื่องนี้
+### First time on this machine
 
-ทำตาม [Setup เครื่องตัวเอง](docs/KICKOFF_GUIDE.md#setup-เครื่องตัวเอง--ทำครั้งแรกครั้งเดียว) — สรุปย่อคือ
+Follow [Set up your machine](docs/KICKOFF_GUIDE.md#set-up-your-machine--first-time-only) — in short
 
 ```bash
 pnpm install
@@ -79,103 +79,103 @@ pnpm --dir apps/api exec prisma migrate deploy
 pnpm dev
 ```
 
-ต้องมี **Node 24**, **pnpm 11** และ **Docker Desktop** ก่อน · ไฟล์ `.env` ไม่ขึ้น git ต้องกรอกค่าเองในเครื่อง
-ตรวจว่าเครื่องพร้อมหรือยังด้วย `pnpm check:setup`
+You need **Node 24**, **pnpm 11** and **Docker Desktop** first · the `.env` file isn't in git, so fill in the values on your machine
+Check whether your machine is ready with `pnpm check:setup`
 
-### ทุกวันที่เริ่มงาน
+### Every day you start work
 
 ```bash
 git switch dev && git pull
-git switch feat/<module>-dev<เลข>    # branch ของตัวเอง
+git switch feat/<module>-dev<n>    # your own branch
 git merge dev
 pnpm check
 pnpm dev
 ```
 
-รายละเอียดและกรณีที่ต้องรันเพิ่ม (มี migration ใหม่ / มี package ใหม่) อยู่ใน [DAILY_WORKFLOW.md](docs/DAILY_WORKFLOW.md)
+Details and the cases that need extra commands (a new migration / a new package) are in [DAILY_WORKFLOW.md](docs/DAILY_WORKFLOW.md)
 
 ---
 
-## คำสั่งที่ใช้บ่อย
+## Common commands
 
-| คำสั่ง | ทำอะไร |
+| Command | What it does |
 | --- | --- |
-| `pnpm dev` | รัน web (`:3000`) + api (`:4000`) พร้อมกัน |
-| `pnpm dev:web` / `pnpm dev:api` | รันแยกทีละฝั่ง |
-| `pnpm check` | typecheck ทั้งสองแอป + test + lint — **รันก่อนส่งงานทุกครั้ง** |
-| `pnpm test` / `pnpm lint` | รันเฉพาะ test หรือเฉพาะ lint |
-| `pnpm check:setup` | ตรวจว่าเครื่องมีของครบ (Node, pnpm, Docker, .env) |
-| `docker compose -f infra/docker/compose.dev.yml up -d` | เปิด Postgres + Maildev |
-| `pnpm --dir apps/api exec prisma migrate deploy` | อัปเดตตารางตาม migration ล่าสุด |
-| `pnpm --dir apps/api exec prisma studio` | เปิดหน้าจอดูข้อมูลในฐานข้อมูล |
-| `pnpm --dir apps/api seed:mock` | ใส่ข้อมูลตัวอย่างสำหรับทดสอบ |
+| `pnpm dev` | Runs web (`:3000`) + api (`:4000`) together |
+| `pnpm dev:web` / `pnpm dev:api` | Runs one side at a time |
+| `pnpm check` | Typecheck both apps + test + lint — **run it every time before submitting work** |
+| `pnpm test` / `pnpm lint` | Runs only the tests or only lint |
+| `pnpm check:setup` | Checks the machine has everything (Node, pnpm, Docker, .env) |
+| `docker compose -f infra/docker/compose.dev.yml up -d` | Starts Postgres + Maildev |
+| `pnpm --dir apps/api exec prisma migrate deploy` | Updates the tables to the latest migration |
+| `pnpm --dir apps/api exec prisma studio` | Opens a UI for browsing the database |
+| `pnpm --dir apps/api seed:mock` | Loads sample data for testing |
 
-**อ่านอีเมล/OTP ตอน dev:** เปิด Maildev ที่ <http://localhost:1080> — ระบบไม่ได้ส่งอีเมลออกจริงในเครื่อง dev
+**Reading email/OTP in dev:** open Maildev at <http://localhost:1080> — the system doesn't actually send email from a dev machine
 
 ---
 
 ## Deploy
 
-| ส่วน | ที่ไหน | branch |
+| Part | Where | branch |
 | --- | --- | --- |
 | `apps/api` | Railway (Docker) | `main` → production |
 | `apps/web` | Vercel | `main` → production · `dev` → preview |
-| PostgreSQL | Railway — service แยกใน project เดียวกับ api | — |
+| PostgreSQL | Railway — a separate service in the same project as the api | — |
 
-> **ยังไม่มี staging** — มีแค่ production กับ Vercel preview
+> **There is no staging yet** — only production and Vercel previews
 >
-> preview ของ Vercel deploy จาก `dev` อัตโนมัติ แต่**ได้ URL สุ่มใหม่ทุก deploy** และชี้ไปที่ API ตัวเดียวกับ production จึงใช้เทสหน้าตาได้ แต่ใช้เทสล็อกอิน Google/LINE ไม่ได้ (เหตุผลและวิธีตั้ง OAuth อยู่ใน [Handbook บทที่ 08](docs/BIDNEST_HANDBOOK.html#ch8))
+> Vercel previews deploy from `dev` automatically, but **get a new random URL on every deploy** and point at the same API as production, so they work for testing the UI but not for testing Google/LINE login (the reasoning and how to set up OAuth are in [Handbook chapter 08](docs/BIDNEST_HANDBOOK-en.html#ch8))
 >
-> staging จริงต้องมี service ที่สองบน Railway **พร้อมฐานข้อมูลแยกอีกตัว** ตั้ง env ใหม่ทั้ง 29 ตัว แล้วผูก `dev` กับโดเมนคงที่บน Vercel เพื่อเอาไปลงทะเบียนกับ Google/LINE — ยังไม่ได้ทำ
+> Real staging needs a second service on Railway **with its own separate database**, all 29 env vars set again, and `dev` bound to a fixed domain on Vercel so it can be registered with Google/LINE — not done yet
 
-[`Dockerfile`](Dockerfile) ที่รากของ repo build เฉพาะ `apps/api` (`apps/web` ไม่ผ่าน Docker เลย)
-build context ต้องเป็นรากของ repo เพราะ pnpm อ่าน workspace จาก lockfile ที่นั่น — ลองในเครื่องได้ด้วย
+The [`Dockerfile`](Dockerfile) at the repo root builds only `apps/api` (`apps/web` doesn't go through Docker at all)
+The build context must be the repo root, because pnpm reads the workspace from the lockfile there — you can try it locally with
 
 ```bash
 docker build -t bidnest-api .
 docker run --rm -p 4000:4000 --env-file apps/api/.env bidnest-api
 ```
 
-[`docker-entrypoint.sh`](docker-entrypoint.sh) รัน `prisma migrate deploy` ให้เองก่อน start ทุกครั้ง ตอน deploy จึงไม่ต้องรัน migration แยก
+[`docker-entrypoint.sh`](docker-entrypoint.sh) runs `prisma migrate deploy` itself before every start, so deployments don't need a separate migration step
 
 ---
 
-## เอกสาร
+## Documentation
 
-| เอกสาร | เนื้อหา |
+| Document | Contents |
 | --- | --- |
-| **[Handbook](docs/BIDNEST_HANDBOOK.html)** | **คู่มือทั้งโปรเจกต์ 9 บท — เริ่มที่นี่ถ้าเพิ่งเข้าทีม** ตั้งเครื่อง · งานประจำวัน · ฟีเจอร์ต่อกันยังไง · การเทส · ทำไมถึงเลือก stack นี้ · ขึ้น production (เปิดไฟล์ในเบราว์เซอร์ได้เลย ไม่ต้องรันอะไร) |
-| [SRS](docs/requirements/) | ข้อกำหนดและเกณฑ์การยอมรับของทุก requirement — **ยึดเป็นหลักเวลาตัดสินว่างานผ่านหรือไม่** |
-| [ผัง Workflow](docs/architecture/workflows/) | ผังการทำงานทั้งระบบ 14 ผัง วาดจากโค้ดจริง |
-| [ERD](docs/architecture/erd/bidnest-erd-v1.dbml) | โครงสร้างฐานข้อมูล ([ดูออนไลน์](https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff)) |
-| [ADR](docs/architecture/adr/) | บันทึกการตัดสินใจเชิงสถาปัตยกรรมและเหตุผล |
-| [Kickoff Guide](docs/KICKOFF_GUIDE.md) | ตั้งค่าเครื่อง, โครงสร้าง monorepo, CI, commit convention |
-| [Daily Workflow](docs/DAILY_WORKFLOW.md) | คำสั่งที่ต้องรันทุกวัน และตอนจะส่งงาน |
-| [Team Role](docs/team-role/) | ขอบเขตงานของแต่ละคน + แม่แบบ workflow ส่วนตัว |
-| [CLAUDE.md](CLAUDE.md) | กติกาการทำงานร่วมของทีม (ใช้กับ Claude Code) |
+| **[Handbook](docs/BIDNEST_HANDBOOK-en.html)** ([Thai edition](docs/BIDNEST_HANDBOOK.html)) | **The whole-project guide in 9 chapters — start here if you're new to the team** machine setup · daily work · how the features connect · testing · why this stack was chosen · going to production (just open the file in a browser, nothing to run) |
+| [SRS](docs/requirements/) | Requirements and acceptance criteria for every requirement — **the reference when deciding whether work passes** |
+| [Workflow diagrams](docs/architecture/workflows/) | 14 diagrams of how the whole system works, drawn from the actual code |
+| [ERD](docs/architecture/erd/bidnest-erd-v1.dbml) | Database structure ([view online](https://dbdiagram.io/d/BidNest-6a803e3ee093539a9ebf8fff)) |
+| [ADR](docs/architecture/adr/) | Architecture decision records and their reasoning |
+| [Kickoff Guide](docs/KICKOFF_GUIDE.md) | Machine setup, monorepo structure, CI, commit convention |
+| [Daily Workflow](docs/DAILY_WORKFLOW.md) | Commands to run every day and when submitting work |
+| [Team Role](docs/team-role/) | Each person's scope of work + personal workflow templates |
+| [CLAUDE.md](CLAUDE.md) | The team's shared working rules (used with Claude Code) |
 
-**เครื่องมือทีม:** [Jira](https://pitchayauds.atlassian.net/jira/software/projects/BN/boards/2) · [Figma](https://www.figma.com/design/XjSmZZgT0IBPc8do84WaRa/Bidnest)
-
----
-
-## การทำงานร่วมกัน
-
-**Branch:** `feat/<module>-dev<เลข>` — `feat/frontend-dev1` · `feat/auth-dev2` · `feat/ecommerce-dev3` · `feat/auction-dev4` · `feat/ai-dev5`
-
-**Commit:** `<type>(<requirement-id>): คำอธิบายภาษาอังกฤษสั้นๆ` เช่น `feat(AUTH-001): add local registration endpoint`
-type ที่ใช้: `feat` `fix` `refactor` `test` `docs` `chore` `ci` — ใส่ requirement id เมื่อ commit ตรงกับ requirement ใน SRS
-
-**Pull Request:** base branch เป็น `dev` เสมอ (ไม่ merge เข้า `main` โดยตรง) · title และ description เป็นภาษาอังกฤษ
-
-**CI:** ทุก PR เข้า `dev` หรือ `main` รัน 3 job อัตโนมัติ ([ci.yml](.github/workflows/ci.yml)) — `lint-and-test` (lint → unit test ทั้งสองแอป → `next build` ฝั่ง web) · `docker-build` (build image ของ api) · `e2e` (ยก Postgres + Maildev แล้ว migrate → seed → e2e)
-
-**ไฟล์ที่ต้องให้เจ้าของ approve ก่อน merge** (ดู [CODEOWNERS](.github/CODEOWNERS)): `CLAUDE.md`, `docs/requirements/`, `docs/architecture/`, `docs/team-role/`, `apps/api/prisma/`, `.github/`, `package.json`
-
-**ห้าม commit ไฟล์ `.env` หรือ hardcode secret/API key ลงในโค้ดเด็ดขาด**
+**Team tools:** [Jira](https://pitchayauds.atlassian.net/jira/software/projects/BN/boards/2) · [Figma](https://www.figma.com/design/XjSmZZgT0IBPc8do84WaRa/Bidnest)
 
 ---
 
-## ขอบเขต V1
+## Working together
 
-เรื่องราวจบที่ประมูลปิดและของถูกส่ง — **ยังไม่มีการคืนเงินหรือยกเลิกหลังจ่ายเงินแล้ว**
-สถานะ `SOLD` และ `UNSOLD` เป็นปลายทางจริง ไม่ย้อนกลับ ส่วนการชำระเงินเป็นการจำลอง ยังไม่ได้ต่อ payment gateway จริง
+**Branch:** `feat/<module>-dev<n>` — `feat/frontend-dev1` · `feat/auth-dev2` · `feat/ecommerce-dev3` · `feat/auction-dev4` · `feat/ai-dev5`
+
+**Commit:** `<type>(<requirement-id>): short English description`, e.g. `feat(AUTH-001): add local registration endpoint`
+Types: `feat` `fix` `refactor` `test` `docs` `chore` `ci` — include the requirement id when the commit maps directly to an SRS requirement
+
+**Pull Request:** the base branch is always `dev` (never merge straight into `main`) · title and description in English
+
+**CI:** every PR into `dev` or `main` runs 3 jobs automatically ([ci.yml](.github/workflows/ci.yml)) — `lint-and-test` (lint → unit tests for both apps → `next build` for web) · `docker-build` (builds the api image) · `e2e` (starts Postgres + Maildev, then migrate → seed → e2e)
+
+**Files that need the owner's approval before merge** (see [CODEOWNERS](.github/CODEOWNERS)): `CLAUDE.md`, `docs/requirements/`, `docs/architecture/`, `docs/team-role/`, `apps/api/prisma/`, `.github/`, `package.json`
+
+**Never commit `.env` files or hardcode secrets/API keys in the code**
+
+---
+
+## V1 scope
+
+The story ends when the auction closes and the item is shipped — **there are no refunds or cancellations after payment yet**
+`SOLD` and `UNSOLD` are true end states and never go back; payment is simulated and not yet connected to a real payment gateway

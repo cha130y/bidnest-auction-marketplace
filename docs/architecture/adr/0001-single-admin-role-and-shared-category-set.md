@@ -1,99 +1,99 @@
-# ADR-0001 — ใช้ Admin role เดียวและชุดหมวดหมู่เดียวร่วมกันทั้งสองโมดูล
+# ADR-0001 — One Admin role and one shared category set for both modules
 
-- **สถานะ:** Accepted
-- **วันที่:** 2026-08-19
-- **อ้างอิง:** SRS v4 §1.1, §2, §4.4, §5.1, §5.2, ADM-001..006
-- **เกี่ยวข้องกับ:** Dev 2 (ADM-003), Dev 3 (ADM-005/006), Dev 4 (ADM-001), Dev 5 (ADM-002/004)
-
----
-
-## บริบท
-
-BidNest มี 2 โมดูลธุรกิจที่ทำงานแยกอิสระจากกัน คือ **Auction** (ประมูลเรียลไทม์) และ **E-commerce** (ซื้อขายราคาคงที่) โดยอยู่ภายใต้ระบบบัญชีเดียวกัน
-
-เมื่อมาถึงงานฝั่ง Admin (ADM-001..006) และการจัดการหมวดหมู่ (ADM-003) จึงเกิดคำถามซ้ำๆ ในทีม 2 ข้อ:
-
-1. ต้องแยก Admin ออกเป็น "Admin ฝั่ง Auction" กับ "Admin ฝั่ง E-commerce" หรือไม่
-2. ต้องแยกชุดหมวดหมู่ออกเป็นคนละชุดต่อโมดูลหรือไม่
-
-คำถามนี้มีที่มาจากความกังวลเชิงปฏิบัติ 2 อย่าง คือ (ก) requirement ADM-001..006 ถูกกระจายให้ dev ถึง 4 คน จึงกลัวว่าจะแก้ไฟล์ชนกัน และ (ข) หมวดหมู่บางหมวดอาจเหมาะกับโมดูลใดโมดูลหนึ่งมากกว่า
-
-เอกสารนี้บันทึกการตัดสินใจไว้เพื่อไม่ให้ต้องถกซ้ำ และเพื่อให้คนที่เข้ามาอ่านโค้ดทีหลังเข้าใจว่าทำไมจึงออกแบบแบบนี้
+- **Status:** Accepted
+- **Date:** 2026-08-19
+- **References:** SRS v4 §1.1, §2, §4.4, §5.1, §5.2, ADM-001..006
+- **Concerns:** Dev 2 (ADM-003), Dev 3 (ADM-005/006), Dev 4 (ADM-001), Dev 5 (ADM-002/004)
 
 ---
 
-## การตัดสินใจ
+## Context
 
-### 1. ใช้ Admin role เดียว — ไม่แยกตามโมดูล
+BidNest has 2 business modules that work independently of each other — **Auction** (real-time auctions) and **E-commerce** (fixed-price buying and selling) — under a single account system.
 
-`UserRole` มีแค่ `USER` และ `ADMIN` ตามเดิม ไม่เพิ่ม `AUCTION_ADMIN` / `ECOMMERCE_ADMIN`
+When work reached the Admin side (ADM-001..006) and category management (ADM-003), the team kept coming back to 2 questions:
 
-### 2. ใช้ชุดหมวดหมู่เดียวร่วมกัน — ไม่มี field `scope`
+1. Should Admin be split into an "Auction Admin" and an "E-commerce Admin"?
+2. Should categories be split into a separate set per module?
 
-ตาราง `categories` ชุดเดียว ทั้ง `auctions` และ `products` อ้างอิงเข้าตารางเดียวกัน ไม่มีการแยกขอบเขตตามโมดูลในระดับข้อมูล
+These questions came from 2 practical concerns: (a) requirements ADM-001..006 are spread across 4 devs, raising fears of editing the same files, and (b) some categories may suit one module better than the other.
 
-### 3. แยกที่ "ไฟล์" ไม่ใช่แยกที่ "role"
-
-ความกังวลเรื่องแก้ไฟล์ชนกันแก้ด้วยการแบ่ง controller ตาม requirement ให้แต่ละคนมีไฟล์ของตัวเอง (ดูหัวข้อ "โครงสร้างที่ตกลงใช้")
+This document records the decision so it does not have to be debated again, and so people reading the code later understand why it was designed this way.
 
 ---
 
-## เหตุผล
+## Decision
 
-### SRS ระบุไว้ชัดเจนอยู่แล้วทั้งสองข้อ
+### 1. One Admin role — not split per module
 
-เรื่องหมวดหมู่ SRS ย้ำถึง 3 จุด:
+`UserRole` stays at just `USER` and `ADMIN`; no `AUCTION_ADMIN` / `ECOMMERCE_ADMIN` is added
 
-| อ้างอิง | ข้อความ |
+### 2. One shared category set — no `scope` field
+
+A single `categories` table; both `auctions` and `products` reference the same table, with no per-module scoping at the data level
+
+### 3. Split by "file", not by "role"
+
+The concern about editing the same files is solved by splitting controllers per requirement so each person has their own files (see the "Agreed structure" section)
+
+---
+
+## Rationale
+
+### The SRS already states both points clearly
+
+On categories, the SRS says it in 3 places:
+
+| Reference | Text |
 | --- | --- |
-| §1.1 | "ชุดหมวดหมู่ (category) **เดียว**ที่ Admin จัดการ ใช้ร่วมกันทั้ง Auction และ E-commerce" |
-| §4.4 | "แคตตาล็อกสินค้าใช้ชุดหมวดหมู่ร่วมกัน (ADM-003) **แทนที่จะแยกชุดต่างหาก** ทำให้ Admin จัดการรายการหมวดหมู่แค่ชุดเดียวสำหรับทั้งสองโมดูล แทนที่จะต้องจัดการสองชุด" |
-| §5.1 | "categories ใช้ร่วมกันทั้งสองโมดูล **ไม่แยกขอบเขตตามโมดูล**; รายการในแต่ละโดเมนจะอ้างอิงได้เฉพาะหมวดหมู่ที่ active เท่านั้น" |
+| §1.1 | "A **single** category set managed by the Admin, shared by both Auction and E-commerce" |
+| §4.4 | "The product catalog uses the shared category set (ADM-003) **rather than a separate set**, so the Admin manages just one category list for both modules instead of two" |
+| §5.1 | "categories are shared by both modules, **not scoped per module**; listings in each domain may only reference active categories" |
 
-เรื่อง Admin role:
+On the Admin role:
 
-- **§2** ตารางสิทธิ์การเข้าถึง ระบุ Administrator ไว้ **แถวเดียว** โดยหน้าที่คร่อมทั้งสองโมดูล — ดูสถิติ, จัดการหมวดหมู่, ระงับ/เปิดใช้งานผู้ใช้, ยกเลิกประมูล, ปิด/เปิดการขายสินค้า, ดูภาพรวมคำสั่งซื้อ, ดูประวัติ audit
-- **§5.1 Identity** — "role ที่บันทึกคือ USER/ADMIN"
-- **§5.2** — กำหนด REST endpoint group ว่า `/admin` **กลุ่มเดียว** ไม่ได้แยกเป็น `/admin/auction` กับ `/admin/shop`
+- **§2** The access-rights table lists Administrator as a **single row**, with duties spanning both modules — view statistics, manage categories, suspend/reactivate users, cancel auctions, suspend/reactivate product listings, view the order overview, view the audit history
+- **§5.1 Identity** — "the recorded role is USER/ADMIN"
+- **§5.2** — defines the REST endpoint group as a **single** `/admin`, not split into `/admin/auction` and `/admin/shop`
 
-### schema ปัจจุบันรองรับอยู่แล้ว ไม่ต้องแก้
+### The current schema already supports it, no changes needed
 
-`apps/api/prisma/schema.prisma` ตรงกับการตัดสินใจนี้ทุกจุด:
+`apps/api/prisma/schema.prisma` matches this decision everywhere:
 
-- `enum UserRole { USER ADMIN }` — ไม่มี admin แยกโมดูล
-- `model Category` — **ไม่มี field `scope`** และมีทั้ง `auctions Auction[]` และ `products Product[]` ชี้เข้ามาที่ตารางเดียวกัน
-- `model AdminAction` — มี FK ครบทั้ง 4 เป้าหมายในแถวเดียวกัน (`targetUserId`, `auctionId`, `categoryId`, `productId`) จึงเป็น audit trail **ตารางเดียว** ที่รองรับทั้งสองโมดูลตาม ADM-004
-- `enum AdminActionType` — ครอบคลุม ADM-001..005 ครบแล้ว (ADM-006 เป็น read-only จึงไม่ต้องมี action type)
+- `enum UserRole { USER ADMIN }` — no per-module admin
+- `model Category` — **no `scope` field**, with both `auctions Auction[]` and `products Product[]` pointing at the same table
+- `model AdminAction` — has FKs for all 4 targets on the same row (`targetUserId`, `auctionId`, `categoryId`, `productId`), making it a **single-table** audit trail that serves both modules per ADM-004
+- `enum AdminActionType` — already covers ADM-001..005 (ADM-006 is read-only, so it needs no action type)
 
-### ต้นทุนของการแยกสูงกว่าประโยชน์ใน V1
+### In V1 the cost of splitting outweighs the benefit
 
-ถ้าแยก Admin เป็น 2 role จะต้องแลกด้วย:
+Splitting Admin into 2 roles would cost:
 
-- แก้ `UserRole` enum + migration ซึ่งขัดกับข้อตกลงในทีมว่าห้ามแก้ schema โดยไม่ตกลงกันก่อน
-- `admin_actions` ต้องถูก query แยกตาม role ทำให้ ADM-004 ที่ออกแบบมาเป็น audit trail เดียวเสียจุดประสงค์
-- ต้องมีหน้าจอ/เมนู/guard 2 ชุด ทั้งที่ V1 ยังไม่มีระบบรับรายงานจากผู้ใช้หรือคิวจัดการข้อพิพาท (SRS §1.2 เลื่อนออกไปแล้วทั้งคู่) จึงยังไม่มีปริมาณงาน admin มากพอที่จะต้องแบ่งทีมดูแล
+- Changing the `UserRole` enum + a migration, against the team's agreement not to change the schema without agreeing first
+- `admin_actions` would have to be queried per role, defeating the purpose of ADM-004 being designed as one audit trail
+- 2 sets of screens/menus/guards, even though V1 has no user reporting system or dispute queue yet (SRS §1.2 has deferred both), so there isn't enough admin work to need separate teams
 
-ถ้าแยกชุดหมวดหมู่จะต้องแลกด้วย: Admin ต้องดูแล 2 ชุด, หมวดที่ซ้ำกัน (เช่น "นาฬิกา") ต้องสร้าง 2 ครั้งและอาจไม่ตรงกัน ซึ่งเป็นปัญหาที่ §4.4 ระบุไว้ตรงๆ ว่าเลือกไม่เอา
+Splitting the category set would cost: the Admin maintaining 2 sets, and overlapping categories (e.g. "Watches") having to be created twice and possibly drifting apart — exactly the problem §4.4 explicitly chose to avoid
 
 ---
 
-## โครงสร้างที่ตกลงใช้
+## Agreed structure
 
 ### API
 
-`categories` **ไม่อยู่ใต้ `admin/`** เพราะ `GET /categories` เป็น endpoint สาธารณะที่ guest ต้องใช้กรองแคตตาล็อก (PROD-003) และผู้ขายต้องใช้ตอนสร้าง draft (AUC-001) — จึงใส่ guard เป็นราย endpoint แทนที่จะ guard ทั้ง controller
+`categories` **is not under `admin/`**, because `GET /categories` is a public endpoint that guests need for filtering the catalog (PROD-003) and sellers need when creating a draft (AUC-001) — so guards are applied per endpoint instead of on the whole controller
 
 ```
 apps/api/src/
   categories/                     ADM-003   → Dev 2
     GET    /categories                        public
-    GET    /categories/admin                  ADMIN (เห็น inactive ด้วย)
+    GET    /categories/admin                  ADMIN (includes inactive)
     POST   /categories                        ADMIN
     PATCH  /categories/:categoryId            ADMIN
     PATCH  /categories/:categoryId/activate   ADMIN
     PATCH  /categories/:categoryId/deactivate ADMIN
   admin/
-    admin.module.ts                         → Dev 5 (รวม controller ทั้งหมด)
+    admin.module.ts                         → Dev 5 (registers all the controllers)
     users.controller.ts           ADM-002   → Dev 5
     actions.controller.ts         ADM-004   → Dev 5
     auctions.controller.ts        ADM-001   → Dev 4
@@ -101,11 +101,11 @@ apps/api/src/
     orders.controller.ts          ADM-006   → Dev 3
 ```
 
-controller ใต้ `admin/` ทุกตัวใส่ guard ที่ระดับ class เพราะเป็น admin-only ทั้งหมด
+Every controller under `admin/` has its guard at class level, because they are all admin-only
 
 ### Web
 
-Admin Dashboard เป็นหน้าเดียวรวมศูนย์ มี sidebar เดียวที่มีทั้งเมนูฝั่ง auction และ e-commerce ตามที่ Team Role Distribution ระบุว่า Dev 5 รับผิดชอบ "Admin Dashboard แบบรวมศูนย์ที่เรียกใช้ endpoint ... ซึ่งอิงจากโมดูลของ Dev 2/3/4"
+The Admin Dashboard is a single centralized page with one sidebar holding both the auction and e-commerce menus, as the Team Role Distribution states that Dev 5 is responsible for "a centralized Admin Dashboard that calls endpoints ... based on the modules of Dev 2/3/4"
 
 ```
 apps/web/src/app/(marketplace)/admin/
@@ -116,9 +116,9 @@ apps/web/src/features/admin/
 
 ---
 
-## ข้อบังคับที่ตามมา (ทุกคนต้องทำตาม)
+## Resulting rules (everyone must follow them)
 
-1. **ทุก admin write ต้องเขียน `admin_actions` ใน transaction เดียวกัน** — ไม่ใช่เขียนแยกทีหลัง เพื่อให้ ADM-004 ถูกการันตีที่ระดับ database ว่าเป็นไปไม่ได้ที่จะมีการกระทำของ admin ที่ไม่มี audit log
+1. **Every admin write must write `admin_actions` in the same transaction** — not separately afterwards, so ADM-004 is guaranteed at the database level: an admin action without an audit log is impossible
 
    ```ts
    return this.prisma.$transaction(async (transaction) => {
@@ -133,43 +133,43 @@ apps/web/src/features/admin/
    });
    ```
 
-2. **หมวดหมู่ปิดใช้งาน ไม่ลบ** — ADM-003 ระบุว่า "หมวดหมู่ที่ถูกใช้งานอยู่แล้วจะถูกปิดใช้งาน ไม่ใช่ลบทิ้งถาวร" จึงไม่มี `DELETE /categories/:id`
+2. **Categories are deactivated, not deleted** — ADM-003 says "a category already in use is deactivated, not permanently deleted", so there is no `DELETE /categories/:id`
 
-3. **บังคับความลึกไม่เกิน 2 ระดับใน service layer** — `model Category` เป็น self-relation ที่ schema กันความลึกไม่ได้ ต้องเช็คใน service ว่า parent ที่ระบุมาต้องมี `parentId === null` และต้อง `isActive === true`
+3. **Enforce a maximum depth of 2 levels in the service layer** — `model Category` is a self-relation whose depth the schema can't limit, so the service must check that the given parent has `parentId === null` and `isActive === true`
 
-4. **หมวดหมู่ที่อ้างอิงได้ต้อง active เท่านั้น** — ทั้ง `AUC-001` และ `PROD-001` ต้องตรวจว่า `categoryId` ที่ส่งเข้ามาเป็นหมวดที่ `isActive = true` ตาม SRS §5.1
-
----
-
-## ผลที่ตามมา
-
-**ข้อดี**
-
-- ไม่ต้องแก้ schema และไม่ต้อง migration เพิ่ม
-- audit trail เป็นแหล่งข้อมูลเดียว query ง่าย ตรงตาม ADM-004
-- Admin จัดการหมวดหมู่ชุดเดียว ข้อมูลไม่แตกเป็นสองชุดที่ไม่ตรงกัน
-- ทีมยังทำงานคู่ขนานได้ไม่ชนกัน เพราะแบ่งที่ไฟล์แทนที่จะแบ่งที่ role
-
-**ข้อเสียที่ยอมรับ**
-
-- หมวดหมู่ที่เหมาะกับโมดูลเดียวจะโผล่ใน dropdown ของอีกโมดูลด้วย — ยอมรับใน V1 ถ้าจำเป็นให้แก้ที่ระดับ query (เช่นซ่อนหมวดที่ยังไม่มีรายการ active อยู่เลย) ไม่ใช่เพิ่ม field ลง schema
-- ยังไม่รองรับการแบ่งหน้าที่ admin ตามความรับผิดชอบ (least privilege) — ถ้าจำเป็นในอนาคตควรทำเป็น permission-based ไม่ใช่เพิ่ม role ต่อโมดูล
+4. **Only active categories may be referenced** — both `AUC-001` and `PROD-001` must check that the incoming `categoryId` is a category with `isActive = true`, per SRS §5.1
 
 ---
 
-## ทางเลือกที่พิจารณาแล้วไม่เลือก
+## Consequences
 
-| ทางเลือก | เหตุผลที่ไม่เลือก |
+**Pros**
+
+- No schema change and no extra migration
+- The audit trail is a single source, easy to query, matching ADM-004
+- The Admin manages one category set; the data doesn't split into two sets that drift apart
+- The team can still work in parallel without colliding, because the split is by file rather than by role
+
+**Accepted cons**
+
+- Categories that suit only one module also show up in the other module's dropdown — accepted in V1; if needed, fix it at the query level (e.g. hide categories with no active listings at all), not by adding a field to the schema
+- Splitting admin duties by responsibility (least privilege) isn't supported yet — if it's needed in the future, it should be permission-based, not a role per module
+
+---
+
+## Alternatives considered and rejected
+
+| Alternative | Why it was rejected |
 | --- | --- |
-| แยก `AUCTION_ADMIN` / `ECOMMERCE_ADMIN` | ขัด SRS §2 และ §5.1, ต้องแก้ schema, ทำลาย audit trail เดียวของ ADM-004 |
-| `Category.scope` (`AUCTION` / `ECOMMERCE` / `BOTH`) | ขัด SRS §5.1 ที่ระบุว่า "ไม่แยกขอบเขตตามโมดูล" โดยตรง — เคยมีตัวอย่างค้างอยู่ใน `docs/KICKOFF_GUIDE.md` ซึ่งเป็นร่างก่อน SRS v4 และถูกแก้ออกแล้วพร้อมกับ ADR ฉบับนี้ |
-| แยกตาราง `auction_categories` / `product_categories` | ปัญหาเดียวกับ `scope` แต่หนักกว่า เพราะ Admin ต้องดูแล 2 ชุดจริงๆ ตรงกับสิ่งที่ §4.4 ระบุว่าเลือกไม่เอา |
-| ย้าย `categories` ไปอยู่ใต้ `admin/` | `GET /categories` เป็น endpoint สาธารณะ (PROD-003, AUC-001) ถ้าอยู่ใต้ `admin/` จะสื่อความหมายผิดและ guard ทั้ง controller ไม่ได้ |
+| Separate `AUCTION_ADMIN` / `ECOMMERCE_ADMIN` | Contradicts SRS §2 and §5.1, requires a schema change, breaks ADM-004's single audit trail |
+| `Category.scope` (`AUCTION` / `ECOMMERCE` / `BOTH`) | Directly contradicts SRS §5.1, which says "not scoped per module" — an example of it was left in `docs/KICKOFF_GUIDE.md`, a draft from before SRS v4, and was removed together with this ADR |
+| Separate `auction_categories` / `product_categories` tables | The same problem as `scope` but worse, because the Admin really would maintain 2 sets — exactly what §4.4 chose to avoid |
+| Move `categories` under `admin/` | `GET /categories` is a public endpoint (PROD-003, AUC-001); under `admin/` it would convey the wrong meaning, and the whole controller couldn't be guarded |
 
 ---
 
-## ประเด็นที่แตกออกไปแล้ว
+## Issues split off
 
-**ADM-005 ทับซ้อนกับ PROD-002** — ADM-005 ให้ admin ปิดการขายสินค้าที่ไม่เหมาะสมได้ แต่ PROD-002 ก็ให้ผู้ขายแก้สถานะสินค้าของตัวเองระหว่าง `ACTIVE`/`INACTIVE` ได้เช่นกัน ทำให้ผู้ขายกด `ACTIVE` กลับได้ทันทีหลัง admin สั่งปิด
+**ADM-005 overlaps with PROD-002** — ADM-005 lets an admin suspend an inappropriate product listing, but PROD-002 also lets sellers switch their own products between `ACTIVE`/`INACTIVE`, so a seller could set it back to `ACTIVE` immediately after an admin suspends it
 
-✅ **ตัดสินใจแล้ว** — ทีมสรุปว่าถ้า admin เป็นคนสั่งปิด ผู้ขายต้องเปิดกลับเองไม่ได้ รายละเอียดและกฎที่ต้อง implement อยู่ที่ [ADR-0002](0002-admin-suspended-product-status.md)
+✅ **Decided** — the team concluded that if an admin suspends a listing, the seller must not be able to reopen it themselves. The details and the rules to implement are in [ADR-0002](0002-admin-suspended-product-status.md)

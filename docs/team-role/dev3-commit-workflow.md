@@ -1,210 +1,210 @@
-# Dev 3 — Commit & PR Workflow (แม่แบบ slash command, bash/macOS)
+# Dev 3 — Commit & PR Workflow (slash command template, bash/macOS)
 
-> **เจ้าของแนวทาง:** Dev 3 (E-Commerce Module)
-> **ไฟล์นี้คืออะไร:** สำเนาของ slash command ส่วนตัว `/commit` ที่ใช้อยู่จริง เอาขึ้น repo ไว้เป็น **แม่แบบให้เพื่อนในทีมก็อปไปปรับเป็นของตัวเอง**
-> **ไม่ใช่กติกาทีม** — กติกาที่ทั้งทีมยึดร่วมกันอยู่ใน `CLAUDE.md` เท่านั้น ไฟล์นี้เป็นแนวทางส่วนบุคคล ปรับได้ตามใจ
-> **ใช้คู่กับ:** [`dev3-ecommerce-workflow.md`](./dev3-ecommerce-workflow.md) — ไฟล์นั้นครอบ **build + test** ไฟล์นี้ครอบ **ship**
-> **อ้างอิง:** `CLAUDE.md` หัวข้อ "Commit message" และ "PR step"
+> **Approach owner:** Dev 3 (E-Commerce Module)
+> **What this file is:** a copy of the personal slash command `/commit` actually in use, put in the repo as **a template for teammates to copy and adapt as their own**
+> **Not a team rule** — the rules the whole team shares live only in `CLAUDE.md`; this file is a personal approach, adjust it as you like
+> **Use together with:** [`dev3-ecommerce-workflow.md`](./dev3-ecommerce-workflow.md) — that file covers **build + test**, this file covers **ship**
+> **References:** the "Commit message" and "PR step" sections of `CLAUDE.md`
 
 ---
 
-## ต่างจาก `dev4-commit-workflow.md` ยังไง
+## How this differs from `dev4-commit-workflow.md`
 
-แนวคิดและตาราง A/B ยกมาจากของ Dev 4 ทั้งหมด (เครดิตเขา) ต่างกันแค่สภาพแวดล้อม:
+The approach and the A/B table come entirely from Dev 4's version (credit to them); only the environment differs:
 
-| | Dev 4 | ไฟล์นี้ |
+| | Dev 4 | This file |
 |---|---|---|
-| เชลล์ | PowerShell (Windows) | **bash/zsh (macOS)** |
+| Shell | PowerShell (Windows) | **bash/zsh (macOS)** |
 | here-doc | `@'` … `'@` | `<<'EOF'` … `EOF` |
 | encode URL | `[uri]::EscapeDataString()` | `python3 -c 'urllib.parse.quote'` |
-| อ่าน remote slug | `-replace` | `sed -E` |
+| Reading the remote slug | `-replace` | `sed -E` |
 
-ถ้าใช้ Windows ให้ไปดูของ Dev 4 ตรงๆ จะตรงกว่า
+If you're on Windows, Dev 4's version is a closer fit
 
 ---
 
-## ข้อกำหนดก่อนใช้
+## Prerequisites
 
-`gh` ต้องติดตั้งและ **login แล้ว** (ขั้นที่ 5 ใช้เช็ค PR ที่เปิดค้าง)
+`gh` must be installed and **logged in** (step 5 uses it to check for open PRs)
 
 ```bash
 brew install gh
-gh auth login          # เปิด browser ทำครั้งเดียวจบ
-gh auth status         # ยืนยันว่าติดแล้ว
+gh auth login          # opens the browser, one time only
+gh auth status         # confirm it's connected
 ```
 
-ถ้าไม่มี `gh` หรือยังไม่ login ให้ **ข้ามขั้นที่ 5** แล้วบอกผู้ใช้ว่าข้ามเพราะอะไร
-อย่าเดาว่ามี PR เปิดอยู่หรือไม่มี
+If `gh` isn't there or isn't logged in, **skip step 5** and tell the user why it was skipped
+Don't guess whether a PR is open or not
 
 ---
 
-## วิธีนำไปใช้
+## How to use it
 
-1. สร้างไฟล์ `.claude/commands/commit.md` ในเครื่องตัวเอง
-2. ก็อปเนื้อหาในบล็อกข้างล่างไปวาง แล้วแก้ให้ตรงกับตัวเอง
-   - base branch ล็อกไว้ที่ `dev` ตาม `CLAUDE.md` — อย่าเปลี่ยนเป็น `main`
-   - ตารางอ่านสถานะ A/B ในขั้นที่ 1 เป็นหัวใจของไฟล์นี้ อย่าตัดทิ้ง
-3. เรียกใช้ด้วย `/commit <requirement-id>` เช่น `/commit PROD-006`
+1. Create the file `.claude/commands/commit.md` on your own machine
+2. Copy the content of the block below into it, then adapt it to yourself
+   - The base branch is locked to `dev` per `CLAUDE.md` — don't change it to `main`
+   - The A/B status table in step 1 is the heart of this file — don't remove it
+3. Invoke it with `/commit <requirement-id>`, e.g. `/commit PROD-006`
 
-`.gitignore` กัน `.claude/*` ไว้แล้ว ไฟล์ command ในเครื่องตัวเองจะไม่ขึ้น git และไม่กระทบใคร
+`.gitignore` already excludes `.claude/*`, so the command file on your machine won't reach git and won't affect anyone
 
 ---
 
-## เนื้อหาแม่แบบ (ก็อปทั้งบล็อก รวม frontmatter)
+## Template content (copy the whole block, including the frontmatter)
 
-> บล็อกข้างล่างใช้ **4 backtick** ครอบ เพราะข้างในมีบล็อกโค้ด ``` ซ้อนอยู่
-> ตอนก็อปให้เอาเฉพาะข้างในบรรทัด ```` ออกมา
+> The block below is wrapped in **4 backticks**, because it contains nested ``` code blocks
+> When copying, take only what is inside the ```` lines
 
 ````markdown
 ---
-description: commit + push งานที่ทำอยู่ แล้วส่ง URL เปิด PR ที่กรอก title/description ไว้ให้แล้ว
+description: commit + push the current work, then send a URL that opens a PR with the title/description already filled in
 ---
 
-# /commit — commit, push, แล้วส่ง URL เปิดฟอร์ม PR ที่กรอกไว้ให้แล้ว
+# /commit — commit, push, then send a URL that opens a pre-filled PR form
 
-ใส่ requirement id เป็น argument ได้ เช่น `/commit PROD-006`
-ถ้าไม่ใส่ ให้เดาจาก diff แล้วถามยืนยันในขั้นที่ 3
+A requirement id can be passed as an argument, e.g. `/commit PROD-006`
+If it isn't given, infer it from the diff and ask for confirmation in step 3
 
-> **ห้ามกดสร้างหรือ merge PR ให้เองเด็ดขาด** (CLAUDE.md หัวข้อ PR step)
-> คำสั่งนี้จบที่ "ส่ง URL ให้ผู้ใช้กดเอง" เท่านั้น — ห้ามเรียก `gh pr create`,
-> `gh pr merge` หรือ `git merge` เข้า dev/main ไม่ว่ากรณีใด
+> **Never create or merge the PR yourself** (CLAUDE.md, PR step section)
+> This command ends only at "send the URL for the user to click" — never call `gh pr create`,
+> `gh pr merge` or `git merge` into dev/main under any circumstances
 
 ---
 
-## ขั้นที่ 1 — สำรวจสถานะก่อน
+## Step 1 — Survey the state first
 
 ```bash
 git fetch --prune origin
 branch=$(git branch --show-current)
 echo "$branch"
 git status --short
-git log --oneline "origin/$branch..HEAD"   # A — ค้าง push จริงไหม
-git log --oneline origin/dev..HEAD         # B — มีอะไรให้เปิด PR ไหม
+git log --oneline "origin/$branch..HEAD"   # A — is anything really waiting to be pushed?
+git log --oneline origin/dev..HEAD         # B — is there anything to open a PR for?
 ```
 
-**ต้องมี `--prune`** — GitHub ลบ branch ทิ้งอัตโนมัติหลัง merge PR แต่ `git fetch` เปล่าๆ
-ไม่ลบ remote-tracking ref ที่ตายแล้วออก ทำให้ `origin/$branch` ยังชี้ commit เก่าค้างอยู่
-แล้ว A จะรายงานว่า "มี commit ค้าง push" เทียบกับ branch ที่ไม่มีอยู่บน remote แล้ว
+**`--prune` is required** — GitHub deletes the branch automatically after a PR is merged, but a plain `git fetch`
+doesn't remove dead remote-tracking refs, so `origin/$branch` keeps pointing at an old commit,
+and A reports "commits waiting to be pushed" against a branch that no longer exists on the remote
 
-A กับ B ตอบคนละคำถาม อย่าใช้ตัวเดียววัดสองเรื่อง — ถ้า push แล้วแต่ PR ยังไม่ merge
-A จะว่าง (ไม่ต้อง push ซ้ำ) แต่ B ไม่ว่าง (ยังมีของรอเข้า dev)
+A and B answer different questions; don't use one to measure both — if it's pushed but the PR isn't merged yet,
+A is empty (no need to push again) but B isn't (there is still work waiting to get into dev)
 
-ถ้า `origin/$branch` ไม่มีบน remote (branch ใหม่ หรือถูกลบไปหลัง merge) คำสั่ง A จะ error
-ให้ถือว่า "ยังไม่เคย push" แล้วดู B อย่างเดียวว่ามีอะไรให้เปิด PR ไหม
+If `origin/$branch` doesn't exist on the remote (a new branch, or deleted after merge), command A errors out —
+treat it as "never pushed" and look only at B to see whether there is anything to open a PR for
 
-แล้วอ่าน diff จริงด้วย `git diff` และ `git diff --staged`
+Then read the actual diff with `git diff` and `git diff --staged`
 
-**หยุดทันทีถ้าเจอกรณีเหล่านี้** (บอกเหตุผลแล้วจบ อย่าทำต่อ):
+**Stop immediately in these cases** (state the reason and end — don't continue):
 
-- อยู่บน branch `main` หรือ `dev` — งานต้องอยู่บน `feat/<module>-dev<เลข>`
-- มี `.env`, key, token หรือ secret อยู่ใน diff — เตือนแล้วให้ผู้ใช้เอาออกก่อน
+- On the `main` or `dev` branch — work must be on `feat/<module>-dev<n>`
+- The diff contains `.env`, a key, a token or a secret — warn, and have the user remove it first
 
-**ถ้า working tree ไม่สะอาด** → ไปขั้นที่ 2 ตามปกติ
+**If the working tree isn't clean** → go to step 2 as usual
 
-**ถ้า working tree สะอาด** ให้ดู A กับ B ประกอบกัน — **B คือตัวตัดสินว่ามี PR ให้ทำไหม**:
+**If the working tree is clean**, look at A and B together — **B decides whether there is a PR to make**:
 
-| A (ค้าง push) | B (รอเข้า dev) | แปลว่า | ทำอะไรต่อ |
+| A (waiting to push) | B (waiting for dev) | Means | Next |
 |---|---|---|---|
-| ว่าง | ว่าง | ไม่มีอะไรเลย | บอกว่าไม่มีอะไรให้ทำ แล้วจบ |
-| ไม่ว่าง | ว่าง | branch ถูก ff ไปที่ dev หลัง PR merge แล้ว | **ไม่มี PR ให้ทำ** เสนอ `git push origin <branch>` เพื่อ sync remote ให้ตรง (ไม่บังคับ) แล้วจบ |
-| ว่าง | ไม่ว่าง | push แล้ว รอเปิด/อัปเดต PR | ข้ามไปขั้นที่ 5 |
-| ไม่ว่าง | ไม่ว่าง | มีของค้าง push | ข้ามไปขั้นที่ 4 แล้วต่อขั้นที่ 5 |
+| empty | empty | Nothing at all | Say there is nothing to do, and end |
+| not empty | empty | The branch was fast-forwarded to dev after the PR merged | **No PR to make**; offer `git push origin <branch>` to sync the remote (optional), and end |
+| empty | not empty | Pushed, waiting to open/update the PR | Skip to step 5 |
+| not empty | not empty | Work waiting to be pushed | Skip to step 4, then step 5 |
 
-แถวที่สองคือกับดัก: A ไม่ว่างชวนให้คิดว่ามีงานค้าง ทั้งที่จริงๆ commit พวกนั้นเข้า dev
-ไปแล้วผ่าน PR ที่ merge ไปเรียบร้อย ถ้าดู A อย่างเดียวจะไปยิง URL สร้าง PR เปล่าที่ไม่มี diff
+The second row is the trap: a non-empty A suggests there is pending work, when those commits actually already got into dev
+through a PR that was merged. Looking only at A, you would send a URL for an empty PR with no diff
 
-ก่อนจบทุกกรณี ถ้า `git rev-list --count HEAD..origin/dev` > 0 ให้บอกว่า branch ตามหลัง dev
-อยู่กี่ commit แล้วเสนอ `git merge --ff-only origin/dev` ก่อนเริ่มงานใหม่
+Before ending in any case, if `git rev-list --count HEAD..origin/dev` > 0, say how many commits the branch is behind dev
+and offer `git merge --ff-only origin/dev` before starting new work
 
-## ขั้นที่ 2 — ร่างแผน commit
+## Step 2 — Draft the commit plan
 
-รูปแบบข้อความตาม CLAUDE.md: `<type>(<requirement-id>): <คำอธิบายภาษาอังกฤษสั้นๆ>`
+Message format per CLAUDE.md: `<type>(<requirement-id>): <short English description>`
 
 - type: `feat` / `fix` / `refactor` / `test` / `docs` / `chore` / `ci`
-- requirement-id ใส่เมื่อตรงกับ requirement ใน SRS โดยตรง งาน infra ทั่วไปข้ามได้
-  ถ้างานคร่อมหลาย requirement (เช่น e2e ที่ครอบ PROD+CART+SHIP) ให้ **ข้าม id** ดีกว่าเลือกมั่ว
-- ข้อความเป็นภาษาอังกฤษเสมอ
+- Include the requirement-id when it maps directly to an SRS requirement; general infra work can skip it
+  If the work spans several requirements (e.g. e2e covering PROD+CART+SHIP), it is better to **leave out the id** than to pick one at random
+- The message is always in English
 
-**ถ้า diff คร่อมงานหลายชนิด ให้เสนอแยก commit** เช่น โค้ดฟีเจอร์กับไฟล์เทส/เอกสาร
-คนละ commit — บอกให้ชัดว่าไฟล์ไหนอยู่ commit ไหน อย่ายัดรวมกันเพราะขี้เกียจ
+**If the diff spans several kinds of work, propose separate commits**, e.g. feature code and test/doc files
+in different commits — say clearly which files go in which commit; don't lump them together out of laziness
 
-body ของ commit เขียนเมื่อมีอะไรที่ diff ไม่ได้บอก (เหตุผลของการตัดสินใจ, ทางที่ไม่เลือกและเพราะอะไร)
-ถ้า diff อธิบายตัวเองได้อยู่แล้วก็เอาแค่บรรทัดเดียวพอ
+Write a commit body when there is something the diff doesn't say (the reasoning behind a decision, the options not chosen and why)
+If the diff already explains itself, a single line is enough
 
-## ขั้นที่ 3 — ยืนยันครั้งที่ 1
+## Step 3 — First confirmation
 
-ใช้ AskUserQuestion ถามว่าจะ commit ตามแผนนี้ไหม ตัวเลือกอย่างน้อย:
+Use AskUserQuestion to ask whether to commit according to this plan, with at least these options:
 
-- ตกลง commit + push ตามนี้
-- ขอแก้ข้อความก่อน
-- ขอแบ่ง commit ใหม่
+- OK, commit + push as planned
+- Edit the message first
+- Split the commits differently
 
-**รอคำตอบจริงเสมอ ห้ามเดาว่าผู้ใช้ตอบตกลง**
+**Always wait for a real answer — never assume the user said yes**
 
-## ขั้นที่ 4 — commit แล้ว push
+## Step 4 — Commit, then push
 
-- `git add` ให้**ระบุ path ตรงๆ** ห้ามใช้ `git add -A` หรือ `git add .`
-- commit message หลายบรรทัดใช้ here-doc ผ่าน `-F -`:
+- `git add` with **explicit paths** — never `git add -A` or `git add .`
+- For multi-line commit messages use a here-doc via `-F -`:
 
   ```bash
   git commit -F - <<'MSG'
   test: add end-to-end coverage for the e-commerce module
 
-  อธิบายเหตุผลตรงนี้
+  Explain the reasoning here
 
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   MSG
   ```
 
-  ใช้ `<<'MSG'` (มี quote) เสมอ ไม่งั้น `$` กับ backtick ในข้อความจะโดนเชลล์แปลง
-- push: `git push origin "$branch"` (ครั้งแรกของ branch ใช้ `git push -u origin "$branch"`)
-- ถ้า pre-commit hook (husky/lint-staged) แก้ไฟล์หรือ fail ให้รายงานตามจริง อย่าใช้ `--no-verify`
+  Always use `<<'MSG'` (quoted), otherwise `$` and backticks in the message get expanded by the shell
+- push: `git push origin "$branch"` (for a branch's first push use `git push -u origin "$branch"`)
+- If the pre-commit hook (husky/lint-staged) modifies files or fails, report it truthfully; don't use `--no-verify`
 
-ถ้ามาที่ขั้นนี้ทั้งที่ไม่มีอะไรจะ commit (มาจากตารางในขั้นที่ 1) ให้ **push อย่างเดียว**
-ข้ามขั้นที่ 2 กับ 3 ไปได้เลย เพราะไม่มี commit message ให้ยืนยัน
+If you reach this step with nothing to commit (coming from the table in step 1), **just push**
+and skip steps 2 and 3, because there is no commit message to confirm
 
-## ขั้นที่ 5 — เช็คก่อนว่ามี PR เปิดค้างอยู่แล้วหรือยัง
+## Step 5 — Check whether a PR is already open
 
 ```bash
 gh pr list --head "$(git branch --show-current)" --base dev --state open --json number,url
 ```
 
-ถ้า `gh` ไม่มีหรือยังไม่ได้ `gh auth login` คำสั่งนี้จะ error — ให้**ข้ามขั้นนี้แล้วบอกผู้ใช้
-ตามตรงว่าข้ามเพราะอะไร** อย่าเดาว่ามีหรือไม่มี PR เปิดอยู่
+If `gh` isn't there or `gh auth login` hasn't been run, this command errors out — **skip this step and tell the user
+honestly why it was skipped**; don't guess whether a PR is open
 
-**ถ้ามี PR เปิดอยู่แล้ว** → ไม่ต้องทำ URL ใหม่ เพราะ push เมื่อกี้อัปเดตเข้า PR เดิมให้แล้ว
-ส่ง URL ของ PR เดิมให้ผู้ใช้ พร้อมสรุปว่า commit รอบนี้เพิ่มอะไรเข้าไป แล้วจบ
+**If a PR is already open** → no new URL is needed, because the push just now already updated the existing PR
+Send the user the existing PR's URL with a summary of what this round's commits added, and end
 
-**ถ้ายังไม่มี** → ไปขั้นที่ 6
+**If not** → go to step 6
 
-## ขั้นที่ 6 — ร่าง PR title + description แล้วยืนยันครั้งที่ 2
+## Step 6 — Draft the PR title + description, then the second confirmation
 
-เป็นภาษาอังกฤษทั้งคู่ (ตาม CLAUDE.md) และต้องสอดคล้องกับสิ่งที่แก้จริง
+Both in English (per CLAUDE.md), and they must match what was actually changed
 
-โครง description ที่ใช้ได้ดี:
+A description skeleton that works well:
 
 ```markdown
 ## What
-<ทำอะไร — ถ้ามี endpoint ใหม่ ใส่ตาราง method/path>
+<what it does — if there are new endpoints, include a method/path table>
 
 ## Why
-<requirement id + เกณฑ์การยอมรับข้อไหนที่ตอบ>
+<requirement id + which acceptance criteria it satisfies>
 
 ## Decisions worth a second pair of eyes
-<จุดที่คนรีวิวควรเถียงได้ — ทางที่เลือกและเหตุผล>
+<points a reviewer should be able to argue with — the option chosen and why>
 
 ## Testing
-<ตารางผลเทสตามจริง ผ่านกี่ข้อ ชุดไหน>
+<a table of real test results — how many passed, which suites>
 
 ## Not covered here
-<สิ่งที่ยังไม่ได้ทำและเพราะอะไร>
+<what hasn't been done and why>
 ```
 
-แล้วใช้ AskUserQuestion ยืนยัน: ตกลง / ขอแก้ title / ขอแก้ description — **รอคำตอบ**
+Then use AskUserQuestion to confirm: OK / edit title / edit description — **wait for the answer**
 
-## ขั้นที่ 7 — ประกอบ URL แล้วส่งให้ผู้ใช้
+## Step 7 — Assemble the URL and send it to the user
 
-base ต้องเป็น `dev` เสมอ ไม่ใช่ `main`
+The base must always be `dev`, not `main`
 
 ```bash
 branch=$(git branch --show-current)
@@ -226,17 +226,17 @@ echo "${#url}"
 echo "$url"
 ```
 
-หมายเหตุ:
+Notes:
 
-- **อย่า encode ชื่อ branch** — GitHub รับ `/` ใน path ของ compare อยู่แล้ว (`dev...feat/ecommerce-dev3`)
-  ตัวแปร `$branch` จึงต่อเข้า URL ตรงๆ ไม่ผ่าน `enc`
-- encode เฉพาะ `title` กับ `body` · `safe=""` สำคัญ ไม่งั้น `/` กับ `#` จะไม่ถูก encode
-- ใช้ `printf '%s'` ไม่ใช่ `echo` เพราะ `echo` เติม newline ท้ายให้เอง
-- **ถ้าความยาว URL เกิน 8000** GitHub จะตอบ 414 ให้ตัด description เหลือเฉพาะ What กับ Testing
-  แล้วบอกผู้ใช้ตามตรงว่าตัดอะไรออก พร้อมพิมพ์ description ฉบับเต็มไว้ในแชทให้ copy วางเองได้
+- **Don't encode the branch name** — GitHub already accepts `/` in the compare path (`dev...feat/ecommerce-dev3`)
+  so the `$branch` variable goes into the URL directly, not through `enc`
+- Encode only `title` and `body` · `safe=""` matters, otherwise `/` and `#` won't be encoded
+- Use `printf '%s'`, not `echo`, because `echo` appends a trailing newline
+- **If the URL is longer than 8000**, GitHub answers 414 — trim the description down to What and Testing only
+  tell the user honestly what was cut, and print the full description in the chat so they can copy-paste it
 
-ปิดท้ายด้วยการพิมพ์ URL เป็นบรรทัดเดี่ยวๆ (ให้คลิกได้) แล้วเตือนสองเรื่อง:
+Finish by printing the URL on a line of its own (so it is clickable), with two reminders:
 
-1. ตรวจว่า base เป็น `dev` — GitHub มักตั้ง default เป็น `main`
-2. อ่าน title/description ที่กรอกมาให้ก่อนกด **Create pull request**
+1. Check that the base is `dev` — GitHub often defaults to `main`
+2. Read the pre-filled title/description before clicking **Create pull request**
 ````
