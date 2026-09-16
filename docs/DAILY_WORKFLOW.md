@@ -1,81 +1,81 @@
-# Workflow ประจำวัน (Daily Workflow)
+# Daily Workflow
 
-คำสั่งที่ต้องรัน **ทุกครั้งที่เริ่มงาน** — แยกออกมาจาก `docs/KICKOFF_GUIDE.md` เพื่อให้เปิดดูซ้ำได้เร็ว ไม่ต้องเลื่อนผ่าน Step 1–7
+Commands to run **every time you start work** — split out of `docs/KICKOFF_GUIDE.md` so it is quick to reopen without scrolling past Steps 1–7
 
-> **ยังไม่เคย setup เครื่องนี้?** (เพิ่งเข้าทีม / เครื่องใหม่ / ยังไม่เคย clone) ไปทำ [Setup เครื่องตัวเอง — ทำครั้งแรกครั้งเดียว](KICKOFF_GUIDE.md#setup-เครื่องตัวเอง--ทำครั้งแรกครั้งเดียว) ใน KICKOFF_GUIDE ให้จบก่อน แล้วค่อยกลับมาหน้านี้
+> **Never set up this machine?** (new to the team / new machine / never cloned) Finish [Set up your machine — first time only](KICKOFF_GUIDE.md#set-up-your-machine--first-time-only) in KICKOFF_GUIDE first, then come back to this page
 >
-> เนื้อหาหน้านี้เหมือนหัวข้อ "Workflow ประจำวัน" ใน `docs/KICKOFF_GUIDE.md` ทุกอย่าง — **แก้ที่ไหนต้องแก้อีกไฟล์ให้ตรงกันด้วย**
+> This page is identical to the "Daily workflow" section in `docs/KICKOFF_GUIDE.md` — **if you edit one, update the other to match**
 
 ---
 
-## เริ่มงาน
+## Starting work
 
-เปิดเครื่องมาทำงานวันใหม่ หรือกลับมาทำต่อหลังพักไป ให้รันชุดนี้ก่อนเขียนโค้ด
+When you sit down to work on a new day, or come back after a break, run this set before writing code
 
 ```bash
 git switch dev && git pull
-git switch feat/auction-dev4   # <-- เปลี่ยนเป็น branch ของตัวเอง
+git switch feat/auction-dev4   # <-- change to your own branch
 git merge dev
 pnpm check
 pnpm dev
 ```
 
-**ชื่อ branch ของแต่ละคน:** `feat/frontend-dev1` · `feat/auth-dev2` · `feat/ecommerce-dev3` · `feat/auction-dev4` · `feat/ai-dev5`
+**Everyone's branch names:** `feat/frontend-dev1` · `feat/auth-dev2` · `feat/ecommerce-dev3` · `feat/auction-dev4` · `feat/ai-dev5`
 
-**✅ เสร็จเมื่อ:** `pnpm check` ผ่านหมด และ `pnpm dev` รันได้ทั้ง web และ api
+**✅ Done when:** `pnpm check` passes completely and `pnpm dev` runs both web and api
 
 ---
 
-## รันเพิ่มเฉพาะตอนเข้าเงื่อนไข
+## Extra commands, only when a condition applies
 
-3 คำสั่งนี้ไม่ต้องรันทุกวัน รันเมื่อเจอเงื่อนไขเท่านั้น (ปกติเจอหลัง `git merge dev`) — รันคำสั่งเช็คนี้ก่อนได้เลย
+These 3 commands aren't needed every day — run them only when the condition applies (usually after `git merge dev`). Run this check command first
 
 ```bash
-# เช็คว่า merge เมื่อกี้มีอะไรเข้ามาบ้าง (มีชื่อไฟล์ขึ้น = ต้องรันคำสั่งด้านล่างที่ตรงกับไฟล์นั้น)
+# See what the merge just brought in (a filename showing up = run the matching command below)
 git diff --name-only HEAD@{1} HEAD -- pnpm-lock.yaml apps/api/prisma/migrations
 ```
 
 ```bash
-# เห็น pnpm-lock.yaml ขึ้นมา = มีคนเพิ่ม/อัปเดต package
+# pnpm-lock.yaml shows up = someone added/updated a package
 pnpm install
 
-# เห็นไฟล์ใน apps/api/prisma/migrations/ ขึ้นมา = มี migration ใหม่จากคนอื่น
+# files under apps/api/prisma/migrations/ show up = a new migration from someone else
 pnpm --dir apps/api exec prisma migrate deploy
 
-# ต่อ database ไม่ได้ / เพิ่งรีสตาร์ทเครื่องแล้ว Docker Desktop ยังไม่ขึ้น
+# can't connect to the database / just restarted and Docker Desktop isn't up yet
 docker compose -f infra/docker/compose.dev.yml up -d
 ```
 
 ---
 
-## ทำไมต้องทำแบบนี้
+## Why it works this way
 
-**ทำไมต้อง merge `dev` เข้ามาทุกครั้ง:** branch ของแต่ละคนแตกไว้ตั้งแต่วัน Kickoff — ถ้าคนอื่น push งานเข้า `dev` ไปแล้วหลังจากนั้น (เช่น Dev 2 ทำ auth เสร็จ) แต่ไม่ merge เข้ามา จะยังทำงานอยู่กับโค้ดเก่า เชื่อมต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+**Why merge `dev` in every time:** everyone's branch was cut on Kickoff day — if others have pushed work into `dev` since then (e.g. Dev 2 finished auth) and you don't merge it in, you are still working on old code and can't connect to the real things others built
 
-**ทำไมต้องรัน `pnpm check` หลัง merge:** `git merge` สำเร็จแค่บอกว่าไม่มี conflict ระดับบรรทัด ไม่ได้การันตีว่าโค้ดยังทำงานถูก (เช่นมีคน rename ฟังก์ชันที่อีกไฟล์หนึ่งยังเรียกชื่อเดิมอยู่ merge ผ่านสนิทแต่พังตอนรัน) และ merge แบบ local นี้ CI ไม่รันให้ (CI รันเฉพาะตอนเปิด PR) — `pnpm check` รวม typecheck ของ apps/api + apps/web, `pnpm test`, และ `pnpm lint` ไว้คำสั่งเดียว ให้รู้ทันทีว่ามีอะไรพังก่อนจะเขียนโค้ดทับต่อ
+**Why run `pnpm check` after merging:** a successful `git merge` only means there were no line-level conflicts; it doesn't guarantee the code still works (e.g. someone renamed a function that another file still calls by the old name — the merge goes through cleanly but breaks at runtime), and CI doesn't run for a local merge like this (CI only runs when a PR is opened) — `pnpm check` bundles the typecheck of apps/api + apps/web, `pnpm test` and `pnpm lint` into one command, so you know right away if anything is broken before building on top of it
 
 ---
 
-## ตอนจะส่งงาน
+## Submitting work
 
 ```bash
 git add -A
-git commit -m "feat(AUC-001): add auction listing endpoint"   # <-- <type>(<requirement-id>): คำอธิบายภาษาอังกฤษ
-git push -u origin feat/auction-dev4                          # <-- branch ของตัวเอง
+git commit -m "feat(AUC-001): add auction listing endpoint"   # <-- <type>(<requirement-id>): English description
+git push -u origin feat/auction-dev4                          # <-- your own branch
 ```
 
-จากนั้นเปิด PR โดย **base branch ต้องเป็น `dev` เสมอ** (ห้าม push ตรงเข้า `main` หรือ `dev` และห้าม commit ไฟล์ `.env` หรือ secret) — รูปแบบ commit message เต็มๆ ดูที่ [Commit Message Convention](KICKOFF_GUIDE.md#commit-message-convention)
+Then open a PR with **the base branch always set to `dev`** (never push straight to `main` or `dev`, and never commit `.env` files or secrets) — the full commit message format is in [Commit Message Convention](KICKOFF_GUIDE.md#commit-message-convention)
 
 ---
 
-## ตอนจะปล่อยขึ้น production
+## Releasing to production
 
-งานประจำวันจบที่ `dev` — การเลื่อนงานจาก `dev` ขึ้น `main` เป็นคนละเรื่องและ **ไม่มี automation ตัวไหนทำให้** ต้องเปิด release PR เองทุกรอบ
+Daily work ends at `dev` — promoting work from `dev` to `main` is a separate matter, and **no automation does it for you**; a release PR has to be opened by hand every time
 
 ```bash
-# เช็คว่ามีอะไรค้างรอปล่อยบ้าง (อ่านอย่างเดียว ไม่ได้สร้าง PR)
+# See what's waiting to be released (read-only, doesn't create a PR)
 git fetch origin
 git log --merges --pretty='- %s' origin/main..origin/dev
 ```
 
-มีรายการขึ้นมา = มีของรอปล่อย ทำตาม [`docs/RELEASE_GUIDE.md`](RELEASE_GUIDE.md) ต่อ (6 ขั้นที่คนกด + 2 ช่วงที่เครื่องทำเอง)
+Anything listed = something is waiting to be released; continue with [`docs/RELEASE_GUIDE.md`](RELEASE_GUIDE.md) (6 steps done by a person + 2 stages the machines do on their own)

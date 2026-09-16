@@ -74,7 +74,7 @@ enum product_status {
   INACTIVE
   OUT_OF_STOCK
   REMOVED
-  SUSPENDED // ใหม่ — ADM-005 (admin สั่งปิดเท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้ — ADR-0002)
+  SUSPENDED // new — ADM-005 (set by an admin only; the seller cannot move out of it — ADR-0002)
 }
 
 enum offer_decision {
@@ -110,12 +110,12 @@ enum ai_request_type {
 enum chat_role {
   USER
   ASSISTANT
-  ADMIN // — AI-001 ตอบโดย Admin ที่รับช่วงต่อจาก AI
+  ADMIN // — AI-001 answered by the Admin who took over from the AI
 }
 
 enum support_session_status {
-  AI_ONLY // — ค่าเริ่มต้น ยังคุยกับ AI อยู่
-  ESCALATED // — ส่งต่อให้ Admin แล้ว ไม่เรียก AI อีก
+  AI_ONLY // — default, still talking to the AI
+  ESCALATED // — handed over to an Admin; the AI is no longer called
   RESOLVED
 }
 
@@ -124,12 +124,12 @@ enum support_session_status {
 Table users {
   id uuid [pk]
   email varchar [unique, not null]
-  password_hash varchar [note: 'nullable — OAuth-only account ไม่มีรหัสผ่าน']
+  password_hash varchar [note: 'nullable — OAuth-only accounts have no password']
   role user_role [not null, default: 'USER']
   status user_status [not null, default: 'ACTIVE']
-  email_verified_at timestamp [note: 'nullable — ประทับเวลาตอน Google/Line ยืนยันอีเมลมาให้ ไม่ได้ทำ verification flow เอง']
+  email_verified_at timestamp [note: 'nullable — stamped when Google/Line verifies the email for us; we run no verification flow of our own']
   last_login_at timestamp
-  auto_reply_message varchar [note: 'nullable — ข้อความตอบกลับอัตโนมัติของผู้ขาย ยาวไม่เกิน 500 ตัวอักษร ค่าว่างคือปิดการใช้งาน (CHAT-004)']
+  auto_reply_message varchar [note: 'nullable — automatic reply message of the seller, at most 500 characters; empty means disabled (CHAT-004)']
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null]
 
@@ -147,7 +147,7 @@ Table user_profiles {
   display_name varchar [not null]
   avatar_url varchar
   bio varchar
-  phone varchar [note: 'ที่อยู่จัดส่งเริ่มต้น — 6 ช่องเดียวกับ order_addresses']
+  phone varchar [note: 'default shipping address — the same 6 fields as order_addresses']
   recipient_name varchar
   line1 varchar
   line2 varchar
@@ -160,7 +160,7 @@ Table user_profiles {
     (display_name)
   }
 
-  Note: 'USR-001 — user_id เป็นทั้ง PK/FK. ที่อยู่จัดส่งเริ่มต้นเก็บเป็น 6 ช่องแยก ชื่อและความกว้างตรงกับ order_addresses ทุกช่อง เพื่อให้ checkout (CART-004) ดึงไป prefill ได้ตรงๆ โดยไม่ต้องมีตัวแปลงกลาง — ต่างกันแค่ที่นี่ nullable ได้ทุกช่อง ส่วนของ order บังคับ เพราะเป็น snapshot ที่พัสดุส่งไปจริง เดิมเป็น location + default_shipping_address (ข้อความอิสระก้อนเดียว) ซึ่ง prefill ไม่ได้'
+  Note: 'USR-001 — user_id is both PK and FK. The default shipping address is stored as 6 separate fields whose names and widths match order_addresses exactly, so checkout (CART-004) can prefill from it directly without a converter — the only difference is that every field here is nullable, while those on the order are required, because that is the snapshot the parcel was actually sent to. It used to be location + default_shipping_address (one free-text blob), which could not be prefilled'
 }
 
 Table auth_accounts {
@@ -202,17 +202,17 @@ Table two_factor_codes {
   used boolean [not null, default: false]
   created_at timestamp [not null, default: `now()`]
 
-  Note: 'ใหม่ — AUTH-007'
+  Note: 'new — AUTH-007'
 }
 
 Table trusted_devices {
   id uuid [pk]
   user_id uuid [not null]
-  token_hash varchar [unique, not null, note: 'SHA-256 ของ token ที่ browser เก็บไว้ ไม่เก็บตัว token']
-  label varchar [note: 'nullable — ชื่อกำกับอุปกรณ์ ยาวไม่เกิน 200 ตัวอักษร']
+  token_hash varchar [unique, not null, note: 'SHA-256 of the token the browser keeps; the token itself is not stored']
+  label varchar [note: 'nullable — device label, at most 200 characters']
   expires_at timestamp [not null]
   last_used_at timestamp [not null, default: `now()`]
-  revoked_at timestamp [note: 'nullable — เวลาที่เลิกเชื่อถืออุปกรณ์นี้ รีเซ็ตรหัสผ่าน (AUTH-005) จะยกเลิกทุกแถวของผู้ใช้']
+  revoked_at timestamp [note: 'nullable — when this device stopped being trusted; a password reset (AUTH-005) revokes all rows of that user']
   created_at timestamp [not null, default: `now()`]
 
   indexes {
@@ -220,7 +220,7 @@ Table trusted_devices {
     (expires_at)
   }
 
-  Note: 'ใหม่ — AUTH-007 browser ที่เคยตอบรหัสถูกแล้ว login ครั้งถัดไปไม่ต้องขอรหัสจนกว่าจะหมดอายุ (ค่าเริ่มต้น 30 วัน) แทนได้เฉพาะปัจจัยที่สอง ไม่แทนรหัสผ่าน'
+  Note: 'new — AUTH-007: a browser that has already answered the code correctly skips the code on later logins until it expires (30 days by default). It replaces only the second factor, never the password'
 }
 
 Table password_reset_tokens {
@@ -231,14 +231,14 @@ Table password_reset_tokens {
   used boolean [not null, default: false]
   created_at timestamp [not null, default: `now()`]
 
-  Note: 'ใหม่ — AUTH-005'
+  Note: 'new — AUTH-005'
 }
 
 // ============ SHARED ============
 
 Table categories {
   id uuid [pk]
-  parent_id uuid [note: 'ใช้ในฝั่ง auction เรื่อง subcategory ไม่ใช้ก็ปล่อยว่างได้']
+  parent_id uuid [note: 'used on the auction side for subcategories; can be left empty if unused']
   name varchar [not null]
   slug varchar [unique, not null]
   description varchar
@@ -252,7 +252,7 @@ Table categories {
     (is_active)
   }
 
-  Note: 'ADM-003 — ใช้ร่วมกันทั้ง Auction/E-commerce'
+  Note: 'ADM-003 — shared by both Auction and E-commerce'
 }
 
 // ============ AUCTION ============
@@ -263,23 +263,23 @@ Table auctions {
   category_id uuid [not null]
   title varchar [not null]
   description varchar [not null]
-  condition product_condition [not null, note: 'ใหม่ — AUC-001 (สภาพสินค้ามีผลต่อราคาประมูลของจริง/ของสะสม)']
+  condition product_condition [not null, note: 'new — AUC-001 (item condition affects auction prices for real items/collectibles)']
   status auction_status [not null, default: 'DRAFT']
-  currency char [not null, default: 'USD', note: '— ปรับ default เป็น THB ได้ทีหลังถ้าต้องการ']
+  currency char [not null, default: 'USD', note: '— the default can be changed to THB later if needed']
   starting_price decimal [not null]
-  reserve_price decimal [note: 'PRIVATE — ห้ามส่งกลับ API ฝั่งผู้ซื้อเด็ดขาด (AUC-003)']
+  reserve_price decimal [note: 'PRIVATE — never return it from buyer-facing APIs (AUC-003)']
   min_bid_increment decimal [not null]
   current_price decimal [not null]
   bid_count integer [not null, default: 0]
   scheduled_start_at timestamp
   original_end_at timestamp
   current_end_at timestamp
-  published_at timestamp [note: 'ตอน publish (AUC-004)']
-  started_at timestamp [note: 'ตอนเข้าสถานะ ACTIVE จริง (AUC-005)']
+  published_at timestamp [note: 'when published (AUC-004)']
+  started_at timestamp [note: 'when it actually entered ACTIVE (AUC-005)']
   ended_at timestamp
-  extension_count integer [not null, default: 0, note: 'BID-004 เช็คแคป 5 ครั้ง']
+  extension_count integer [not null, default: 0, note: 'BID-004 checks the cap of 5']
   winner_user_id uuid
-  winning_bid_id uuid [unique, note: 'AUC-007 บันทึกทั้งผู้ชนะและบิดที่ชนะ']
+  winning_bid_id uuid [unique, note: 'AUC-007 records both the winner and the winning bid']
   sold_price decimal
   cancellation_reason varchar [note: 'ADM-001']
   row_version integer [not null, default: 1, note: 'optimistic concurrency (§6)']
@@ -328,7 +328,7 @@ Table bids {
     (bidder_id, placed_at)
   }
 
-  Note: 'BID-001..002 — เฉพาะ accepted bid เท่านั้นที่ persist'
+  Note: 'BID-001..002 — only accepted bids are persisted'
 }
 
 Table auction_extensions {
@@ -344,14 +344,14 @@ Table auction_extensions {
     (auction_id, extension_number) [unique]
   }
 
-  Note: 'BID-004 anti-sniping — unique ต่อ bid กัน trigger ซ้ำถ้า connection หลุดแล้ว retry'
+  Note: 'BID-004 anti-sniping — unique per bid, so a retry after a dropped connection cannot trigger it twice'
 }
 
 Table auction_events {
   id integer [pk, increment]
   auction_id uuid [not null]
-  actor_user_id uuid [note: 'nullable — event ที่ระบบสร้างเอง']
-  bid_id uuid [note: 'nullable — เฉพาะ event ที่เกี่ยวกับ bid']
+  actor_user_id uuid [note: 'nullable — events created by the system itself']
+  bid_id uuid [note: 'nullable — only for bid-related events']
   event_type auction_event_type [not null]
   created_at timestamp [not null, default: `now()`]
 
@@ -385,7 +385,7 @@ Table products {
     (seller_id, status)
   }
 
-  Note: 'PROD-001..007 · status = SUSPENDED สงวนไว้ให้ ADM-005 เท่านั้น (ADR-0002)'
+  Note: 'PROD-001..007 · status = SUSPENDED is reserved for ADM-005 only (ADR-0002)'
 }
 
 Table product_images {
@@ -408,7 +408,7 @@ Table carts {
   user_id uuid [unique, not null]
   created_at timestamp [not null, default: `now()`]
 
-  Note: 'CART-001 — ตะกร้าถาวรต่อผู้ใช้ 1 ใบ'
+  Note: 'CART-001 — one persistent cart per user'
 }
 
 Table cart_items {
@@ -430,14 +430,14 @@ Table offers {
   offer_amount decimal [not null]
   decision offer_decision [not null]
   counter_amount decimal
-  expires_at timestamp [note: 'ACCEPT/COUNTER-accepted เท่านั้น — 15 นาที']
+  expires_at timestamp [note: 'ACCEPT/COUNTER-accepted only — 15 minutes']
   created_at timestamp [not null, default: `now()`]
 
   indexes {
     (buyer_id, product_id, created_at)
   }
 
-  Note: 'AI-003 (Optional) — cooldown 5 นาที, cap 3 ครั้ง/(buyer,product)/24ชม.'
+  Note: 'AI-003 (Optional) — 5-minute cooldown, cap of 3 per (buyer, product) per 24h'
 }
 
 Table orders {
@@ -456,7 +456,7 @@ Table orders {
     (seller_id, status)
   }
 
-  Note: 'CART-003 — 1 order ต่อ 1 ผู้ขายต่อ checkout session'
+  Note: 'CART-003 — 1 order per seller per checkout session'
 }
 
 Table order_addresses {
@@ -469,18 +469,18 @@ Table order_addresses {
   postal_code varchar [not null]
   phone varchar [not null]
 
-  Note: 'Snapshot ที่อยู่ ณ ตอน checkout — แก้ไขไม่ได้อีกหลังชำระเงินสำเร็จ'
+  Note: 'Snapshot of the address at checkout — cannot be edited after payment succeeds'
 }
 
 Table order_items {
   id uuid [pk]
   order_id uuid [not null]
-  product_id uuid [note: 'nullable — ว่างเมื่อบรรทัดนี้เป็นรายการประมูลที่ชนะ']
-  auction_id uuid [unique, note: 'nullable — ว่างเมื่อบรรทัดนี้เป็นสินค้าในร้าน (CART-004)']
+  product_id uuid [note: 'nullable — empty when this line is a won auction item']
+  auction_id uuid [unique, note: 'nullable — empty when this line is a shop product (CART-004)']
   quantity integer [not null]
-  unit_price decimal [not null, note: 'ราคาปกติ, negotiated price ถ้า offer accept แล้ว หรือ sold_price ถ้าเป็นรายการประมูล']
+  unit_price decimal [not null, note: 'regular price, the negotiated price if an offer was accepted, or sold_price for an auction item']
 
-  Note: '1 บรรทัดผูกกับ product หรือ auction อย่างใดอย่างหนึ่งเสมอ รูปแบบเดียวกับ conversations. unique บน auction_id ทำให้ประมูล 1 รายการจ่ายได้ครั้งเดียวตลอดไป — Postgres ถือว่า NULL ต่างกันเสมอ ข้อจำกัดนี้จึงมีผลเฉพาะบรรทัดประมูล ไม่กระทบบรรทัดสินค้า (CART-004)'
+  Note: 'Each line is always tied to exactly one of product or auction, the same pattern as conversations. unique on auction_id means an auction can only ever be paid for once — Postgres treats NULLs as always distinct, so the constraint only applies to auction lines and does not affect product lines (CART-004)'
 }
 
 Table payment_transactions {
@@ -490,13 +490,13 @@ Table payment_transactions {
   method varchar [not null, note: 'Card / Bank Transfer / e-Wallet — UI only']
   created_at timestamp [not null, default: `now()`]
 
-  Note: 'CART-004 — 1 payment ต่อ 1 checkout_session_id ไม่ใช่ต่อ order'
+  Note: 'CART-004 — 1 payment per checkout_session_id, not per order'
 }
 
 Table conversations {
   id uuid [pk]
-  product_id uuid [note: 'nullable — ว่างเมื่อห้องนี้เป็นห้องของรายการประมูล']
-  auction_id uuid [note: 'nullable — ว่างเมื่อห้องนี้เป็นห้องของสินค้าในร้าน (CHAT-004)']
+  product_id uuid [note: 'nullable — empty when this room belongs to an auction item']
+  auction_id uuid [note: 'nullable — empty when this room belongs to a shop product (CHAT-004)']
   buyer_id uuid [not null]
   seller_id uuid [not null]
   created_at timestamp [not null, default: `now()`]
@@ -506,7 +506,7 @@ Table conversations {
     (auction_id, buyer_id, seller_id) [unique]
   }
 
-  Note: 'CHAT-001 (Optional) — เปิดซ้ำกับคู่เดิมกลับไป thread เดิมเสมอ. CHAT-004 เพิ่มฝั่งประมูล — 1 ห้องผูกกับ product หรือ auction อย่างใดอย่างหนึ่งเสมอ ไม่ผูกทั้งสองอย่าง จึงมี unique แยกกันคนละชุด'
+  Note: 'CHAT-001 (Optional) — reopening with the same pair always returns to the same thread. CHAT-004 adds the auction side — a room is always tied to exactly one of product or auction, never both, hence the separate unique sets'
 }
 
 Table messages {
@@ -521,32 +521,32 @@ Table messages {
     (conversation_id, created_at)
   }
 
-  Note: 'CHAT-002 (Optional) — ข้อความตัวอักษรเท่านั้นใน V1'
+  Note: 'CHAT-002 (Optional) — text-only messages in V1'
 }
 
 Table shipments {
   id uuid [pk]
   order_id uuid [unique, not null]
-  tracking_number varchar [note: 'สร้างอัตโนมัติตอนเข้าสถานะ SHIPPED']
-  carrier varchar [note: 'ชื่อขนส่งจำลอง']
+  tracking_number varchar [note: 'generated automatically on entering SHIPPED']
+  carrier varchar [note: 'simulated carrier name']
   status shipment_status [not null, default: 'PROCESSING']
   created_at timestamp [not null, default: `now()`]
 
-  Note: 'SHIP-001 — สถานะย้อนกลับไม่ได้'
+  Note: 'SHIP-001 — status cannot move backwards'
 }
 
 Table shipment_events {
-  id integer [pk, increment, note: 'รูปแบบเดียวกับ auction_events']
+  id integer [pk, increment, note: 'same pattern as auction_events']
   shipment_id uuid [not null]
-  actor_user_id uuid [note: 'nullable — event ที่ระบบสร้างเอง']
-  event_type shipment_status [not null, note: 'reuse type เดียวกับ shipments.status — ค่าตรงกันทุกตัว ไม่ต้องแยก enum']
+  actor_user_id uuid [note: 'nullable — events created by the system itself']
+  event_type shipment_status [not null, note: 'reuses the same type as shipments.status — every value matches, no separate enum needed']
   created_at timestamp [not null, default: `now()`]
 
   indexes {
     (shipment_id, id)
   }
 
-  Note: 'Append-only log รูปแบบเดียวกับ auction_events — SHIP-001/002'
+  Note: 'Append-only log, same pattern as auction_events — SHIP-001/002'
 }
 
 // ============ ENGAGEMENT ============
@@ -574,7 +574,7 @@ Table product_watchlists {
     (product_id, created_at)
   }
 
-  Note: 'ใหม่ — ติดตามสินค้าในร้าน ต่อยอดจาก WAT-001/002 แยกตารางเพราะสินค้ากับประมูลอยู่คนละตาราง แต่รูปทรงเหมือนกันทุกอย่างเพื่อให้สองรายการทำงานเหมือนกันจากข้างนอก'
+  Note: 'new — watching shop products, extending WAT-001/002. A separate table because products and auctions live in separate tables, but the shape is identical so the two lists behave the same from the outside'
 }
 
 Table auction_participants {
@@ -595,10 +595,10 @@ Table auction_participants {
 Table notifications {
   id uuid [pk]
   user_id uuid [not null]
-  auction_id uuid [note: 'CHANGED — nullable เพราะบาง type ไม่เกี่ยวกับ auction']
+  auction_id uuid [note: 'CHANGED — nullable because some types are not auction-related']
   bid_id uuid
-  order_id uuid [note: 'ใหม่ — NOT-005..007']
-  conversation_id uuid [note: 'ใหม่ — NOT-008 (Optional)']
+  order_id uuid [note: 'new — NOT-005..007']
+  conversation_id uuid [note: 'new — NOT-008 (Optional)']
   type notification_type [not null]
   title varchar [not null]
   message varchar [not null]
@@ -609,7 +609,7 @@ Table notifications {
     (user_id, read_at, created_at)
   }
 
-  Note: 'NOT-001..008 — title/message (ไม่ใช่ JSON payload, เป็น text ธรรมดา); เพิ่ม order_id/conversation_id ให้ client รู้ว่า refetch อะไร (§5.2)'
+  Note: 'NOT-001..008 — title/message (not a JSON payload, plain text); order_id/conversation_id added so the client knows what to refetch (§5.2)'
 }
 
 Table admin_actions {
@@ -618,7 +618,7 @@ Table admin_actions {
   target_user_id uuid
   auction_id uuid
   category_id uuid
-  product_id uuid [note: 'ใหม่ — ADM-005, เพิ่มตาม pattern nullable-FK']
+  product_id uuid [note: 'new — ADM-005, added following the nullable-FK pattern']
   action_type admin_action_type [not null]
   note varchar
   created_at timestamp [not null, default: `now()`]
@@ -637,21 +637,21 @@ Table ai_requests {
   type ai_request_type [not null]
   created_at timestamp [not null, default: `now()`]
 
-  Note: 'ใหม่ — AI-002/AI-003 (Optional), log-level เท่านั้น ใช้ rate-limit'
+  Note: 'new — AI-002/AI-003 (Optional), log-level only, used for rate-limiting'
 }
 
 Table support_chat_sessions {
   id uuid [pk]
   user_id uuid [not null]
   status support_session_status [not null, default: 'AI_ONLY']
-  assigned_admin_id uuid [note: 'nullable — Admin ที่กดรับผิดชอบบทสนทนานี้ (AI-001)']
+  assigned_admin_id uuid [note: 'nullable — the Admin who took ownership of this conversation (AI-001)']
   created_at timestamp [not null, default: `now()`]
 
   indexes {
     (status, created_at)
   }
 
-  Note: 'ใหม่ — AI-001 (บังคับ), session-scoped. AI ตอบพลาด 3 ครั้งติด หรือผู้ใช้ขอคุยกับเจ้าหน้าที่โดยตรง จะส่งต่อเป็น ESCALATED แล้วเข้าคิวรอ Admin — ตั้งแต่นั้นไม่เรียก AI อีก'
+  Note: 'new — AI-001 (required), session-scoped. After 3 consecutive AI misses, or when the user asks for staff directly, it is handed over as ESCALATED and queued for an Admin — from then on the AI is no longer called'
 }
 
 Table support_chat_messages {

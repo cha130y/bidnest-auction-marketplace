@@ -43,7 +43,7 @@ type SectionPick = {
 /**
  * AUC-008 — the four sections on the home page, one auction each.
  *
- * Replaces the five-across "ปิดเร็วๆ นี้" row. That row answered one question
+ * Replaces the five-across "Closing soon" row. That row answered one question
  * well and hid the other three: somebody landing here could not tell there was
  * anything scheduled, or that an auction had just been won. Four columns say
  * what the site is doing right now in one glance, and each one is a way in to

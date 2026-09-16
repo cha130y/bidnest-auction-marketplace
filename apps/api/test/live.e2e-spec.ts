@@ -718,7 +718,7 @@ describe('Live lobby (e2e)', () => {
   });
 
   /**
-   * LIV-004 — "เมื่อจบแสดงผล Sold/Unsold/ราคาสุดท้าย". Settlement itself is
+   * LIV-004 — "when it ends, show Sold/Unsold/final price". Settlement itself is
    * AUC-007's and is tested there; this is about what the finished auction
    * reports and what the room is told.
    */
@@ -796,7 +796,7 @@ describe('Live lobby (e2e)', () => {
       expect(arena.result).toMatchObject({
         outcome: 'UNSOLD',
         soldPrice: null,
-        // "ราคาสุดท้าย" is still what the bidding reached
+        // "Final price" is still what the bidding reached
         finalPrice: '3000',
         reserveMet: false,
         winner: null
@@ -893,8 +893,8 @@ describe('Live lobby (e2e)', () => {
   });
 
   /**
-   * LIV-003 — "แสดงจำนวนครั้งที่ต่อเวลา/เวลาสิ้นสุดใหม่ในสถานะเร่งด่วนที่
-   * เข้าถึงง่าย". The rule itself is BID-004's and is tested there; this is
+   * LIV-003 — "show the number of extensions / the new end time in an
+   * easy-to-see urgent state". The rule itself is BID-004's and is tested there; this is
    * about the arena reporting it so a screen never has to work it out.
    */
   describe('sudden death on the arena (LIV-003)', () => {
@@ -1030,7 +1030,7 @@ describe('Live lobby (e2e)', () => {
   });
 
   /**
-   * LIV-001 — "เปลี่ยนสถานะเริ่มประมูลอัตโนมัติ". The scheduler is switched
+   * LIV-001 — "switch the auction to started automatically". The scheduler is switched
    * off under test (see app.module), so the pass is called directly here —
    * which is also the only way to assert on it without waiting ten seconds.
    */

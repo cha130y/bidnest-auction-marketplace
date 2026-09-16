@@ -10,7 +10,7 @@ import type { AuctionResult } from "@/lib/api/types"
  *
  * - `soldPrice` is what somebody actually paid. Null unless it sold.
  * - `finalPrice` is the highest bid it reached, sold or not — which is what
- *   "ราคาสุดท้าย" means for an auction that did not sell. Null when nobody bid,
+ *   "Final price" means for an auction that did not sell. Null when nobody bid,
  *   because a price of 0 there means "no price", not "it went for nothing".
  * - `reserveMet` is the whole of what a buyer is told about the reserve
  *   (AUC-003). The amount itself never leaves the API.

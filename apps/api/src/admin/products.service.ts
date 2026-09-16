@@ -11,17 +11,19 @@ import { ListAdminProductsDto } from './dtos/list-admin-products.dto';
 /**
  * ADM-005 — Product listing oversight (owner: Dev 3)
  *
- * ปิด → `SUSPENDED` (ไม่ใช่ INACTIVE) เพราะ INACTIVE เป็นสถานะที่ผู้ขายเปิด
- * กลับเองได้ตาม PROD-002 ซึ่งจะทำให้ ADM-005 ไม่มีผลบังคับ — ดู ADR-0002
- * เปิดกลับ → `stockQty > 0 ? ACTIVE : OUT_OF_STOCK` (PROD-005)
+ * Suspend → `SUSPENDED` (not INACTIVE), because INACTIVE is a status the seller
+ * can reopen on their own per PROD-002, which would make ADM-005 unenforceable
+ * — see ADR-0002.
+ * Reactivate → `stockQty > 0 ? ACTIVE : OUT_OF_STOCK` (PROD-005)
  *
- * ทุกครั้งที่ปิด/เปิดต้องเขียน `admin_actions` ใน `$transaction` เดียวกับการ
- * อัปเดต `products.status` (ADM-004) พร้อมเหตุผลที่ admin ระบุ
+ * Every suspend/reactivate must write `admin_actions` in the same
+ * `$transaction` as the `products.status` update (ADM-004), with the reason
+ * the admin gave.
  *
- * ห้ามแตะ orders ที่สถานะ PAID เด็ดขาด — ADM-005 ระบุว่าการปิดการขายปิดกั้น
- * เฉพาะคำสั่งซื้อใหม่ ฝั่ง buyer ถูกปิดกั้นด้วย allowlist `status === 'ACTIVE'`
- * ที่ ProductService.search, CartService.addItem และ CheckoutService อยู่แล้ว
- * ส่วนฝั่ง seller (แก้ไข/เติมสต็อก/soft-delete) กันไว้ที่
+ * Never touch orders in PAID status — ADM-005 says suspension blocks only new
+ * orders. The buyer side is already blocked by the `status === 'ACTIVE'`
+ * allowlist in ProductService.search, CartService.addItem and CheckoutService;
+ * the seller side (edit / restock / soft-delete) is guarded in
  * `ProductService.assertNotSuspended`
  */
 @Injectable()

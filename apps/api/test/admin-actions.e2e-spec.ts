@@ -6,10 +6,10 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { authRegistry } from './helpers/auth';
 
-// ID จริงจาก apps/api/prisma/seed.ts — ต้อง seed DB ก่อนรัน (pnpm --dir apps/api exec prisma db seed)
+// Real IDs from apps/api/prisma/seed.ts — seed the DB before running (pnpm --dir apps/api exec prisma db seed)
 const ADMIN_USER_ID = '00000000-0000-4000-8000-000000000001'; // ADMIN_ID
 const REGULAR_USER_ID = '00000000-0000-4000-8000-000000000004'; // BUYER_ID
-const TARGET_USER_ID = '00000000-0000-4000-8000-000000000002'; // SELLER_A_ID — เป้าหมายที่จะ suspend ทดสอบ
+const TARGET_USER_ID = '00000000-0000-4000-8000-000000000002'; // SELLER_A_ID — the target suspended by the test
 
 describe('Admin actions routes (e2e)', () => {
   let app: INestApplication<App>;
@@ -53,14 +53,14 @@ describe('Admin actions routes (e2e)', () => {
     await app.close();
   });
 
-  it('non-admin โดน 403', () => {
+  it('rejects a non-admin with 403', () => {
     return request(server)
       .get('/admin/actions')
       .set('Authorization', authOf(REGULAR_USER_ID))
       .expect(403);
   });
 
-  it('suspend user แล้วต้องเห็น audit log ใหม่', async () => {
+  it('shows a new audit log entry after suspending a user', async () => {
     await request(server)
       .patch(`/admin/users/${TARGET_USER_ID}/suspend`)
       .set('Authorization', authOf(ADMIN_USER_ID))

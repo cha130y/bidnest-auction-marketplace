@@ -17,7 +17,7 @@ type CatalogPaginationProps = {
 }
 
 /**
- * "ก่อนหน้า" and "ถัดไป", greyed out when there is nowhere to go.
+ * "Previous" and "Next", greyed out when there is nowhere to go.
  *
  * The link-driven pager: a shop page is bookmarked and shared, so which page
  * you are on belongs in the URL. `PageNav` in ui/ is the callback-driven twin

@@ -74,8 +74,9 @@ export default function AdminAccountPage() {
     onSuccess: async (updated) => {
       queryClient.setQueryData(adminProfileQueryKey, updated);
       setFields(toFields(updated));
-      // Header อ่านชื่อ/รูปจาก session ไม่ใช่จาก query นี้ — ต้อง sync ไว้ ไม่งั้น
-      // ชื่อใน header จะไม่เปลี่ยนจนกว่าจะ login ใหม่ (เหมือน profile-form.tsx)
+      // The header reads name/avatar from the session, not from this query — keep
+      // them in sync, otherwise the header name won't change until the next
+      // login (same as profile-form.tsx)
       await updateSession({
         name: updated.profile.displayName,
         image: updated.profile.avatarUrl,

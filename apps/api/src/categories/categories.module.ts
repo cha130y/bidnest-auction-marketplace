@@ -5,8 +5,8 @@ import { CategoriesService } from './categories.service';
 /**
  * ADM-003 — Category management (owner: Dev 2)
  *
- * export CategoriesService ไว้เพราะ AUC-001 และ PROD-001 ต้องใช้ตรวจว่า
- * categoryId ที่ผู้ขายส่งมาเป็นหมวดหมู่ที่ active จริง (SRS §5.1)
+ * CategoriesService is exported because AUC-001 and PROD-001 use it to check
+ * that the categoryId a seller sends is a genuinely active category (SRS §5.1)
  */
 @Module({
   controllers: [CategoriesController],

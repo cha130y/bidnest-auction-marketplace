@@ -11,8 +11,8 @@ import {
 } from 'class-validator';
 
 /**
- * AUTH-001 — "ต้องกรอกชื่อจริง, ชื่อที่แสดง (display name), อีเมลที่ไม่ซ้ำ และ
- * รหัสผ่าน; นามสกุลเป็นข้อมูลไม่บังคับ". Max lengths mirror the column widths
+ * AUTH-001 — "first name, display name, a unique email and a password are
+ * required; last name is optional". Max lengths mirror the column widths
  * in schema.prisma so validation fails before Postgres does.
  */
 export class RegisterDto {
@@ -31,14 +31,14 @@ export class RegisterDto {
   })
   password: string;
 
-  @ApiProperty({ example: 'สมชาย', maxLength: 100 })
+  @ApiProperty({ example: 'Somchai', maxLength: 100 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
   @Transform(({ value }: { value: string }) => value?.trim())
   firstName: string;
 
-  @ApiPropertyOptional({ example: 'ใจดี', maxLength: 100 })
+  @ApiPropertyOptional({ example: 'Jaidee', maxLength: 100 })
   @IsOptional()
   @IsString()
   @MaxLength(100)

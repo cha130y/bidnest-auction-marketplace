@@ -18,13 +18,14 @@ import { AdminSupportService } from './support.service';
 /**
  * Admin module — ADM-001, ADM-002, ADM-004, ADM-005, ADM-006
  *
- * **Admin role เดียวครอบทั้งสองโมดูล** ไม่แยกเป็น admin ฝั่ง auction กับ
- * ฝั่ง e-commerce (SRS §2, §5.1, §5.2) เหตุผลเต็มดูที่
+ * **One Admin role covers both modules** — there is no separate auction admin
+ * and e-commerce admin (SRS §2, §5.1, §5.2). Full reasoning in
  * `docs/architecture/adr/0001-single-admin-role-and-shared-category-set.md`
  *
- * แยกที่ระดับ **ไฟล์** ตามเจ้าของ requirement เพื่อให้ 4 คนทำคู่ขนานได้ไม่ชนกัน:
+ * Split at the **file** level by requirement owner, so four people can work in
+ * parallel without colliding:
  *
- * | ไฟล์                   | Requirement | เจ้าของ |
+ * | File                   | Requirement | Owner   |
  * | ---------------------- | ----------- | ------- |
  * | users.controller.ts    | ADM-002     | Dev 5   |
  * | actions.controller.ts  | ADM-004     | Dev 5   |
@@ -33,11 +34,11 @@ import { AdminSupportService } from './support.service';
  * | orders.controller.ts   | ADM-006     | Dev 3   |
  * | support.controller.ts  | AI-001 escalation | Dev 5 |
  *
- * ADM-003 (หมวดหมู่, Dev 2) **ไม่ได้อยู่ที่นี่** — อยู่ที่ `src/categories/`
- * เพราะ `GET /categories` เป็น endpoint สาธารณะ
+ * ADM-003 (categories, Dev 2) **is not here** — it lives in `src/categories/`
+ * because `GET /categories` is a public endpoint.
  *
- * ไฟล์นี้เป็นจุดเดียวที่ทุกคนต้องแก้ร่วมกัน (ตอนเพิ่ม controller ของตัวเอง)
- * ให้ merge `dev` เข้ามาก่อนแก้เสมอเพื่อลด conflict
+ * This file is the one place everyone has to edit together (when adding their
+ * own controller). Always merge `dev` in before editing to reduce conflicts.
  */
 @Module({
   imports: [AuthModule],

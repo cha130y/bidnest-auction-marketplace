@@ -1,24 +1,24 @@
-# ผัง Workflow ของระบบ (Workflow Diagrams)
+# Workflow Diagrams
 
-ผังการทำงานทั้งระบบในไฟล์เดียว — ภาพรวมสถาปัตยกรรม 1 ผัง, ภาพรวม end-to-end 1 ผัง และผังย่อยรายฟีเจอร์อีก 13 ผัง
-วาดจากโค้ดจริงใน `apps/api` และ `apps/web` ไม่ได้วาดจากเอกสารอย่างเดียว จึงใช้ตรวจสอบพฤติกรรมจริงของระบบได้
+Diagrams of how the whole system works, in one file — 1 architecture overview, 1 end-to-end overview and 13 per-feature diagrams
+Drawn from the actual code in `apps/api` and `apps/web`, not from documents alone, so they can be used to check how the system really behaves
 
-> **ผังนี้บอกว่า "ระบบทำงานยังไง"** ส่วน **SRS บอกว่า "ต้องทำอะไรถึงจะผ่าน"** และ **ERD บอกว่า "ข้อมูลเก็บยังไง"** —
-> เวลาไม่ตรงกัน ให้ยึด SRS เป็นข้อกำหนด แล้วแจ้งว่าผังหรือโค้ดจุดไหนหลุด
+> **These diagrams say "how the system works"**, while **the SRS says "what it must do to pass"** and **the ERD says "how data is stored"** —
+> when they disagree, treat the SRS as the requirement and report where the diagram or code has drifted
 
 ---
 
-## เปิดดูยังไง
+## How to open them
 
-มีสองฉบับ เนื้อหาและผังชุดเดียวกัน ต่างกันแค่ภาษา — ฉบับอังกฤษไว้ส่งให้อาจารย์หรือคนนอกทีมที่อ่านไทยไม่ได้
+There are two editions with the same content and diagrams, differing only in language — the English edition is for sending to instructors or people outside the team who can't read Thai
 
-| ฉบับ | ไฟล์ในเครื่อง (กดเปิดได้เลย) | ลิงก์ออนไลน์ |
+| Edition | Local file (click to open) | Online link |
 | --- | --- | --- |
-| **ภาษาไทย** — ต้นทางหลัก | [bidnest-workflows-v1.html](bidnest-workflows-v1.html) | <https://claude.ai/code/artifact/8ca77c79-a7e5-4d44-96d7-9a9d4dce3157> |
-| **English** | [bidnest-workflows-v1-en.html](bidnest-workflows-v1-en.html) | ยังไม่ได้ publish |
+| **Thai** — the primary source | [bidnest-workflows-v1.html](bidnest-workflows-v1.html) | <https://claude.ai/code/artifact/8ca77c79-a7e5-4d44-96d7-9a9d4dce3157> |
+| **English** | [bidnest-workflows-v1-en.html](bidnest-workflows-v1-en.html) | Same link as the Thai edition — switch with the language link under the title |
 
-เป็นไฟล์ HTML ไฟล์เดียวจบ ไม่ต้องรันเซิร์ฟเวอร์ ไม่ต้อง `pnpm dev` — ดับเบิลคลิกใน File Explorer ก็เปิดได้
-หรือสั่งจากเทอร์มินัล โดยยืนที่ root ของโปรเจค:
+Each is a single self-contained HTML file — no server to run, no `pnpm dev` — double-clicking it in File Explorer opens it
+or open it from the terminal, standing at the project root:
 
 ```powershell
 start docs\architecture\workflows\bidnest-workflows-v1.html
@@ -28,59 +28,59 @@ start docs\architecture\workflows\bidnest-workflows-v1.html
 start docs\architecture\workflows\bidnest-workflows-v1-en.html
 ```
 
-ทั้งสองหน้ามีลิงก์สลับภาษาอยู่ใต้หัวเรื่อง กดข้ามไปมาได้ (ต้องเปิดในเบราว์เซอร์จริง ถ้าเปิดใน preview ของ VS Code ลิงก์อาจไม่ทำงาน)
+Both pages have a language-switch link under the title to jump between them (open them in a real browser; in VS Code's preview the link may not work)
 
-**ข้อควรรู้:** ตอนออฟไลน์หน้าจะเปิดได้ปกติ แต่ฟอนต์ IBM Plex โหลดไม่ขึ้น (ดึงจาก Google Fonts) หน้าจะสลับไปใช้ฟอนต์ระบบแทน
-อ่านได้ครบเหมือนเดิม แค่หน้าตาเปลี่ยน
+**Good to know:** offline, the page still opens fine, but the IBM Plex fonts don't load (they come from Google Fonts), so the page falls back to system fonts
+Everything is still readable, it just looks different
 
 ---
 
-## ในไฟล์มีผังอะไรบ้าง
+## What's in the file
 
-| # | ผัง | ตอบคำถาม |
+| # | Diagram | Answers |
 | --- | --- | --- |
-| — | ชิ้นส่วนของระบบ | web / api / db / บริการภายนอก ต่อกันยังไง |
-| 00 | ภาพรวมทั้งระบบ | สองเส้นทางหาราคา (ประมูล / ซื้อทันที) บรรจบกันตรงไหน |
-| 01 | สมัคร / เข้าสู่ระบบ | ทำไมล็อกอินเป็นสองจังหวะ และ trusted device ตัดตรงไหน |
-| 02 | วงจรชีวิตประมูล | สถานะไหนคนสั่ง สถานะไหนระบบสั่งตามเวลา |
-| 03 | การส่งบิด | ด่านตรวจ → transaction → broadcast |
-| 04 | ห้องประมูลสด | ล็อบบี้ → สนาม → ช่วงตัดสิน → ผลลัพธ์ |
-| 05 | ติดตาม + แจ้งเตือน | เหตุการณ์ 8 ชนิด → 1 แถวข้อมูล → 2 ปลายทาง |
-| 06 | สถานะสินค้า | ผู้ขายปิดเอง กับ แอดมินสั่งปิด ต่างกันยังไง (ADR-0002) |
-| 07 | ตะกร้า → ชำระเงิน | จ่ายครั้งเดียวแต่แตกออเดอร์ตามผู้ขาย |
-| 08 | การจัดส่ง | ลำดับสถานะที่อนุญาต และจุดที่ยกเลิกได้ |
-| 09 | AI ประเมินราคา | ทางสำเร็จและทางที่ AI ใช้ไม่ได้ |
-| 10 | AI ต่อรองราคา | ผลลัพธ์ 3 แบบตัดสินจากอะไร |
-| 11 | แชทช่วยเหลือ | อะไรทำให้ส่งต่อจาก AI ไปหาแอดมิน |
-| 12 | แชทผู้ซื้อ–ผู้ขาย | ห้องแชทเกิดจากอะไร |
-| 13 | คำสั่งแอดมิน | คำสั่งกับบันทึกเหตุผลเกิดพร้อมกันยังไง |
-| — | ตารางสถานะอ้างอิง | ชื่อสถานะทั้งหมดที่ใช้ตรงกันทั้ง schema / API / หน้าจอ |
-| — | ใครดูแลส่วนไหน | โมดูลของ Dev 1–5 |
+| — | System components | How web / api / db / external services connect |
+| 00 | Whole-system overview | Where the two paths to a price (auction / buy now) meet |
+| 01 | Sign up / log in | Why login has two stages, and where trusted devices cut in |
+| 02 | Auction lifecycle | Which statuses a person triggers and which the system triggers on schedule |
+| 03 | Placing a bid | Checks → transaction → broadcast |
+| 04 | Live auction room | Lobby → arena → deciding phase → result |
+| 05 | Watchlist + notifications | 8 event types → 1 data row → 2 destinations |
+| 06 | Product status | How a seller pausing differs from an admin suspending (ADR-0002) |
+| 07 | Cart → payment | One payment, split into orders per seller |
+| 08 | Shipping | The allowed status sequence and where cancellation is possible |
+| 09 | AI price estimate | The success path and the path when the AI isn't available |
+| 10 | AI price negotiation | What decides between the 3 outcomes |
+| 11 | Support chat | What triggers the handover from the AI to an admin |
+| 12 | Buyer–seller chat | What creates a chat room |
+| 13 | Admin actions | How an action and its recorded reason happen together |
+| — | Status reference table | Every status name, used consistently across schema / API / screens |
+| — | Who owns what | The modules of Dev 1–5 |
 
-**ภาษาของผัง:** กล่องเส้นทึบ = ขั้นตอนหรือสถานะ · **กล่องสีส้ม = ระบบทำเอง ไม่มีคนกด** · กล่องเส้นประ = ทางเลือกหรือกรณีถูกปฏิเสธ · กล่องพื้นเทา = เงื่อนไขหรือหมายเหตุ
-
----
-
-## แก้ไขและอัปเดต
-
-ไฟล์ `bidnest-workflows-v1.html` (ไทย) เป็น **ต้นทางหลัก** — แก้ที่ไฟล์นี้ก่อนเสมอ
-แล้วค่อยแก้ `bidnest-workflows-v1-en.html` ตามให้ตรงกัน สองไฟล์มีพิกัด SVG ชุดเดียวกัน ต่างกันแค่ข้อความกับฟอนต์
-(ไทยใช้ IBM Plex Sans Thai / อังกฤษใช้ IBM Plex Sans)
-ผังทั้งหมดเป็น inline SVG เขียนมือ (ไม่ใช่รูปภาพ) จึงซูมได้ไม่แตก และเปลี่ยนสีตามธีมสว่าง/มืดของคนเปิดเอง
-
-หน้าลิงก์ออนไลน์เป็นสำเนาที่ publish ไว้ให้ทีมเปิดง่าย ไม่ได้อัปเดตตามไฟล์อัตโนมัติ —
-แก้ไฟล์แล้วต้อง publish ทับใหม่เพื่อให้สองที่ตรงกัน
-
-**เวลาต้องอัปเดต:** เมื่อ flow เปลี่ยนจริงในโค้ด เช่น เพิ่มสถานะใหม่, เปลี่ยนลำดับการเขียนข้อมูล,
-เพิ่ม/ย้าย endpoint ที่ผังอ้างถึง — ไม่ต้องอัปเดตเมื่อแก้เฉพาะ UI หรือ refactor ที่ flow เหมือนเดิม
+**Diagram legend:** solid-bordered box = a step or status · **orange box = done by the system, no one clicks** · dashed box = an alternative or rejected case · grey-filled box = a condition or note
 
 ---
 
-## เอกสารที่เกี่ยวข้อง
+## Editing and updating
 
-| เอกสาร | ใช้ตอนไหน |
+The file `bidnest-workflows-v1.html` (Thai) is **the primary source** — always edit it first
+then update `bidnest-workflows-v1-en.html` to match. Both files share the same SVG coordinates, differing only in text and fonts
+(Thai uses IBM Plex Sans Thai / English uses IBM Plex Sans)
+All diagrams are hand-written inline SVG (not images), so they zoom without blurring and follow the viewer's light/dark theme
+
+The online link is a copy published for the team's convenience; it doesn't update automatically from the file —
+after editing the file, publish over it again to keep the two in sync
+
+**When to update:** when a flow actually changes in the code, e.g. a new status, a change in the order data is written,
+or an endpoint the diagrams refer to is added/moved — no update is needed for UI-only changes or refactors that keep the flow the same
+
+---
+
+## Related documents
+
+| Document | When to use |
 | --- | --- |
-| [SRS](../../requirements/) | ต้องการเกณฑ์การยอมรับของ requirement |
-| [ERD](../erd/bidnest-erd-v1.dbml) | ต้องการรู้ว่าข้อมูลเก็บที่ตารางไหน |
-| [ADR](../adr/) | ต้องการรู้ว่าทำไมถึงออกแบบแบบนี้ |
-| [`apps/api/prisma/schema.prisma`](../../../apps/api/prisma/schema.prisma) | ต้องการชื่อ field และสถานะจริงในฐานข้อมูล |
+| [SRS](../../requirements/) | You need a requirement's acceptance criteria |
+| [ERD](../erd/bidnest-erd-v1.dbml) | You need to know which table data is stored in |
+| [ADR](../adr/) | You need to know why it was designed this way |
+| [`apps/api/prisma/schema.prisma`](../../../apps/api/prisma/schema.prisma) | You need the real field and status names in the database |

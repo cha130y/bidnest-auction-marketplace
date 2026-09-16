@@ -183,7 +183,7 @@ function CartGate({ onFailed }: { onFailed: (error: unknown) => void }) {
 
   // Waits for the cart itself, not just for the request to be in flight. On
   // the render where the token has landed but the fetch has not started, the
-  // old condition fell through and flashed "ไม่มีสินค้าให้ชำระเงิน" — the one
+  // old condition fell through and flashed "Nothing to pay for" — the one
   // screen a buyer arriving at checkout must never be shown by accident.
   if (!isAuthReady || (isAuthenticated && isPending)) {
     return (
@@ -568,7 +568,7 @@ function summarise(payable: Payable) {
     return {
       itemCount: payable.quantity,
       // PROD-007 — an agreed price does not also take the quantity discount
-      // ("ไม่ทับซ้อนกัน"), so there is no saving to show against it. The server
+      // ("they do not stack"), so there is no saving to show against it. The server
       // prices it the same way.
       discountTotal: "0",
       total: payable.total,
@@ -684,12 +684,12 @@ function CheckoutForm({
       onFailed(error)
 
       // The refusal is itself the news that this cart is out of date — the
-      // stock it was priced against is gone. Without this, "กลับไปที่ตะกร้า"
+      // stock it was priced against is gone. Without this, "Back to cart"
       // lands on a cart that still looks fine, and the buyer is told the item
       // sold out on one screen and that all is well on the next.
       //
       // Refetching is enough: the cart route recomputes `issue` per line, so
-      // the red "ของเหลือไม่พอ" row appears on arrival rather than after
+      // the red "Not enough stock" row appears on arrival rather than after
       // whatever would eventually have refetched it.
       if (checkoutFailure(error).kind === "UNAVAILABLE") {
         void queryClient.invalidateQueries({ queryKey: cartQueryKey })
@@ -840,7 +840,7 @@ function CheckoutForm({
 
         {/* Named on this side only. A cart is a stack of things the buyer just
             picked out and still remembers; a lot is one item won some time ago,
-            possibly among several, and "1 ชิ้น" alone would not say which. */}
+            possibly among several, and "1 item" alone would not say which. */}
         {summary.lotTitle && (
           <p className="mt-3 line-clamp-2 font-semibold text-ink">
             {summary.lotTitle}

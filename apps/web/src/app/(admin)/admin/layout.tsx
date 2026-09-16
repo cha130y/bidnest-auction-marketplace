@@ -141,7 +141,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // `isPending && isFetching`, so it is false on the render where the query has
   // only just been enabled — the token has arrived but the request has not left
   // yet. This fell through to the branch below and told an admin signing in
-  // "คุณไม่มีสิทธิ์เข้าถึงหน้านี้" for an instant, every time.
+  // "You don't have permission to access this page" for an instant, every time.
   if (!ready || (token && isPending)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-n-100">

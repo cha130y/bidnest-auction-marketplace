@@ -1,69 +1,69 @@
-# คู่มือปล่อยงานขึ้น Production (Release Guide)
+# Release Guide
 
-ขั้นตอนเลื่อนงานจาก `dev` ขึ้น `main` — ทำเฉพาะตอนจะปล่อยของขึ้น production **ไม่ใช่งานประจำวัน**
+The steps for promoting work from `dev` to `main` — only when releasing to production, **not part of daily work**
 
-> **งานประจำวัน** (เริ่มงาน / commit / เปิด PR เข้า `dev`) อยู่ที่ [`docs/DAILY_WORKFLOW.md`](DAILY_WORKFLOW.md)
-> ไฟล์นี้เริ่มต่อจากจุดที่ PR ของทุกคน merge เข้า `dev` เรียบร้อยแล้ว
+> **Daily work** (starting work / committing / opening PRs into `dev`) is in [`docs/DAILY_WORKFLOW.md`](DAILY_WORKFLOW.md)
+> This file picks up from the point where everyone's PRs have been merged into `dev`
 
-**`main` คือ production** — Railway (API) กับ Vercel (Web) deploy ทันทีที่ `main` ขยับ และ **ไม่มี automation ตัวไหน merge `dev` เข้า `main` ให้** ต้องเปิด release PR เองทุกรอบ
+**`main` is production** — Railway (API) and Vercel (Web) deploy as soon as `main` moves, and **no automation merges `dev` into `main` for you**; a release PR has to be opened by hand every time
 
 ---
 
-## ภาพรวม
+## Overview
 
 ```
 feat/<module>-devN  --PR-->  dev  --release PR-->  main  --auto-->  Railway + Vercel
-      (คนกด)                     (คนกด)                  (อัตโนมัติ)
+                   (manual)          (manual)           (automatic)
 ```
 
-รวมทั้งหมด **6 ขั้นที่คนกด** + **2 ช่วงที่เครื่องทำให้เอง** (Step 4 และ Step 7)
+In total, **6 steps done by a person** + **2 stages the machines do on their own** (Step 4 and Step 7)
 
 ---
 
-## Step 1 — เช็คว่ามีอะไรค้างรอปล่อยบ้าง
+## Step 1 — Check what's waiting to be released
 
 ```bash
-# อ่านอย่างเดียว ไม่ได้สร้าง PR — รันกี่รอบก็ได้
+# Read-only, doesn't create a PR — run it as many times as you like
 git fetch origin
 git log --merges --pretty='- %s' origin/main..origin/dev
 ```
 
-ได้รายการ PR ที่ `dev` มีแต่ `main` ยังไม่มี — ก๊อปเก็บไว้ใช้ต่อใน Step 2
+You get the list of PRs that `dev` has but `main` doesn't — copy it for Step 2
 
 ```bash
-# อยากดูละเอียดถึงระดับ commit แทนที่จะเป็นราย PR
+# To see detail down to the commit level instead of per PR
 git log --no-merges --pretty='- %s' origin/main..origin/dev
 ```
 
-**✅ เสร็จเมื่อ:** มีรายการ PR ขึ้นมาบนจอ
+**✅ Done when:** a list of PRs shows up on screen
 
-**ไม่มีอะไรขึ้นเลย** = `main` ตามทัน `dev` แล้ว รอบนี้ไม่ต้องปล่อย จบแค่นี้
+**Nothing shows up** = `main` has caught up with `dev`; there's nothing to release this time, and you're done
 
 ---
 
-## Step 2 — เปิด release PR
+## Step 2 — Open the release PR
 
-เปิดหน้า compare ใน browser
+Open the compare page in a browser
 
 ```
 https://github.com/cha130y/bidnest-auction-marketplace/compare/main...dev
 ```
 
-ตรวจให้แน่ใจว่าหัวหน้าเพจเป็น **`base: main` ← `compare: dev`** และขึ้นว่า **Able to merge**
+Make sure the top of the page says **`base: main` ← `compare: dev`** and shows **Able to merge**
 
-**Title** — ใช้โครงเดิมของทีม ใส่ `(<REQUIREMENT-ID>)` ได้ถ้ารอบนั้นเป็น requirement เดียวล้วน
+**Title** — use the team's usual format; add `(<REQUIREMENT-ID>)` if the round is a single requirement only
 
 ```
-chore: release dev to main - <สรุปสั้นๆ ว่ารอบนี้มีอะไร>
+chore: release dev to main - <short summary of what this round contains>
 ```
 
 ```
 chore(AI-001): release dev to main - support chat fixes and a wider FAQ
 ```
 
-> ระวังอย่าให้มีเว้นวรรคเกินหน้า `:` เพราะ title นี้จะกลายเป็น **merge commit message บน `main`** ถ้าเว้นวรรคเกินจะหลุดรูปแบบ commit ของทีม
+> Be careful not to put an extra space before the `:`, because this title becomes the **merge commit message on `main`** — an extra space breaks the team's commit format
 
-**Description** — สั้น 2–3 บรรทัดพอ รายละเอียดอยู่ใน PR ลูกอยู่แล้ว เอารายการจาก Step 1 มาวาง พิมพ์ `#153` เฉยๆ GitHub จะทำลิงก์ให้เอง
+**Description** — 2–3 short lines is enough, the details are already in the child PRs. Paste the list from Step 1; just type `#153` and GitHub links it for you
 
 ```markdown
 Promotes `dev` to `main`. Two PRs since the last release (#152).
@@ -72,188 +72,188 @@ Promotes `dev` to `main`. Two PRs since the last release (#152).
 - #154 — AUC-004: fix the closing job timezone
 ```
 
-**✅ เสร็จเมื่อ:** กด Create pull request แล้ว PR ขึ้นมา
+**✅ Done when:** you click Create pull request and the PR appears
 
 ---
 
-## Step 3 — กด Update branch ทันที (อย่ารอ CI)
+## Step 3 — Click Update branch right away (don't wait for CI)
 
-ถ้าท้าย PR ขึ้นแถบ **"This branch is out-of-date with the base branch"** ให้กดปุ่ม **Update branch** ทันที **ไม่ต้องรอ 3 job ที่กำลังรันอยู่**
+If the bottom of the PR shows the **"This branch is out-of-date with the base branch"** bar, click **Update branch** immediately — **don't wait for the 3 jobs that are running**
 
-> ⚠️ **ห้ามเลือก "Update with rebase"** — ใช้ **"Update with merge commit"** ซึ่งเป็นค่าเริ่มต้นเท่านั้น
-> `dev` เป็น branch ที่ทั้ง 5 คนใช้ร่วมกัน การ rebase จะเขียนประวัติใหม่ทั้งเส้น แล้ว `dev` ในเครื่องทุกคนจะพังพร้อมกัน
+> ⚠️ **Never choose "Update with rebase"** — only use **"Update with merge commit"**, which is the default
+> `dev` is shared by all 5 people; a rebase rewrites the whole history, and everyone's local `dev` breaks at once
 
-ไม่ขึ้นแถบนี้ = `dev` ตามทัน `main` อยู่แล้ว ข้ามไป Step 4 ได้เลย
+No bar = `dev` is already up to date with `main`; skip straight to Step 4
 
-**✅ เสร็จเมื่อ:** แถบ out-of-date หายไป และ CI เริ่มรันรอบใหม่
+**✅ Done when:** the out-of-date bar is gone and CI starts a new run
 
 ---
 
-## Step 4 — รอ CI (อัตโนมัติ · ราว 4 นาที)
+## Step 4 — Wait for CI (automatic · about 4 minutes)
 
-ไม่ต้องทำอะไร รอ 3 job นี้เขียวครบ ทั้งสามตัวติดป้าย **Required** ถ้าตัวใดตัวหนึ่งแดง ปุ่ม merge จะกดไม่ได้
+Nothing to do — wait for these 3 jobs to go green. All three are marked **Required**; if any of them is red, the merge button can't be clicked
 
-| Job | ตรวจอะไร |
+| Job | What it checks |
 |---|---|
-| `lint-and-test` | lint, unit test และ build ของ `apps/web` — จับ Server Component ที่ build ไม่ผ่าน ซึ่งไม่โผล่ตอน dev |
-| `docker-build` | image ของ API ยัง build ได้อยู่มั้ย (build อย่างเดียว ไม่ push) — Dockerfile คือ production code ที่ lint กับ test ไม่เคยเปิดอ่าน |
-| `e2e` | รัน API จริงกับ Postgres 17 + MailDev จริง ผ่าน `migrate deploy` → `db seed` → `test:e2e` — จับ migration ที่ apply ไม่ผ่าน |
+| `lint-and-test` | lint, unit tests and the `apps/web` build — catches Server Components that fail to build, which doesn't show up in dev |
+| `docker-build` | whether the API image still builds (build only, no push) — the Dockerfile is production code that lint and tests never read |
+| `e2e` | runs the real API against real Postgres 17 + MailDev via `migrate deploy` → `db seed` → `test:e2e` — catches migrations that don't apply |
 
-check ชื่อ **Vercel** ที่เขียวอยู่เป็น preview deploy ของ frontend คนละสายกับ CI สามตัวนี้ และไม่ใช่ตัวบังคับ
+The green check named **Vercel** is the frontend preview deploy, a separate track from these three CI jobs, and not required
 
-**✅ เสร็จเมื่อ:** ขึ้น "All checks have passed"
+**✅ Done when:** it shows "All checks have passed"
 
-**ถ้าแดง:** อ่าน log ของ job ที่แดง แก้บน branch ต้นทาง เปิด PR เข้า `dev` ตามปกติ แล้วกลับมาเริ่มที่ Step 1 ใหม่ — **ห้ามแก้บน `dev` ตรงๆ**
-
----
-
-## Step 5 — ขอ approve จากเพื่อนในทีม 1 คน
-
-branch protection บังคับ `required_approving_review_count: 1` — กด merge เองคนเดียวไม่ได้
-
-เลือกคนที่งานรอบนั้นเป็นของเขาจะดีที่สุด เพราะเขารู้ว่าต้องดูตรงไหน
-
-> ตั้ง `dismiss_stale_reviews: false` ไว้ — ถ้าเพื่อน approve แล้วมีคนกด Update branch ทีหลัง approval **จะไม่ถูกล้าง** ไม่ต้องไปรบกวนขอใหม่
-
-**✅ เสร็จเมื่อ:** มีเครื่องหมายถูกเขียวข้างชื่อคน approve
+**If it's red:** read the failing job's log, fix it on the source branch, open a PR into `dev` as usual, then come back and start again from Step 1 — **never fix it directly on `dev`**
 
 ---
 
-## Step 6 — กด Merge pull request
+## Step 5 — Get approval from 1 teammate
 
-ใช้ปุ่ม **Merge pull request** (merge commit) ตามที่ทีมทำมาตลอด
+Branch protection enforces `required_approving_review_count: 1` — you can't merge on your own
 
-**ไม่ใช้ Squash and merge** เพราะจะยุบงานของทุกคนในรอบนั้นเหลือ commit เดียว แล้วสาวกลับไม่ได้ว่า PR ไหนแก้อะไร
+Ideally pick the person whose work is in this round, because they know what to look at
 
-**✅ เสร็จเมื่อ:** PR ขึ้นสถานะ Merged สีม่วง
+> `dismiss_stale_reviews: false` is set — if a teammate approves and someone clicks Update branch afterwards, the approval **is not cleared**, so there's no need to bother them again
+
+**✅ Done when:** there's a green check next to the approver's name
 
 ---
 
-## Step 7 — Railway และ Vercel deploy (อัตโนมัติ)
+## Step 6 — Click Merge pull request
 
-ไม่ต้องทำอะไร ทั้งสองเจ้าเห็น `main` ขยับแล้วเริ่มเอง
+Use the **Merge pull request** button (merge commit), as the team always has
 
-- **Railway → `apps/api`** build image ตาม [`Dockerfile`](../Dockerfile) พอ container บูต [`docker-entrypoint.sh`](../docker-entrypoint.sh) จะรัน `prisma migrate deploy` ให้ก่อนเสมอ — **ไม่ต้องไป migrate เองด้วยมือ**
-- **Vercel → `apps/web`** build Next.js เอง คนละสายกับ Railway โดยสิ้นเชิง `apps/web` ไม่เคยผ่าน Docker image เลย
+**Don't use Squash and merge**, because it collapses everyone's work in the round into a single commit, and you can no longer trace which PR changed what
 
-> ⚠️ **`railway.json` ที่รากรีโปไม่ใช่ตัวที่ Railway อ่าน**
+**✅ Done when:** the PR shows the purple Merged status
+
+---
+
+## Step 7 — Railway and Vercel deploy (automatic)
+
+Nothing to do — both providers see `main` move and start on their own
+
+- **Railway → `apps/api`** builds the image from the [`Dockerfile`](../Dockerfile); when the container boots, [`docker-entrypoint.sh`](../docker-entrypoint.sh) always runs `prisma migrate deploy` first — **no need to migrate by hand**
+- **Vercel → `apps/web`** builds Next.js itself, completely separate from Railway; `apps/web` never goes through a Docker image
+
+> ⚠️ **The `railway.json` at the repo root is not what Railway reads**
 >
-> ไฟล์นั้นเขียน `builder`, `healthcheckPath` และ `restartPolicy` ไว้ก็จริง แต่ค่าที่ใช้จริงตอน deploy อยู่ที่ **Settings ของ service บน Railway dashboard** แก้ไฟล์แล้ว commit ขึ้นไปจะไม่มีอะไรเปลี่ยน และไม่มี error บอกด้วย
+> That file does specify `builder`, `healthcheckPath` and `restartPolicy`, but the values actually used at deploy time are in the **service Settings on the Railway dashboard**. Editing the file and committing it changes nothing, and no error tells you so
 >
-> ถ้าต้องแก้ builder หรือ health check ให้ไปแก้ที่:
+> To change the builder or health check, go to:
 >
 > ```
-> Railway → project BidNest → service ของ API → Settings
+> Railway → project BidNest → the API service → Settings
 > ```
 
-CI จะรันซ้ำอีกรอบบน `main` ด้วย เป็นด่านสุดท้ายก่อนของจริงออก
+CI also runs again on `main`, as the last gate before the real thing goes out
 
-**✅ เสร็จเมื่อ:** Railway ขึ้น Deployment successful
+**✅ Done when:** Railway shows Deployment successful
 
 ---
 
-## Step 8 — ตรวจว่า production ยังหายใจอยู่
+## Step 8 — Check production is still breathing
 
-หาโดเมนจริงของ API ก่อน — **ไม่ได้อยู่ในรีโป** ต้องเปิดจาก dashboard
+Find the API's real domain first — **it's not in the repo**; get it from the dashboard
 
 ```
-Railway → project BidNest → service ของ API
+Railway → project BidNest → the API service
 → Settings → Networking → Public Networking
 ```
 
-แล้วยิง health check จากเครื่องตัวเอง (จะเปิดใน browser แทนก็ได้ ผลเหมือนกัน)
+Then hit the health check from your own machine (opening it in a browser works too, same result)
 
 ```bash
-# Git Bash — เปลี่ยน <railway-domain> เป็นโดเมนจริงที่ copy มาจาก Railway
+# Git Bash — replace <railway-domain> with the real domain copied from Railway
 curl https://<railway-domain>/health
 ```
 
 ```powershell
-# PowerShell — curl ใน PowerShell เป็น alias ของ Invoke-WebRequest ไม่ใช่ curl ตัวจริง
+# PowerShell — curl in PowerShell is an alias of Invoke-WebRequest, not the real curl
 Invoke-RestMethod https://<railway-domain>/health
 ```
 
-**✅ เสร็จเมื่อ:** ได้ผลลัพธ์ **เป๊ะแบบนี้** เท่านั้น
+**✅ Done when:** you get **exactly this** result, and nothing else
 
 ```json
 {"status":"ok"}
 ```
 
-> ได้อย่างอื่นที่ไม่ใช่ `{"status":"ok"}` = **ยิงผิดเซิร์ฟเวอร์** ไม่ใช่ API ของเรา ให้กลับไปเอาโดเมนจาก Railway dashboard ใหม่
-> รูปแบบนี้มาจาก `apps/api/src/health/health.controller.ts` ถ้าวันไหนแก้ endpoint นั้น ให้แก้บรรทัดนี้ตามด้วย
+> Anything other than `{"status":"ok"}` = **you hit the wrong server**, not our API; go back and get the domain from the Railway dashboard again
+> This format comes from `apps/api/src/health/health.controller.ts`; if that endpoint ever changes, update this line too
 
 ```bash
-# รอบไหนมี migration ติดไปด้วย — เปิด deploy log ของ Railway หาบรรทัดนี้ว่าผ่านจริง
+# For rounds that include a migration — open Railway's deploy log and find this line to confirm it passed
 ==> prisma migrate deploy
 ```
 
-ปิดท้ายด้วยการลองกดใช้ฟีเจอร์ที่เพิ่งปล่อยสัก 1 อย่างบนเว็บจริง
+Finish by trying out at least 1 of the newly released features on the live site
 
 ---
 
-## กับดักที่เจอบ่อย
+## Common pitfalls
 
-**1. รอ CI จบก่อนค่อยกด Update branch**
-เสียเวลาฟรีหนึ่งรอบเต็ม เพราะ commit ที่กำลังเทสอยู่ไม่ใช่ commit ที่จะ merge จริง กด Update ก่อนแล้วรอรอบเดียวจบ
+**1. Waiting for CI to finish before clicking Update branch**
+Wastes a full round, because the commit being tested isn't the commit that will actually be merged. Click Update first, then wait for a single round
 
-**2. เผลอเลือก Update with rebase**
-เขียนประวัติ `dev` ใหม่ทั้งเส้น ทุกคนที่มี `dev` ในเครื่องต้องมานั่งแก้พร้อมกัน ใช้ merge commit เท่านั้น
+**2. Accidentally choosing Update with rebase**
+Rewrites the whole history of `dev`; everyone with `dev` on their machine has to fix it at once. Use merge commits only
 
-**3. เปิด PR จาก feature branch เข้า `main` ตรงๆ**
-ผิดกติกาใน `CLAUDE.md` — feature branch ต้องเข้า `dev` เสมอ มีแค่ release PR เท่านั้นที่ base เป็น `main` ได้
+**3. Opening a PR from a feature branch straight into `main`**
+Against the rules in `CLAUDE.md` — feature branches always go into `dev`; only a release PR may have `main` as its base
 
-**4. ดองงานใน `dev` นานเกินไป**
-รวบหลาย PR ไม่ได้ทำให้ merge ยากขึ้นเลย (`dev` เป็น superset ของ `main` จึงแทบไม่มีทาง conflict) แต่ถ้า production พังจะไล่ไม่ถูกว่าตัวไหนทำ และ rollback จะลากงานที่ไม่ผิดกลับไปด้วย — เกิน 6–8 PR เมื่อไหร่ควรปล่อยได้แล้ว
+**4. Letting work sit in `dev` too long**
+Bundling several PRs doesn't make merging any harder (`dev` is a superset of `main`, so conflicts are nearly impossible), but if production breaks you can't tell which one did it, and a rollback drags innocent work back with it — once it's past 6–8 PRs, it's time to release
 
-**5. รอบที่มี migration ปนไปกับ feature ธรรมดา**
-migration ย้อนกลับยากที่สุดในบรรดาของทั้งหมด ถ้ารอบไหนแตะ `apps/api/prisma/schema.prisma` ควรปล่อยแยกก้อน จะได้รู้ทันทีว่าถ้าพังเป็นเพราะอะไร
+**5. A round that mixes a migration with ordinary features**
+Migrations are the hardest thing of all to roll back. If a round touches `apps/api/prisma/schema.prisma`, release it on its own, so you immediately know what caused any breakage
 
-**6. เชื่อ health check ที่ไม่ได้เช็คว่าเป็นของเรา**
-โดเมน Railway เป็นชื่อสาธารณะที่ใครก็จองได้ ยิงผิดตัวแล้วได้ 200 กลับมาเหมือนกัน ต้องดูว่า response เป็น `{"status":"ok"}` เป๊ะๆ เท่านั้น และ**ห้ามเอาโดเมนที่ไม่แน่ใจไปใส่ `NEXT_PUBLIC_API_URL`** เพราะจะกลายเป็นส่งรหัสผ่านผู้ใช้ไปให้เซิร์ฟเวอร์ที่เราไม่รู้จัก
+**6. Trusting a health check without checking it's ours**
+Railway domains are public names anyone can claim; hitting the wrong one can also return 200. The response must be exactly `{"status":"ok"}`, and **never put a domain you're unsure of into `NEXT_PUBLIC_API_URL`**, because that would send users' passwords to a server we don't know
 
 ---
 
-## กติกาที่ตั้งไว้บน `main`
+## Rules set on `main`
 
-ค่าจริงจาก branch protection ของ repo
+Actual values from the repo's branch protection
 
-| กติกา | ค่า | แปลว่า |
+| Rule | Value | Meaning |
 |---|---|---|
-| Required checks | `lint-and-test`, `docker-build`, `e2e` | ต้องเขียวครบสามตัวถึงกด merge ได้ |
-| Strict (up-to-date) | เปิด | ต้องกด Update branch ทุกครั้งที่ตามหลัง `main` |
-| Approvals | 1 คน | กด merge เองคนเดียวไม่ได้ |
-| Dismiss stale reviews | ปิด | push ใหม่แล้ว approval เดิมยังอยู่ |
-| Force push / delete | ปิดทั้งคู่ | ลบหรือทับ `main` ไม่ได้ |
-| Enforce on admins | ปิด | admin ยัง push ตรงเข้า `main` ได้ — **อย่าใช้ทางลัดนี้** |
+| Required checks | `lint-and-test`, `docker-build`, `e2e` | All three must be green before merge is possible |
+| Strict (up-to-date) | On | Must click Update branch every time it falls behind `main` |
+| Approvals | 1 person | You can't merge on your own |
+| Dismiss stale reviews | Off | Existing approvals stay after a new push |
+| Force push / delete | Both off | `main` can't be deleted or overwritten |
+| Enforce on admins | Off | Admins can still push straight to `main` — **don't use this shortcut** |
 
 ```bash
-# อยากเช็คค่าปัจจุบันเองเมื่อไหร่ก็ได้ (ต้องติดตั้ง gh CLI และ login แล้ว)
+# Check the current values yourself any time (requires the gh CLI, logged in)
 gh api repos/cha130y/bidnest-auction-marketplace/branches/main/protection
 ```
 
 ---
 
-## ทำไมต้องทำแบบนี้
+## Why it works this way
 
-**ทำไม `dev` → `main` ถึงไม่ทำให้เป็นอัตโนมัติ:** เพราะ `main` deploy ขึ้น production ทันทีที่ขยับ ถ้า auto-merge จาก `dev` ทุกครั้ง ก็เท่ากับทุก PR ที่เข้า `dev` จะยิงขึ้น production เลย ซึ่งขัดกับจุดประสงค์ของการมี `dev` เป็นด่านกลาง การให้คนกดเองคือจุดที่เราเลือกได้ว่า "รอบนี้พร้อมออกหรือยัง"
+**Why `dev` → `main` isn't automated:** because `main` deploys to production the moment it moves. Auto-merging from `dev` every time would mean every PR into `dev` ships straight to production, defeating the purpose of having `dev` as a middle gate. Having a person click is the point where we get to decide "is this round ready to go out?"
 
-**ทำไมต้องกด Update branch ก่อนรอ CI:** branch protection ตั้ง `strict: true` ไว้ ยังไงก็ merge ไม่ได้ถ้ายังตามหลัง `main` และการกด Update branch จะ push commit ใหม่ ทำให้ CI รีสตาร์ตใหม่หมดอยู่ดี — รอให้จบก่อนค่อยกด คือทิ้ง CI ไปเปล่าๆ หนึ่งรอบ
+**Why click Update branch before waiting for CI:** branch protection sets `strict: true`, so it can't be merged while behind `main` anyway, and clicking Update branch pushes a new commit, which restarts CI from scratch regardless — waiting for it to finish before clicking just throws away one CI run
 
-**ทำไม CI ต้องมีถึง 3 job:** `lint` กับ `test` รันบน Node ของ runner และไม่เคยเปิด `Dockerfile` เลย — dependency ที่ต้องการ system package เพิ่ม หรือ path ที่ย้าย จะไม่มีใครจับได้จนกว่าจะ deploy พัง ส่วน `e2e` เป็น job เดียวที่รัน API กับ database จริง ทำให้ migration ที่ apply ไม่ผ่านโผล่ที่นี่แทนที่จะโผล่ตอน container บูตใน production
+**Why CI needs 3 jobs:** `lint` and `test` run on the runner's Node and never open the `Dockerfile` — a dependency that needs an extra system package, or a moved path, would go unnoticed until a deploy breaks. `e2e` is the only job that runs the API against a real database, so a migration that doesn't apply shows up here instead of when the container boots in production
 
-**ทำไมไม่ใช้ squash merge:** รอบหนึ่งอาจมีงานของ 3–4 คนปนกัน squash แล้วจะเหลือ commit เดียวบน `main` ทำให้ `git log` ไม่บอกว่าใครแก้อะไร และเวลาต้อง revert เฉพาะงานของคนใดคนหนึ่งจะทำไม่ได้
+**Why not squash merge:** one round can mix the work of 3–4 people; squashing leaves a single commit on `main`, so `git log` no longer says who changed what, and reverting just one person's work becomes impossible
 
 ---
 
-## เอกสารที่เกี่ยวข้อง
+## Related documents
 
-- [`docs/DAILY_WORKFLOW.md`](DAILY_WORKFLOW.md) — งานประจำวัน เริ่มงาน / ส่งงานเข้า `dev`
-- [`docs/KICKOFF_GUIDE.md`](KICKOFF_GUIDE.md) — setup เครื่องครั้งแรก, ตั้งค่า branch protection, CI/CD
-- `CLAUDE.md` — กติกาชื่อ branch, commit message, PR
+- [`docs/DAILY_WORKFLOW.md`](DAILY_WORKFLOW.md) — daily work: starting work / submitting work into `dev`
+- [`docs/KICKOFF_GUIDE.md`](KICKOFF_GUIDE.md) — first-time machine setup, branch protection setup, CI/CD
+- `CLAUDE.md` — rules for branch names, commit messages, PRs
 
-**ไฟล์ในรีโปที่เอกสารนี้อ้างถึง** — ถ้าไฟล์พวกนี้เปลี่ยน ให้อัปเดตเอกสารนี้ตามด้วย
+**Repo files this document refers to** — if these files change, update this document too
 
-- `.github/workflows/ci.yml` — นิยามของ 3 job ใน Step 4
+- `.github/workflows/ci.yml` — definitions of the 3 jobs in Step 4
 - `railway.json` — `builder: DOCKERFILE`, `healthcheckPath: /health`
-- `Dockerfile` และ `docker-entrypoint.sh` — สิ่งที่เกิดขึ้นใน Step 7
-- `apps/api/src/health/health.controller.ts` — response ที่คาดหวังใน Step 8
+- `Dockerfile` and `docker-entrypoint.sh` — what happens in Step 7
+- `apps/api/src/health/health.controller.ts` — the expected response in Step 8

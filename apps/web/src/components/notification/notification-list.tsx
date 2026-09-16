@@ -117,7 +117,7 @@ const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
 /**
- * "3 ชั่วโมงที่แล้ว" reads faster than "25 ส.ค. 2569 22:07" when the question
+ * "3 hours ago" reads faster than "25 Aug 2569 22:07" when the question
  * is "is this new?", which is the question a notification list is for. Past a
  * week the exact date is the more useful answer, so it takes over.
  *
@@ -141,7 +141,7 @@ const PAGE_SIZE = 20
 /**
  * `first`, then whatever of `second` is not already in it.
  *
- * Both directions are needed. Pressing "โหลดเพิ่ม" puts the next page after
+ * Both directions are needed. Pressing "Load more" puts the next page after
  * what is on screen; a notification arriving puts a re-read first page in
  * front of it. Either way a row can appear in both halves — an arrival pushes
  * everything down by one, so the old row 20 becomes the new row 21 — and the
@@ -281,7 +281,7 @@ export function NotificationList() {
 
   /**
    * Patched in place rather than re-read. Re-reading would send the list back
-   * to page one, which throws away every "โหลดเพิ่ม" the reader pressed — and
+   * to page one, which throws away every "Load more" the reader pressed — and
    * a row they touched on page four is the last one they want to lose.
    */
   const readOne = async (notification: AppNotification) => {
@@ -291,7 +291,7 @@ export function NotificationList() {
       const at = new Date().toISOString()
       setItems((current) =>
         (current ?? [])
-          // Under "ยังไม่ได้อ่าน" the row has stopped belonging to the list it
+          // Under "Unread" the row has stopped belonging to the list it
           // is in, so it leaves rather than sitting there contradicting the tab.
           .filter((item) => !(unreadOnly && item.id === notification.id))
           .map((item) =>
@@ -299,10 +299,10 @@ export function NotificationList() {
           )
       )
       setUnread((current) => Math.max(0, current - 1))
-      // Under "ยังไม่ได้อ่าน" the row left the list, so the total it is
+      // Under "Unread" the row left the list, so the total it is
       // counted against has to come down with it — otherwise the line below
-      // reads "แสดง 19 จาก 20" over a list that now holds all nineteen there
-      // are. Under "ทั้งหมด" the row stayed, and so does the total.
+      // reads "Showing 19 of 20" over a list that now holds all nineteen there
+      // are. Under "All" the row stayed, and so does the total.
       if (unreadOnly) {
         setMeta((current) =>
           current

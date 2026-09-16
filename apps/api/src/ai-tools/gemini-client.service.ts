@@ -130,11 +130,11 @@ export class GeminiClientService {
       }
     }
 
-    // ไม่มีทางมาถึงบรรทัดนี้ได้จริง (loop ด้านบน throw หรือ return เสมอ) — TypeScript ต้องการ return/throw ปิดท้ายฟังก์ชัน
+    // Unreachable in practice (the loop above always throws or returns) — TypeScript needs a closing return/throw
     throw new GeminiUnavailableException();
   }
 
-  /** retry เฉพาะปัญหาชั่วคราวฝั่ง Gemini (5xx เช่น 503 high demand) หรือ timeout ของเราเอง — ไม่ retry 4xx (API key ผิด, โมเดลไม่มีจริง ฯลฯ) เพราะลองใหม่ก็ไม่ช่วย */
+  /** Retry only transient Gemini-side problems (5xx such as 503 high demand) or our own timeout — never 4xx (wrong API key, nonexistent model, etc.), since retrying would not help */
   private isRetryable(error: Error): boolean {
     if (error.message === 'GEMINI_TIMEOUT') {
       return true;

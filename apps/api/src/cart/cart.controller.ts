@@ -27,7 +27,7 @@ export class CartController {
 
   /**
    * CART-001 — adds to the quantity already in the cart rather than replacing
-   * it, so pressing "เพิ่มลงตะกร้า" twice on a listing leaves two of it. Worth
+   * it, so pressing "Add to cart" twice on a listing leaves two of it. Worth
    * saying out loud: the request looks like it sets a quantity, and the stock
    * ceiling is therefore checked against the resulting total, not against the
    * number in the body. `PATCH items/:itemId` is the one that sets.

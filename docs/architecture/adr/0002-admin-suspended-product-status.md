@@ -1,29 +1,29 @@
-# ADR-0002 — ใช้สถานะ `SUSPENDED` แยกการปิดการขายโดย Admin ออกจากการปิดโดยผู้ขาย
+# ADR-0002 — Use a `SUSPENDED` status to separate suspension by an Admin from pausing by the seller
 
-- **สถานะ:** Accepted
-- **วันที่:** 2026-08-19
-- **อ้างอิง:** SRS v4 ADM-005, PROD-002, PROD-003, PROD-005
-- **เกี่ยวข้องกับ:** Dev 3 (ADM-005, PROD-002, PROD-003, PROD-005), Dev 2 (เจ้าของ schema/migration)
-- **สืบเนื่องจาก:** [ADR-0001](0001-single-admin-role-and-shared-category-set.md) หัวข้อประเด็นค้าง
-
----
-
-## บริบท
-
-SRS มีข้อกำหนด 2 ข้อที่ทับซ้อนกัน:
-
-- **ADM-005** — "Admin ปิดหรือเปิดการขายสินค้าที่ไม่เหมาะสมกลับคืนได้ พร้อมบันทึกเหตุผลไว้ทุกครั้ง ... การปิดการขายจะปิดกั้นคำสั่งซื้อใหม่ แต่ไม่ยกเลิกคำสั่งซื้อที่จ่ายเงินแล้ว (PAID)"
-- **PROD-002** — "ผู้ขายแก้ไขราคา, รายละเอียด, รูปภาพ, หมวดหมู่ และสต็อกได้ในขณะที่สินค้าอยู่ในสถานะ ACTIVE หรือ INACTIVE"
-
-`ProductStatus` เดิมมี `ACTIVE / INACTIVE / OUT_OF_STOCK / REMOVED` ซึ่ง **แยกไม่ออกว่า `INACTIVE` นั้นเกิดจากผู้ขายปิดเอง หรือ admin สั่งปิด** ผลคือผู้ขายกด `ACTIVE` กลับได้ทันทีหลัง admin สั่งปิด ทำให้ ADM-005 ไม่มีผลบังคับจริง
-
-SRS ไม่ได้ระบุทางออกไว้ ทีมจึงตัดสินใจกันเองว่า **ถ้า admin เป็นคนสั่งปิด ผู้ขายต้องเปิดกลับเองไม่ได้**
+- **Status:** Accepted
+- **Date:** 2026-08-19
+- **References:** SRS v4 ADM-005, PROD-002, PROD-003, PROD-005
+- **Concerns:** Dev 3 (ADM-005, PROD-002, PROD-003, PROD-005), Dev 2 (schema/migration owner)
+- **Follows from:** [ADR-0001](0001-single-admin-role-and-shared-category-set.md), the issues-split-off section
 
 ---
 
-## การตัดสินใจ
+## Context
 
-เพิ่มค่า `SUSPENDED` เข้า `enum ProductStatus` แล้วให้ "ใครเป็นคนปิด" เป็นส่วนหนึ่งของ state machine โดยตรง
+The SRS has 2 overlapping requirements:
+
+- **ADM-005** — "The Admin can suspend or reactivate inappropriate product listings, recording a reason every time ... suspension blocks new orders but does not cancel orders that are already paid (PAID)"
+- **PROD-002** — "The seller can edit the price, details, images, category and stock while the product is ACTIVE or INACTIVE"
+
+The original `ProductStatus` had `ACTIVE / INACTIVE / OUT_OF_STOCK / REMOVED`, which **can't tell whether an `INACTIVE` came from the seller pausing it or from an admin suspending it**. As a result, the seller could set it back to `ACTIVE` immediately after an admin suspended it, leaving ADM-005 with no real force
+
+The SRS doesn't specify a solution, so the team decided that **if an admin suspends a listing, the seller must not be able to reopen it themselves**
+
+---
+
+## Decision
+
+Add a `SUSPENDED` value to `enum ProductStatus`, making "who closed it" part of the state machine itself
 
 ```prisma
 enum ProductStatus {
@@ -31,13 +31,13 @@ enum ProductStatus {
   INACTIVE
   OUT_OF_STOCK
   REMOVED
-  SUSPENDED // ADM-005 — admin สั่งปิดเท่านั้น ผู้ขายเปลี่ยนออกเองไม่ได้ (PROD-002)
+  SUSPENDED // ADM-005 — set by an admin only; the seller cannot move out of it (PROD-002)
 }
 ```
 
-migration: `20260819031110_add_suspended_product_status` (`ALTER TYPE "ProductStatus" ADD VALUE 'SUSPENDED'` บรรทัดเดียว ไม่มีคอลัมน์ใหม่ ไม่ต้อง backfill)
+migration: `20260819031110_add_suspended_product_status` (a single line, `ALTER TYPE "ProductStatus" ADD VALUE 'SUSPENDED'` — no new column, no backfill)
 
-ไม่เพิ่มค่าใน `AdminActionType` — `DEACTIVATE_PRODUCT` / `REACTIVATE_PRODUCT` ที่มีอยู่แล้วใช้ได้ตรงความหมาย
+No new `AdminActionType` value — the existing `DEACTIVATE_PRODUCT` / `REACTIVATE_PRODUCT` already mean exactly this
 
 ---
 
@@ -45,108 +45,108 @@ migration: `20260819031110_add_suspended_product_status` (`ALTER TYPE "ProductSt
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ACTIVE: PROD-001 ลงขาย
-    ACTIVE --> INACTIVE: ผู้ขาย (PROD-002)
-    INACTIVE --> ACTIVE: ผู้ขาย (PROD-002)
-    ACTIVE --> OUT_OF_STOCK: อัตโนมัติ stock = 0 (PROD-005)
-    OUT_OF_STOCK --> ACTIVE: อัตโนมัติ เติม stock (PROD-005)
-    ACTIVE --> REMOVED: ผู้ขาย soft-delete (PROD-002)
-    INACTIVE --> REMOVED: ผู้ขาย soft-delete (PROD-002)
+    [*] --> ACTIVE: PROD-001 listed
+    ACTIVE --> INACTIVE: seller (PROD-002)
+    INACTIVE --> ACTIVE: seller (PROD-002)
+    ACTIVE --> OUT_OF_STOCK: automatic, stock = 0 (PROD-005)
+    OUT_OF_STOCK --> ACTIVE: automatic, restocked (PROD-005)
+    ACTIVE --> REMOVED: seller soft-delete (PROD-002)
+    INACTIVE --> REMOVED: seller soft-delete (PROD-002)
     ACTIVE --> SUSPENDED: admin (ADM-005)
     INACTIVE --> SUSPENDED: admin (ADM-005)
     OUT_OF_STOCK --> SUSPENDED: admin (ADM-005)
-    SUSPENDED --> ACTIVE: admin เท่านั้น (ADM-005)
-    SUSPENDED --> OUT_OF_STOCK: admin เท่านั้น ถ้า stock = 0
+    SUSPENDED --> ACTIVE: admin only (ADM-005)
+    SUSPENDED --> OUT_OF_STOCK: admin only, if stock = 0
 ```
 
-**`SUSPENDED` เป็นสถานะปลายทางสำหรับผู้ขาย** — ผู้ขายย้ายออกจากสถานะนี้ไม่ได้เลย รวมถึงย้ายไป `REMOVED` ด้วย
+**`SUSPENDED` is a terminal state for the seller** — the seller can't move out of it at all, including to `REMOVED`
 
-เหตุผลที่ต้องกันทาง `REMOVED` ด้วย ไม่ใช่เพราะมีฟีเจอร์กู้คืน (V1 ไม่มี — ดูหัวข้อถัดไป) แต่เพราะ **การย้ายไป `REMOVED` จะลบร่องรอยว่าสินค้าเคยถูกระงับ** เนื่องจาก `SUSPENDED` เก็บอยู่ใน field เดียวกับที่ผู้ขายเขียนได้ ถ้า guard เขียนแบบเช็คสถานะปลายทาง (`ถ้ากำลังจะเป็น ACTIVE และตอนนี้เป็น SUSPENDED → ปฏิเสธ`) ผู้ขายจะเดินอ้อม 2 ก้าวคือ `SUSPENDED → REMOVED → ACTIVE` ได้ทันที เพราะก้าวที่สอง guard ไม่ทำงานแล้ว
+The `REMOVED` path has to be blocked too — not because there is a restore feature (V1 has none — see the next section), but because **moving to `REMOVED` would erase the trace that the product was ever suspended**. Since `SUSPENDED` lives in the same field the seller can write, a guard that checks the target status (`if it's about to become ACTIVE and is currently SUSPENDED → reject`) lets the seller take a 2-step detour, `SUSPENDED → REMOVED → ACTIVE`, right away, because the guard no longer fires on the second step
 
-**guard ต้องเช็คที่สถานะปัจจุบัน ไม่ใช่สถานะปลายทาง:**
+**The guard must check the current status, not the target status:**
 
 ```ts
-// ✅ ถูก — บล็อกทุกการกระทำของผู้ขายเมื่อสินค้าอยู่ในสถานะ SUSPENDED
+// ✅ Correct — blocks every seller action while the product is SUSPENDED
 if (product.status === ProductStatus.SUSPENDED) {
-  throw new ForbiddenException('สินค้านี้ถูกระงับโดยผู้ดูแลระบบ');
+  throw new ForbiddenException('This product has been suspended by an administrator');
 }
 ```
 
 ---
 
-## `REMOVED` เป็นสถานะปลายทาง ไม่มีการกู้คืนใน V1
+## `REMOVED` is a terminal state; there is no restore in V1
 
-ทีมตัดสินใจว่า **V1 ไม่ทำฟีเจอร์กู้คืนสินค้าที่ถูกลบ** — ไม่มี endpoint `restore` และไม่มีเส้นทางออกจาก `REMOVED` ในทุกกรณี (ตรงกับ state machine ด้านบนที่ไม่มีลูกศรออกจาก `REMOVED`)
+The team decided that **V1 has no restore feature for deleted products** — no `restore` endpoint and no way out of `REMOVED` in any case (matching the state machine above, which has no arrow out of `REMOVED`)
 
-เหตุผลไม่ใช่แค่ประหยัดเวลา แต่เพราะ **SRS มีทางออกให้อยู่แล้ว**:
+The reason is not just saving time, but that **the SRS already provides an alternative**:
 
-| ความต้องการของผู้ขาย | สถานะที่ถูกต้อง | กลับมาขายได้ไหม |
+| What the seller wants | Correct status | Can it be sold again? |
 | --- | --- | --- |
-| พักขายชั่วคราว / ของหมด / ยังไม่พร้อม | `INACTIVE` | ได้ ผู้ขายกดเองได้ตลอด |
-| ไม่ต้องการรายการนี้อีกแล้ว | `REMOVED` | ไม่ได้ ต้องลงขายใหม่ |
+| Pause temporarily / out of stock / not ready | `INACTIVE` | Yes, the seller can switch it any time |
+| Doesn't want this listing anymore | `REMOVED` | No, it must be listed again |
 
-ถ้าเพิ่มปุ่มกู้คืน `REMOVED` จะกลายเป็น `INACTIVE` ที่ซ้ำซ้อน — มีสองสถานะทำงานเหมือนกัน แล้วผู้ขายจะสับสนว่าควรใช้อันไหน
+Adding a restore button would turn `REMOVED` into a redundant `INACTIVE` — two statuses that behave the same, leaving sellers confused about which to use
 
-**สิ่งที่ต้องทำแทน (งาน UI ล้วน — Dev 1 / Dev 3):**
+**What to do instead (UI-only work — Dev 1 / Dev 3):**
 
-- ปุ่มลบต้องมี confirm dialog ที่เขียนชัดว่า **"ลบแล้วกู้คืนไม่ได้"**
-- ใน dialog เดียวกันต้องเสนอทางเลือกว่า *"ถ้าแค่อยากหยุดขายชั่วคราว ให้ใช้ปิดการขาย (INACTIVE) แทน"*
-- ปุ่ม "ปิดการขาย" ควรเด่นกว่าปุ่ม "ลบ" ในหน้าจัดการสินค้า
+- The delete button must have a confirm dialog that clearly says **"Deleted listings cannot be restored"**
+- The same dialog must offer the alternative: *"If you only want to stop selling temporarily, use Pause listing (INACTIVE) instead"*
+- The "Pause listing" button should be more prominent than "Delete" on the product management page
 
-ผู้ขายที่ลบไปแล้วต้องลงขายใหม่ทั้งหมด — ได้ `product.id` ใหม่, ต้องอัปโหลดรูปใหม่ (`product_images` ผูกกับ id เดิม), ลิงก์เดิมที่แชร์ไว้ตาย 404 และแชทเดิมที่ผูกกับ `product_id` เดิมเริ่ม thread ใหม่ ส่วนประวัติคำสั่งซื้อเก่าไม่หาย เพราะเป็น soft-delete
+A seller who deleted a listing must list it again from scratch — a new `product.id`, images uploaded again (`product_images` are tied to the old id), previously shared links die with 404, and chats tied to the old `product_id` start a new thread. Past order history isn't lost, because it's a soft-delete
 
-> **หมายเหตุถ้าอนาคตจะเพิ่ม restore:** ทำได้ปลอดภัยโดยไม่ต้องแก้ schema (`PATCH /products/:id/restore` คืนไป `INACTIVE` ไม่ใช่ `ACTIVE`) — แต่ปลอดภัยได้ **ก็ต่อเมื่อ guard บล็อก `SUSPENDED → REMOVED` ตามหัวข้อด้านบนแล้วเท่านั้น** ไม่งั้นจะเปิดช่องเลี่ยงการระงับทันที
+> **Note if restore is added in the future:** it can be done safely without a schema change (`PATCH /products/:id/restore` returning to `INACTIVE`, not `ACTIVE`) — but it is safe **only if the guard already blocks `SUSPENDED → REMOVED` as described above**; otherwise it immediately opens a way around suspension
 
 ---
 
-## กฎที่ต้อง implement (Dev 3)
+## Rules to implement (Dev 3)
 
-| จุด | กฎ |
+| Point | Rule |
 | --- | --- |
-| ADM-005 admin ปิด | `status = SUSPENDED` + เขียน `admin_actions` (`DEACTIVATE_PRODUCT`) ใน `$transaction` เดียวกัน ตาม ADR-0001 |
-| ADM-005 admin เปิดกลับ | `status = stockQty > 0 ? ACTIVE : OUT_OF_STOCK` + เขียน `admin_actions` (`REACTIVATE_PRODUCT`) ใน transaction เดียวกัน |
-| PROD-002 ผู้ขายเปลี่ยนสถานะ | ถ้าสถานะปัจจุบันเป็น `SUSPENDED` → ตอบ `403 Forbidden` พร้อมข้อความว่าถูกระงับโดยผู้ดูแลระบบ |
-| PROD-002 ผู้ขายแก้ข้อมูลสินค้า | สินค้าที่ `SUSPENDED` แก้ไขไม่ได้ — PROD-002 อนุญาตแก้เฉพาะ `ACTIVE`/`INACTIVE` อยู่แล้ว |
-| PROD-002 ผู้ขาย soft-delete | สินค้าที่ `SUSPENDED` ลบไม่ได้ด้วย เพื่อไม่ให้ลบร่องรอยการระงับ |
-| PROD-002 กู้คืนสินค้าที่ลบแล้ว | ไม่มีใน V1 — `REMOVED` เป็นสถานะปลายทาง ต้องมี confirm dialog ที่บอกว่ากู้คืนไม่ได้ และเสนอ `INACTIVE` เป็นทางเลือก |
-| PROD-005 auto-flip | ต้องข้ามสินค้าที่ `SUSPENDED` ไม่งั้นการเติม stock จะเปลี่ยนกลับเป็น `ACTIVE` เอง แล้วลบล้างคำสั่ง admin |
-| PROD-003 / PROD-004 หน้าสาธารณะ | กรอง `status = ACTIVE` อยู่แล้ว → `SUSPENDED` ถูกซ่อนอัตโนมัติ ไม่ต้องแก้ query |
-| หน้ารายการสินค้าของผู้ขาย | ต้องแสดง `SUSPENDED` พร้อมป้ายบอกให้ชัด เพื่อให้ผู้ขายรู้ว่าทำไมแก้ไม่ได้ ไม่ใช่ซ่อนหายไปเฉยๆ |
-| CART / checkout | สินค้าที่ `SUSPENDED` ต้องเพิ่มลงตะกร้าและ checkout ไม่ได้ (ADM-005 "ปิดกั้นคำสั่งซื้อใหม่") |
-| Order ที่มีอยู่แล้ว | ห้ามแตะ `orders` ที่ `PAID` เด็ดขาด ตาม ADM-005 |
+| ADM-005 admin suspends | `status = SUSPENDED` + write `admin_actions` (`DEACTIVATE_PRODUCT`) in the same `$transaction`, per ADR-0001 |
+| ADM-005 admin reactivates | `status = stockQty > 0 ? ACTIVE : OUT_OF_STOCK` + write `admin_actions` (`REACTIVATE_PRODUCT`) in the same transaction |
+| PROD-002 seller changes status | If the current status is `SUSPENDED` → respond `403 Forbidden` with a message that it was suspended by an administrator |
+| PROD-002 seller edits product details | A `SUSPENDED` product cannot be edited — PROD-002 already only allows editing while `ACTIVE`/`INACTIVE` |
+| PROD-002 seller soft-delete | A `SUSPENDED` product can't be deleted either, so the suspension trace can't be erased |
+| PROD-002 restoring a deleted product | Not in V1 — `REMOVED` is terminal; there must be a confirm dialog saying it cannot be restored, offering `INACTIVE` as the alternative |
+| PROD-005 auto-flip | Must skip `SUSPENDED` products, otherwise restocking would flip them back to `ACTIVE` on its own and undo the admin's action |
+| PROD-003 / PROD-004 public pages | Already filter `status = ACTIVE` → `SUSPENDED` is hidden automatically, no query change needed |
+| Seller's product list page | Must show `SUSPENDED` with a clear badge, so the seller knows why it can't be edited — not just silently hidden |
+| CART / checkout | A `SUSPENDED` product cannot be added to the cart or checked out (ADM-005 "blocks new orders") |
+| Existing orders | Never touch `orders` that are `PAID`, per ADM-005 |
 
-⚠️ **จุดที่พลาดง่ายที่สุดคือ PROD-005 auto-flip** — ถ้าลืมกัน สินค้าที่ admin สั่งระงับจะกลับมาขายเองเงียบๆ ตอนผู้ขายเติม stock
-
----
-
-## เหตุผลที่เลือกวิธีนี้
-
-- **แหล่งข้อมูลเดียว** — สถานะการมองเห็นของสินค้าอยู่ที่ `status` field เดียว ไม่ต้องเซ็ต 2 field ให้ตรงกัน
-- **หน้าสาธารณะไม่ต้องแก้** — ทุก query ที่กรอง `status = ACTIVE` ซ่อน `SUSPENDED` ให้อัตโนมัติตั้งแต่วันแรก
-- **migration เบา** — เพิ่มค่า enum อย่างเดียว ไม่มีคอลัมน์ใหม่ ไม่ต้อง backfill ข้อมูลเดิม
-- **อ่านโค้ดแล้วเข้าใจทันที** — `if (product.status === SUSPENDED) throw Forbidden(...)` ชัดกว่าการเช็ค flag แยกหรือ query audit log
+⚠️ **The easiest place to slip up is the PROD-005 auto-flip** — forget to guard it, and a product an admin suspended quietly goes back on sale when the seller restocks
 
 ---
 
-## ทางเลือกที่พิจารณาแล้วไม่เลือก
+## Why this approach
 
-| ทางเลือก | เหตุผลที่ไม่เลือก |
+- **A single source of truth** — the product's visibility lives in the one `status` field; there are no 2 fields to keep in sync
+- **Public pages need no change** — every query that filters `status = ACTIVE` has hidden `SUSPENDED` automatically from day one
+- **A light migration** — just an added enum value, no new column, no backfill of existing data
+- **Code that reads clearly at a glance** — `if (product.status === SUSPENDED) throw Forbidden(...)` is clearer than checking a separate flag or querying the audit log
+
+---
+
+## Alternatives considered and rejected
+
+| Alternative | Why it was rejected |
 | --- | --- |
-| เพิ่มคอลัมน์ `Product.adminDeactivatedAt DateTime?` | ต้องเซ็ต 2 field พร้อมกัน (`status = INACTIVE` + `adminDeactivatedAt = now`) และเคลียร์ 2 field ตอนปลด เสี่ยงหลุด sync ข้อดีคือ PROD-005 auto-flip ไม่ต้องแก้ แต่แลกมาด้วยความซับซ้อนที่มากกว่า |
-| อ่านสถานะจาก `admin_actions` แถวล่าสุด | ไม่ต้องเพิ่ม field ใน `Product` แต่ยังต้องแก้ schema อยู่ดีเพื่อเพิ่ม `@@index([productId, createdAt])` และเพิ่ม query 1 ครั้งทุกการเปลี่ยนสถานะ ที่สำคัญคือ audit log ควรเป็นบันทึกแบบ append-only ว่า "เกิดอะไรขึ้น" ไม่ใช่ source of truth ของ state ปัจจุบัน |
-| ปล่อยตาม SRS เดิม (ไม่แก้อะไร) | ADM-005 จะไม่มีผลบังคับจริง เพราะผู้ขายกด `ACTIVE` กลับได้ทันที |
+| Add a column `Product.adminDeactivatedAt DateTime?` | 2 fields must be set together (`status = INACTIVE` + `adminDeactivatedAt = now`) and 2 cleared on reactivation, risking them getting out of sync. The upside is that PROD-005 auto-flip needs no change, but at the cost of more complexity |
+| Read the status from the latest `admin_actions` row | No field added to `Product`, but the schema still has to change to add `@@index([productId, createdAt])`, plus 1 extra query on every status change. Most importantly, the audit log should be an append-only record of "what happened", not the source of truth for current state |
+| Leave it as the SRS had it (change nothing) | ADM-005 would have no real force, because the seller can set `ACTIVE` again right away |
 
 ---
 
-## ผลที่ตามมา
+## Consequences
 
-**ข้อดี**
+**Pros**
 
-- ADM-005 บังคับใช้ได้จริงที่ระดับ state machine ไม่ใช่แค่ที่ UI (สอดคล้อง SRS §6 ที่บังคับให้ตรวจสิทธิ์ฝั่ง server)
-- แยก "ผู้ขายปิดเอง" กับ "admin สั่งปิด" ออกจากกันได้ในรายงานและหน้า audit
+- ADM-005 is truly enforced at the state-machine level, not just in the UI (consistent with SRS §6, which requires server-side permission checks)
+- "Seller paused it" and "admin suspended it" can be told apart in reports and the audit page
 
-**ข้อเสียที่ยอมรับ**
+**Accepted cons**
 
-- ทุกที่ที่ `switch` หรือ map `ProductStatus` ต้องเพิ่มเคส `SUSPENDED` — TypeScript จะเตือนให้เองถ้าเขียน exhaustive check
-- PROD-005 auto-flip ต้องเพิ่มเงื่อนไขกัน 1 บรรทัด (ระบุไว้ในตารางด้านบนแล้ว)
-- ยังไม่ได้เก็บ "เหตุผลที่ระงับ" ไว้บนแถว `Product` — เหตุผลอยู่ใน `admin_actions.note` ตาม ADM-005 ถ้าหน้าจอผู้ขายต้องแสดงเหตุผลให้เจ้าของสินค้าเห็น ต้อง join กลับไปที่ `admin_actions` ให้เสนอทีมก่อนถ้าจะเพิ่ม field
+- Every `switch` or map over `ProductStatus` needs a `SUSPENDED` case — TypeScript will flag it if you write an exhaustive check
+- PROD-005 auto-flip needs a 1-line guard condition (already listed in the table above)
+- The "reason for suspension" isn't stored on the `Product` row — it lives in `admin_actions.note` per ADM-005. If the seller's screen needs to show the owner the reason, it must join back to `admin_actions`; propose it to the team first before adding a field

@@ -46,8 +46,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   })
 
   // `isPending`, not `isLoading`: the latter is false on the render where the
-  // query has only just been enabled, and this screen's next branch is "ไม่พบ
-  // คำสั่งซื้อนี้" — shown for an instant to somebody looking at their own order.
+  // query has only just been enabled, and this screen's next branch is "Order
+  // not found" — shown for an instant to somebody looking at their own order.
   if (!ready || (isAuthenticated && order.isPending)) {
     return (
       <div
@@ -180,7 +180,7 @@ function Loaded({
  * nothing, and saying so is the point.
  *
  * SHIP-001 belongs to the seller, so this screen carries no controls. That
- * left the timeline sitting at "กำลังเตรียมพัสดุ" with nothing underneath it
+ * left the timeline sitting at "Preparing parcel" with nothing underneath it
  * and no hint of who moves it next. Two different readers reach that dead end:
  *
  * - **The seller**, who arrives from a notification, or from their own shop,

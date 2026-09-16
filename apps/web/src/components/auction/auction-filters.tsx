@@ -49,7 +49,7 @@ export function AuctionFilters({
        * Clears the filters, not the section — unlike the catalogue, where
        * clearing means `/shop` because there is nothing else in the URL. Here
        * the section is which list you are reading, and somebody dropping their
-       * filters while looking at "ปิดเร็วๆ นี้" has not asked to be sent back
+       * filters while looking at "Closing soon" has not asked to be sent back
        * to the hot list.
        */
       onClear={() => router.push(auctionHref(search, NO_AUCTION_FILTERS))}
@@ -76,7 +76,7 @@ export function AuctionFilters({
       /**
        * Named, because an auction has two prices and this one matches
        * whichever is in force: the current price once somebody has bid, the
-       * starting price before that. "ช่วงราคา" alone would leave a visitor
+       * starting price before that. "Price range" alone would leave a visitor
        * guessing which of the two numbers on the card they are filtering.
        */
       priceLabel="ช่วงราคาที่แสดง"

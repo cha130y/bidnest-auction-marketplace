@@ -16,7 +16,7 @@ import { WatchlistService } from './watchlist.service';
  * acts on, the way participants are (LIV-001), because that is what the request
  * is about; the list itself lives at `/watchlist`.
  *
- * One auction per request, which is the criterion's "ครั้งละ 1 รายการ": there
+ * One auction per request, which is the criterion's "one item at a time": there
  * is no endpoint that takes a list, so a client cannot half-succeed at adding
  * five and have to work out which ones landed.
  */

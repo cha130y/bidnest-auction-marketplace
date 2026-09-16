@@ -35,7 +35,7 @@ const EXHAUSTED_MARKER = 'ผมลองช่วยเต็มที่แล
 
 /**
  * Shown in place of a real AI reply when Gemini itself is unavailable
- * (quota, outage, timeout) — reuses EXHAUSTED_MARKER so the "คุยกับแอดมิน"
+ * (quota, outage, timeout) — reuses EXHAUSTED_MARKER so the "Talk to admin"
  * button appears immediately rather than the caller seeing a raw 503 with
  * nothing to do about it.
  */
@@ -48,13 +48,15 @@ const CONTACT_ADMIN_REPLY =
  * A contact-intent verb within a few characters of an "admin"/"a human"
  * noun, checked as one combined pattern rather than "both words appear
  * somewhere in the message" — that looser check (the previous approach) is
- * too eager: "แอดมินจะเห็นข้อความที่ผมคุยกับผู้ขายไหม" contains both "แอดมิน"
- * and "คุย" but is a real FAQ-answerable privacy question, not a request for
- * a human, because "คุย" there belongs to "คุยกับผู้ขาย", nowhere near
- * "แอดมิน". Requiring the two words to actually sit next to each other (a
- * short character gap, to absorb connectors like "กับ"/"หน่อย") is what
- * keeps mixed-language phrasing like "ติดต่อ admin" catchable without also
- * catching unrelated sentences that merely mention the word "แอดมิน".
+ * too eager: "แอดมินจะเห็นข้อความที่ผมคุยกับผู้ขายไหม" ("will the admin see my
+ * chat with the seller?") contains both "แอดมิน" (admin) and "คุย" (talk) but
+ * is a real FAQ-answerable privacy question, not a request for a human,
+ * because "คุย" there belongs to "คุยกับผู้ขาย" (talk with the seller), nowhere
+ * near "แอดมิน". Requiring the two words to actually sit next to each other (a
+ * short character gap, to absorb connectors like "กับ"/"หน่อย" — "with"/
+ * "please") is what keeps mixed-language phrasing like "ติดต่อ admin"
+ * ("contact admin") catchable without also catching unrelated sentences that
+ * merely mention the word "แอดมิน".
  */
 const ADMIN_NOUN = '(?:แอดมิน|admin|เจ้าหน้าที่|คนจริง|human agent|human)';
 const CONTACT_VERB = '(?:ติดต่อ|พูดคุย|คุย|ขอสาย|call|talk|speak|contact)';
@@ -71,7 +73,8 @@ function isExplicitEscalationRequest(message: string): boolean {
   if (NEAR_ADMIN_REQUEST_PATTERN.test(normalized)) return true;
 
   // A lone mention with barely anything else around it ("แอดมิน", "admin
-  // ครับ") still counts even with no verb attached — a frustrated user often
+  // ครับ" — a bare "admin", with or without a polite particle) still counts
+  // even with no verb attached — a frustrated user often
   // just types the word itself. Checked on the whole remaining message (not
   // just what trails the word) so a long, unrelated sentence that happens to
   // mention "แอดมิน" once doesn't qualify as "just the word".
@@ -171,7 +174,7 @@ export class SupportChatService {
   }
 
   /**
-   * User-triggered — the "คุยกับแอดมิน" button, shown only once the AI has
+   * User-triggered — the "Talk to admin" button, shown only once the AI has
    * already failed. Re-checks the escalation heuristic server-side rather
    * than trusting the client's own `escalated` flag, so a session can't be
    * pushed into an admin's queue by an unearned button click.
@@ -280,7 +283,7 @@ export class SupportChatService {
   /**
    * Gemini being down (quota, outage, timeout) shouldn't surface as a raw
    * 503 mid-demo — reply with the same "I've done what I can" message an
-   * exhausted AI would give, so the caller gets the "คุยกับแอดมิน" button
+   * exhausted AI would give, so the caller gets the "Talk to admin" button
    * instead of a dead end.
    */
   private async generateReplySafely(prompt: string): Promise<string> {
@@ -310,7 +313,7 @@ export class SupportChatService {
   }
 
   /**
-   * True on either path to "คุยกับแอดมิน": the 3-miss heuristic below, or
+   * True on either path to "Talk to admin": the 3-miss heuristic below, or
    * the caller having just asked for a human outright — checked here too
    * (not just in sendMessage) since escalate() re-validates server-side
    * rather than trusting the client's own flag from that earlier response.

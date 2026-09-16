@@ -38,7 +38,7 @@ export function parseAddress(value: string): { email: string; name?: string } {
  * That is a sending network refusing a hosting provider's address range, not
  * anything we can configure our way out of, and it fails by silence rather
  * than by refusal: the connection simply hangs, which is why a login could sit
- * on "กำลังตรวจสอบ..." with nothing in the logs to say why.
+ * on "Verifying..." with nothing in the logs to say why.
  *
  * MAIL_FROM still means the same thing on both paths, and still has to be an
  * address the provider has verified as yours.

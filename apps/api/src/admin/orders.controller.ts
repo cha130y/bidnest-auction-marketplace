@@ -6,12 +6,12 @@ import { AdminOrdersService } from './orders.service';
 /**
  * ADM-006 — Order overview (owner: Dev 3)
  *
- * **Read-only เท่านั้นใน V1** — ไม่มี endpoint แก้ไขหรือคืนเงิน เพราะ SRS ระบุว่า
- * การจัดการข้อพิพาทถูกเลื่อนออกไปแล้วอย่างชัดเจน ห้ามเพิ่ม POST/PATCH/DELETE
- * ที่ controller นี้โดยไม่แก้ SRS ก่อน
+ * **Read-only in V1** — there is no endpoint to edit or refund, because the SRS
+ * states explicitly that dispute handling has been deferred. Do not add
+ * POST/PATCH/DELETE to this controller without amending the SRS first.
  *
- * ไม่มีการเขียน admin_actions ที่นี่ เพราะการอ่านอย่างเดียวไม่ใช่ "การกระทำสำคัญ"
- * ตามนิยามของ ADM-004
+ * Nothing is written to admin_actions here, because reading is not a
+ * "significant action" as ADM-004 defines it.
  */
 @Roles('ADMIN')
 @Controller('admin/orders')
@@ -20,7 +20,7 @@ export class AdminOrdersController {
 
   /**
    * query: status?, page?, limit?
-   * คืน buyer, seller, สถานะ, ยอดรวม แบบแบ่งหน้าตาม ADM-006
+   * Returns buyer, seller, status and total, paginated, per ADM-006
    */
   @Get()
   listOrders(@Query() dto: ListOrderDto) {

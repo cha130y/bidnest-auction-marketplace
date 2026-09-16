@@ -37,8 +37,8 @@ export class NegotiatorService {
    * be allowed to pay less than the sticker.
    *
    * Taking one's own proposal seriously is what closes it. The rule the SRS
-   * actually fixes is the floor — "จะไม่มีทางอนุมัติราคาที่ต่ำกว่าราคาต่ำสุดที่
-   * ตั้งไว้เด็ดขาด" — and that is still checked first and independently here,
+   * actually fixes is the floor — "it must never approve a price below the
+   * minimum that was set" — and that is still checked first and independently here,
    * so an accepted counter can never fall below it either.
    */
   decide(

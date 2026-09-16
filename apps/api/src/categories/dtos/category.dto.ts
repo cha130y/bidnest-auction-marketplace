@@ -10,7 +10,7 @@ import {
 
 /** ADM-003 — create. `slug` is derived from the name, never sent by the caller. */
 export class CreateCategoryDto {
-  @ApiProperty({ example: 'เครื่องใช้ไฟฟ้า', maxLength: 120 })
+  @ApiProperty({ example: 'Electronics', maxLength: 120 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)

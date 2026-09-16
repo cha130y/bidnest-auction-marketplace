@@ -49,12 +49,14 @@ export type PriceEstimate = z.infer<typeof estimateSchema>;
 /**
  * AI-002 — AI Price Estimator (Optional, owner: Dev 5)
  *
- * "แต่ละ draft ประเมินได้จำนวนคงที่ที่น้อย" ตาม SRS — แต่ `ai_requests` (ตาราง
- * เดียวที่มีสำหรับ log ฟีเจอร์ AI ตัวนี้) มีแค่ userId/type/createdAt ไม่มี
- * auctionId ให้ผูก จะเพิ่ม column ต้องแก้ schema ซึ่ง CLAUDE.md ห้ามทำโดยไม่ถาม
- * ก่อน — ใช้ @Throttle ที่ตัว controller แทน (per-user ต่อช่วงเวลา ไม่ใช่
- * per-draft เป๊ะๆ ตามตัวหนังสือ SRS แต่ได้ผลลัพธ์เดียวกันคือคุมต้นทุน/กันสแปม)
- * ถ้าอยากได้ cap แบบ per-draft จริงต้องคุยเรื่อง schema ก่อน
+ * The SRS says "each draft can be estimated a small, fixed number of times" —
+ * but `ai_requests` (the only table available for logging this AI feature)
+ * has just userId/type/createdAt, with no auctionId to tie it to. Adding a
+ * column means changing the schema, which CLAUDE.md forbids without asking
+ * first — so @Throttle on the controller is used instead (per user per time
+ * window, not literally per draft as the SRS words it, but with the same
+ * outcome: cost control and spam prevention). A true per-draft cap needs a
+ * schema discussion first.
  */
 @Injectable()
 export class PriceEstimatorService {

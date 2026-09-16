@@ -30,7 +30,7 @@ export type AuctionResult = {
 };
 
 /**
- * LIV-004 — "เมื่อจบแสดงผล Sold/Unsold/ราคาสุดท้าย".
+ * LIV-004 — "when it ends, show Sold/Unsold/final price".
  *
  * Null while the auction is still running, which is what tells a screen to
  * keep showing the arena. A block that existed with empty fields would make
@@ -48,7 +48,7 @@ export function describeAuctionResult(
     soldPrice: auction.soldPrice,
     /**
      * The highest bid the auction reached, whether or not it sold — which is
-     * what "ราคาสุดท้าย" means for an auction that did not. Null when nobody
+     * what "final price" means for an auction that did not. Null when nobody
      * bid at all, because a `currentPrice` of 0 there means "no price", not
      * "it went for nothing".
      */

@@ -1,25 +1,25 @@
-# คู่มือเริ่มต้นโปรเจค (Kickoff Guide)
+# Kickoff Guide
 
-อ้างอิงจาก SRS v7 และ Team Role Distribution — ทำตามลำดับนี้ได้เลย แต่ละ step มีคำสั่งจริงให้ copy ไปรันตรงๆ
+Based on SRS v7 and the Team Role Distribution — just follow this order; every step has real commands to copy and run directly
 
-**ผู้รับผิดชอบ Step 1–4 และ 6: Dev 2** (ตามที่ระบุใน Team Role Distribution ว่าเป็นเจ้าของ "NestJS setup, ออกแบบ Prisma schema หลักและดูแล migration ให้ทั้งทีม")
-**Step 5 (Jira):** ไม่ผูกกับ role ใครโดยเฉพาะ ทำคู่ขนานกับ Step 2–4 ได้เลย ใครสะดวกก็ทำได้
-**Step 7:** ทุกคนเริ่มพร้อมกัน
+**Owner of Steps 1–4 and 6: Dev 2** (per the Team Role Distribution, which makes them the owner of "NestJS setup, designing the main Prisma schema and managing migrations for the whole team")
+**Step 5 (Jira):** not tied to anyone's role — can be done in parallel with Steps 2–4 by whoever is free
+**Step 7:** everyone starts together
 
-ชื่อโปรเจค: **BidNest — Auction & Marketplace** · ชื่อ repo: `bidnest-auction-marketplace` · ใช้ slug `bidnest` สำหรับชื่อ DB/service ภายใน
+Project name: **BidNest — Auction & Marketplace** · repo name: `bidnest-auction-marketplace` · use the slug `bidnest` for internal DB/service names
 
 ---
 
-## Step 1 — ตั้งค่า Git Repository
+## Step 1 — Set up the Git repository
 
-**ผู้รับผิดชอบ: Dev 2**
+**Owner: Dev 2**
 
 ```bash
-# สร้าง repo บน GitHub ก่อน (ผ่านเว็บ ตั้งเป็น Private) แล้ว clone
+# Create the repo on GitHub first (via the website, set to Private), then clone
 git clone https://github.com/<org>/bidnest-auction-marketplace.git
 cd bidnest-auction-marketplace
 
-# ไฟล์เริ่มต้น
+# Initial files
 cat > .gitignore << 'EOF'
 node_modules/
 .env
@@ -35,17 +35,17 @@ git add .
 git commit -m "chore: initial commit"
 git push origin main
 
-# สร้าง dev branch
+# Create the dev branch
 git switch -c dev
 git push origin dev
 ```
 
-**ตั้งค่า branch protection (ทำผ่านหน้าเว็บ GitHub):**
+**Set up branch protection (on the GitHub website):**
 
-- [ ] Settings → Branches → Add rule สำหรับ `main`: Require pull request before merging, Require 1 approval
-- [ ] ทำซ้ำสำหรับ `dev`
+- [ ] Settings → Branches → Add rule for `main`: Require pull request before merging, Require 1 approval
+- [ ] Repeat for `dev`
 
-**สร้าง feature branch ให้แต่ละคน:**
+**Create a feature branch for each person:**
 
 ```bash
 git switch dev
@@ -56,17 +56,17 @@ git switch dev && git switch -c feat/auction-dev4   && git push origin feat/auct
 git switch dev && git switch -c feat/ai-dev5        && git push origin feat/ai-dev5
 ```
 
-**✅ เสร็จเมื่อ:** ทุกคน clone repo ได้ และมี branch ของตัวเองพร้อมใช้งาน
+**✅ Done when:** everyone can clone the repo and has their own branch ready to use
 
 ---
 
-## Step 2 — Scaffold โครงสร้าง Monorepo
+## Step 2 — Scaffold the monorepo structure
 
-**ผู้รับผิดชอบ: Dev 2**
+**Owner: Dev 2**
 
 ```bash
 git switch dev
-npm install -g pnpm   # ถ้ายังไม่มี
+npm install -g pnpm   # if you don't have it yet
 
 mkdir -p apps packages
 cat > pnpm-workspace.yaml << 'EOF'
@@ -74,7 +74,7 @@ packages:
   - 'apps/*'
   - 'packages/*'
 EOF
-pnpm init   # สร้าง package.json ที่ root ไว้ใส่ script รวม/config เครื่องมือส่วนกลาง
+pnpm init   # creates the root package.json to hold combined scripts/shared tool config
 
 # Next.js app
 cd apps
@@ -84,8 +84,8 @@ pnpm create next-app@latest web --typescript --tailwind --app --src-dir --import
 pnpm dlx @nestjs/cli new api --package-manager pnpm
 cd ..
 
-# create-next-app และ nest new มักสร้าง .git ซ้อนไว้ในตัวเองอัตโนมัติ
-# ลบทิ้งก่อน ไม่งั้น "git add ." จากข้างนอกจะ error เพราะเห็นเป็น repo ซ้อน repo
+# create-next-app and nest new usually create a nested .git automatically
+# delete it first, otherwise "git add ." from outside errors out because it sees a repo inside a repo
 rm -rf apps/web/.git apps/api/.git
 
 # shared packages
@@ -93,18 +93,18 @@ mkdir -p packages/contracts packages/config
 cd packages/contracts && pnpm init && cd ../..
 cd packages/config && pnpm init && cd ../..
 
-# Husky + lint-staged (บังคับ lint ตอน commit) + concurrently (รัน dev server 2 ฝั่งพร้อมกันได้)
+# Husky + lint-staged (enforce lint on commit) + concurrently (run both dev servers at once)
 pnpm add -D husky lint-staged concurrently -w
 pnpm exec husky init
 ```
 
-แก้ไฟล์ `.husky/pre-commit` (Husky สร้างให้อัตโนมัติ แต่ค่าเริ่มต้นรัน `pnpm test` — แก้เป็นรัน lint-staged แทน):
+Edit `.husky/pre-commit` (Husky creates it automatically, but by default it runs `pnpm test` — change it to run lint-staged instead):
 
 ```bash
 pnpm exec lint-staged
 ```
 
-เพิ่ม config ท้าย `package.json` ที่ root (config ของ lint-staged + shortcut คำสั่งรัน dev server ให้พิมพ์สั้นลง):
+Add config at the end of the root `package.json` (lint-staged config + shortcut commands for running the dev servers):
 
 ```json
 {
@@ -120,7 +120,7 @@ pnpm exec lint-staged
 }
 ```
 
-**ทำไม `eslint --fix` เฉยๆ ใช้ไม่ได้:** pnpm ไม่ hoist package ขึ้น root แบบ npm/yarn — `eslint` ที่ `create-next-app`/`nest new` ติดตั้งให้ อยู่ใน `apps/web/node_modules/.bin/` และ `apps/api/node_modules/.bin/` เท่านั้น ไม่ได้อยู่ที่ root เลย ต้องเรียกผ่าน `pnpm --dir <app> exec eslint` เพื่อให้ไปหยิบ eslint (พร้อม config) ของแอปนั้นๆ โดยตรง (lint-staged ส่ง path แบบ absolute เสมอ สลับ cwd ด้วย `--dir` จึงไม่ทำให้ path ผิดเพี้ยน)
+**Why plain `eslint --fix` doesn't work:** pnpm doesn't hoist packages to the root like npm/yarn — the `eslint` that `create-next-app`/`nest new` installs lives only in `apps/web/node_modules/.bin/` and `apps/api/node_modules/.bin/`, never at the root. It has to be called through `pnpm --dir <app> exec eslint` so it picks up that app's own eslint (and config) directly (lint-staged always passes absolute paths, so switching cwd with `--dir` doesn't break the paths)
 
 ```bash
 git add .
@@ -128,19 +128,19 @@ git commit -m "chore: scaffold monorepo structure"
 git push origin dev
 ```
 
-**✅ เสร็จเมื่อ:** รัน `pnpm install` ที่ root แล้ว `pnpm dev:web` และ `pnpm dev:api` ใช้งานได้ทั้งคู่โดยไม่ error (หรือรัน `pnpm dev` ตัวเดียวเปิดทั้งคู่พร้อมกันในเทอร์มินัลเดียว) — ลองแก้โค้ดให้ lint error ตั้งใจ แล้ว `git commit` ดู ต้องถูกบล็อกอัตโนมัติก่อนจะ commit สำเร็จ
+**✅ Done when:** running `pnpm install` at the root, then `pnpm dev:web` and `pnpm dev:api` both work without errors (or `pnpm dev` alone opens both at once in one terminal) — try deliberately introducing a lint error and running `git commit`; it must be blocked automatically before the commit succeeds
 
 ---
 
-## Step 3 — ตั้งค่า Docker Compose (Postgres + Maildev)
+## Step 3 — Set up Docker Compose (Postgres + Maildev)
 
-**ผู้รับผิดชอบ: Dev 2**
+**Owner: Dev 2**
 
 ```bash
 mkdir -p infra/docker
 ```
 
-สร้างไฟล์ `infra/docker/compose.dev.yml`:
+Create `infra/docker/compose.dev.yml`:
 
 ```yaml
 services:
@@ -172,24 +172,24 @@ volumes:
   pg_data:
 ```
 
-**`restart: unless-stopped`** — container ทั้งสองตัวจะฟื้นเองอัตโนมัติทุกครั้งที่เปิด Docker Desktop หลัง restart เครื่องจริง (ไม่ใช่แค่ sleep) ไม่ต้องรัน `docker compose up -d` ซ้ำเอง ยกเว้นสั่ง `docker compose stop`/`docker stop` ไว้ก่อน restart เครื่อง (กรณีนั้นจะจำไว้ว่าตั้งใจปิด ไม่ auto-resume ให้)
+**`restart: unless-stopped`** — both containers come back on their own every time Docker Desktop opens after a real machine restart (not just sleep), so there's no need to run `docker compose up -d` again yourself — unless you ran `docker compose stop`/`docker stop` before restarting (in that case it remembers you shut them down on purpose and doesn't auto-resume)
 
 ```bash
 docker compose -f infra/docker/compose.dev.yml up -d
-docker compose -f infra/docker/compose.dev.yml ps   # เช็คว่า healthy ทั้ง 2 service
+docker compose -f infra/docker/compose.dev.yml ps   # check both services are healthy
 
 git add infra/docker/compose.dev.yml
 git commit -m "chore: add docker compose for postgres + maildev"
 git push origin dev
 ```
 
-**✅ เสร็จเมื่อ:** เปิด http://localhost:1080 เห็นหน้า Maildev และเชื่อมต่อ Postgres ที่ port 5433 ได้
+**✅ Done when:** http://localhost:1080 shows the Maildev page and you can connect to Postgres on port 5433
 
 ---
 
-## Step 4 — ตั้งค่า Prisma และ Schema เริ่มต้น
+## Step 4 — Set up Prisma and the initial schema
 
-**ผู้รับผิดชอบ: Dev 2**
+**Owner: Dev 2**
 
 ```bash
 cd apps/api
@@ -198,7 +198,7 @@ pnpm add @prisma/client
 pnpm dlx prisma init
 ```
 
-แก้ `apps/api/prisma/schema.prisma` — เริ่มจากส่วน Identity + Category ที่ทุกคนรอใช้ก่อน (ตัวอย่างย่อ ขยายตาม SRS §5.1 ทีหลัง):
+Edit `apps/api/prisma/schema.prisma` — start with the Identity + Category parts everyone is waiting on (a short example; expand per SRS §5.1 later):
 
 ```prisma
 model User {
@@ -224,7 +224,7 @@ model Category {
 }
 ```
 
-**หมายเหตุเรื่อง Category:** ใช้ **ชุดเดียวร่วมกันทั้ง Auction และ E-commerce** ไม่มี field `scope` แยกตามโมดูล ตาม SRS §5.1 ที่ระบุว่า "categories ใช้ร่วมกันทั้งสองโมดูล ไม่แยกขอบเขตตามโมดูล" — ทั้ง `auctions` และ `products` อ้างอิงเข้าตารางนี้ตารางเดียว เหตุผลเต็มดูที่ [ADR-0001](architecture/adr/0001-single-admin-role-and-shared-category-set.md)
+**Note on Category:** use **one set shared by both Auction and E-commerce**, with no per-module `scope` field, per SRS §5.1, which states that "categories are shared by both modules, not scoped per module" — both `auctions` and `products` reference this single table. Full reasoning in [ADR-0001](architecture/adr/0001-single-admin-role-and-shared-category-set.md)
 
 ```bash
 pnpm dlx prisma migrate dev --name init_identity_and_categories
@@ -235,30 +235,30 @@ git commit -m "feat: initial prisma schema (identity + categories)"
 git push origin dev
 ```
 
-**✅ เสร็จเมื่อ:** `prisma migrate dev` รันผ่านไม่ error และเปิด `prisma studio` เห็นตาราง User/Category จริง
+**✅ Done when:** `prisma migrate dev` runs without errors and `prisma studio` shows the real User/Category tables
 
 ---
 
-## Step 5 — สร้าง Jira Project และ Backlog
+## Step 5 — Create the Jira project and backlog
 
-**ผู้รับผิดชอบ: ยืดหยุ่น (ไม่ผูก role) — ทำคู่ขนานกับ Step 2–4 ได้เลย**
+**Owner: flexible (not tied to a role) — can be done in parallel with Steps 2–4**
 
-- [ ] สร้าง Jira project (Scrum หรือ Kanban ตามทีมถนัด)
-- [ ] สร้าง Epic 5 ตัว: `Authentication`, `Auction`, `E-commerce`, `AI Features`, `Admin`
-- [ ] แตก Story จาก requirement ID ใน SRS ตรงๆ เช่น `AUTH-001` ถึง `AUTH-008` เป็น 8 story ใน Epic Authentication
-- [ ] Epic AI Features: ตั้ง `AI-001` (Customer Service Chatbot) เป็น priority บังคับ, `AI-002`/`AI-003` เป็น Optional/stretch แยกไว้ชัดเจน
-- [ ] มอบหมาย assignee ตามตารางภาพรวมใน Team Role Distribution
-- [ ] ตั้ง Sprint แรก ให้ story ของ Dev 2 (auth พื้นฐาน) เป็น priority สูงสุด
+- [ ] Create the Jira project (Scrum or Kanban, whichever the team prefers)
+- [ ] Create 5 Epics: `Authentication`, `Auction`, `E-commerce`, `AI Features`, `Admin`
+- [ ] Break Stories straight from the SRS requirement IDs, e.g. `AUTH-001` to `AUTH-008` as 8 stories in the Authentication Epic
+- [ ] AI Features Epic: set `AI-001` (Customer Service Chatbot) as a required priority, with `AI-002`/`AI-003` clearly separated as Optional/stretch
+- [ ] Assign assignees according to the overview table in the Team Role Distribution
+- [ ] Set up the first Sprint with Dev 2's stories (basic auth) as the top priority
 
-**✅ เสร็จเมื่อ:** ทุกคนเห็น backlog ของตัวเองใน Jira และรู้ว่า story แรกที่ต้องทำคืออะไร
+**✅ Done when:** everyone can see their own backlog in Jira and knows what their first story is
 
 ---
 
-## Step 6 — ตั้งค่า CI พื้นฐาน (Lint + Test บน PR)
+## Step 6 — Set up basic CI (Lint + Test on PRs)
 
-**ผู้รับผิดชอบ: Dev 2**
+**Owner: Dev 2**
 
-สร้างไฟล์ `.github/workflows/ci.yml`:
+Create `.github/workflows/ci.yml`:
 
 ```yaml
 name: CI
@@ -289,160 +289,160 @@ git commit -m "ci: add lint + test workflow"
 git push origin dev
 ```
 
-ตั้งค่าเพิ่ม (GitHub Settings → Branches → `main`): Require status checks to pass → เลือก `lint-and-test`
+Additional setting (GitHub Settings → Branches → `main`): Require status checks to pass → select `lint-and-test`
 
-> **หมายเหตุ — CI ตอนนี้โตกว่านี้แล้ว** yaml ข้างบนคือฉบับตั้งต้นของวัน kickoff ปัจจุบัน [ci.yml](../.github/workflows/ci.yml) มี 3 job: `lint-and-test` · `docker-build` · `e2e` (ยก Postgres + Maildev แล้ว migrate → seed → รัน e2e) และ branch protection บังคับให้เขียวครบทั้งสาม
+> **Note — CI has grown since then.** The yaml above is the original version from kickoff day. Today [ci.yml](../.github/workflows/ci.yml) has 3 jobs: `lint-and-test` · `docker-build` · `e2e` (starts Postgres + Maildev, then migrate → seed → run e2e), and branch protection requires all three to be green
 >
-> `pnpm test` ที่รากเป็น `pnpm -r --if-present test` จึงรันทั้ง **Jest ของ `apps/api`** และ **Vitest ของ `apps/web`** ให้เอง — เพิ่มเทสในแอปไหนก็เข้า CI เองโดยไม่ต้องแก้ ci.yml
+> The root `pnpm test` is `pnpm -r --if-present test`, so it runs both **Jest in `apps/api`** and **Vitest in `apps/web`** — tests added to either app get into CI automatically without touching ci.yml
 >
-> หลักการเลือกเครื่องมือเทส (Vitest / Jest / RTL / Supertest) อยู่ในบทที่ 06 ของ [BidNest Handbook](https://claude.ai/code/artifact/a3409b5b-ceac-4725-8161-8c0c66042d4a)
+> The principles behind the choice of test tools (Vitest / Jest / RTL / Supertest) are in chapter 06 of the [BidNest Handbook](https://claude.ai/code/artifact/a3409b5b-ceac-4725-8161-8c0c66042d4a)
 
-**✅ เสร็จเมื่อ:** เปิด PR ทดสอบ 1 อัน แล้วเห็นสถานะ CI ขึ้นจริง (เขียว/แดง) ที่ท้าย PR
+**✅ Done when:** you open 1 test PR and see the CI status actually show up (green/red) at the bottom of the PR
 
 ---
 
-## Step 7 — Kickoff ทีมและเริ่มงานคู่ขนาน
+## Step 7 — Team kickoff and start parallel work
 
-**ผู้รับผิดชอบ: ทุกคน พร้อมกัน**
+**Owner: everyone, together**
 
 ```bash
-# Dev 2 — เริ่ม auth พื้นฐานก่อนใคร (critical path)
+# Dev 2 — start basic auth before anyone else (critical path)
 git switch feat/auth-dev2
-# เริ่มทำ: AUTH-001 (local registration) → AUTH-002 (local login) → AUTH-004 (refresh session)
+# Start with: AUTH-001 (local registration) → AUTH-002 (local login) → AUTH-004 (refresh session)
 
-# Dev 1 — เริ่มคู่ขนานได้เลย ไม่ต้องรอ auth
+# Dev 1 — can start in parallel right away, no need to wait for auth
 git switch feat/frontend-dev1
-# เริ่มทำ: Design System (Shadcn-UI setup, layout, shared components)
+# Start with: Design System (Shadcn-UI setup, layout, shared components)
 
-# Dev 3 — scaffold โครงสร้างโมดูล E-commerce (mock auth ไปก่อน)
+# Dev 3 — scaffold the E-commerce module structure (mock auth for now)
 git switch feat/ecommerce-dev3
-# เริ่มทำ: routes/DTO เปล่าสำหรับ PROD-001..007, CART-001..005
+# Start with: empty routes/DTOs for PROD-001..007, CART-001..005
 
-# Dev 4 — scaffold โครงสร้างโมดูล Auction (mock auth ไปก่อน)
+# Dev 4 — scaffold the Auction module structure (mock auth for now)
 git switch feat/auction-dev4
-# เริ่มทำ: routes/DTO เปล่าสำหรับ AUC-001..008
+# Start with: empty routes/DTOs for AUC-001..008
 
-# Dev 5 — scaffold AI-001 Customer Service Chatbot (feature บังคับ ทำก่อน AI-002/003)
+# Dev 5 — scaffold AI-001 Customer Service Chatbot (a required feature, before AI-002/003)
 git switch feat/ai-dev5
-# เริ่มทำ: endpoint /support/chat เปล่า + โครง Admin Dashboard
+# Start with: an empty /support/chat endpoint + the Admin Dashboard skeleton
 ```
 
-**กติกาตลอดโปรเจค:**
+**Rules for the whole project:**
 
-- [ ] ห้าม push ตรงเข้า `main` หรือ `dev` — merge ผ่าน PR เท่านั้น (ตาม branch protection ที่ตั้งไว้ Step 1)
-- [ ] PR ต้องผ่าน CI (Step 6) และมี approve อย่างน้อย 1 คนก่อน merge
-- [ ] พอ Dev 2 ทำ auth พื้นฐานเสร็จ (AUTH-001/002/004) ให้แจ้งทีมทันทีเพื่อให้ Dev 3/4/5 เริ่มเชื่อมต่อ auth จริงแทน mock
+- [ ] Never push straight to `main` or `dev` — merge only through PRs (per the branch protection set up in Step 1)
+- [ ] A PR must pass CI (Step 6) and have at least 1 approval before merge
+- [ ] As soon as Dev 2 finishes basic auth (AUTH-001/002/004), tell the team so Dev 3/4/5 can switch from mock auth to the real thing
 
-**✅ เสร็จเมื่อ:** ทุกคนมี branch ของตัวเอง เริ่มโค้ดจริงได้ และรู้ชัดว่าอะไรคือ blocker ที่ต้องรอ (auth พื้นฐานจาก Dev 2)
+**✅ Done when:** everyone has their own branch, can start writing real code, and knows clearly what the blocker to wait for is (basic auth from Dev 2)
 
 ---
 
-## Setup เครื่องตัวเอง — ทำครั้งแรกครั้งเดียว
+## Set up your machine — first time only
 
-**ผู้รับผิดชอบ: ทุกคน** (คนที่เข้าทีมทีหลัง หรือย้ายไปทำอีกเครื่อง ก็ใช้ชุดนี้)
+**Owner: everyone** (people who join the team later, or move to another machine, use this set too)
 
-รันครบชุดนี้ **ครั้งเดียวต่อเครื่อง** ทำแล้วไม่ต้องทำอีก จากนั้นใช้แค่ "Workflow ประจำวัน" หัวข้อถัดไป
+Run this whole set **once per machine** — after that you never need it again, just the "Daily workflow" in the next section
 
 ```bash
 # 1. Clone repo
 git clone https://github.com/<org>/bidnest-auction-marketplace.git
 cd bidnest-auction-marketplace
 
-# 2. ติดตั้ง dependency ทั้ง monorepo
+# 2. Install dependencies for the whole monorepo
 pnpm install
 
-# 3. ตั้งค่า environment variables (ไฟล์ .env ไม่ขึ้น git ต้องสร้างเองในเครื่อง)
+# 3. Set up environment variables (.env files aren't in git — create them on your machine)
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 
-# 4. เปิด Docker (Postgres + Maildev) แล้วสร้างตารางตาม schema ล่าสุด
+# 4. Start Docker (Postgres + Maildev), then create the tables from the latest schema
 docker compose -f infra/docker/compose.dev.yml up -d
 pnpm --dir apps/api exec prisma migrate deploy
 
-# 5. เข้า branch ของตัวเอง (เลือกบรรทัดของตัวเองบรรทัดเดียว)
+# 5. Switch to your own branch (pick just your own line)
 git switch feat/frontend-dev1
 git switch feat/auth-dev2
 git switch feat/ecommerce-dev3
 git switch feat/auction-dev4
 git switch feat/ai-dev5
 
-# 6. ลองรันดูว่าขึ้นครบทั้ง web และ api
+# 6. Try running it to see both web and api come up
 pnpm dev
 ```
 
-**ทำไม `.env` ต้อง copy ทีละ app:** `apps/api` โหลด `.env` จาก cwd ของตัวเอง (`apps/api/`) เท่านั้น ส่วน `apps/web` (Next.js) โหลด `.env.local` จาก cwd ของตัวเอง (`apps/web/`) เท่านั้น วางไฟล์เดียวไว้ root ไม่มีผลกับทั้งคู่
+**Why `.env` has to be copied per app:** `apps/api` only loads `.env` from its own cwd (`apps/api/`), and `apps/web` (Next.js) only loads `.env.local` from its own cwd (`apps/web/`). A single file at the root has no effect on either
 
-**ทำไมต้อง `prisma migrate deploy` (ขั้นตอน 4):** `docker compose up -d` เปิด Postgres มาเฉยๆ ไม่ได้สร้างตารางให้เอง ต้องสั่ง apply migration ให้ตรงกับ `schema.prisma` ก่อน — ทำครั้งเดียวก็พอ เพราะ compose ตั้ง `restart: unless-stopped` ไว้แล้ว และข้อมูลอยู่ใน volume ไม่หายไปไหน
+**Why `prisma migrate deploy` is needed (step 4):** `docker compose up -d` just starts Postgres; it doesn't create any tables. You have to apply the migrations to match `schema.prisma` first — once is enough, because compose sets `restart: unless-stopped` and the data lives in a volume that doesn't go away
 
-**✅ เสร็จเมื่อ:** `pnpm dev` รันได้ทั้ง web และ api โดยไม่ error และเชื่อมต่อ database ที่มีตารางครบตาม schema ล่าสุด
+**✅ Done when:** `pnpm dev` runs both web and api without errors, connected to a database with every table from the latest schema
 
 ---
 
-## Workflow ประจำวัน — ทำทุกครั้งที่เริ่มงาน
+## Daily workflow — do this every time you start work
 
-> หัวข้อนี้มีสำเนาแยกไว้ที่ **[docs/DAILY_WORKFLOW.md](DAILY_WORKFLOW.md)** สำหรับเปิดดูเร็วๆ ตอนทำงานประจำวัน (เนื้อหาเหมือนกัน — **แก้ที่ไหนต้องแก้อีกไฟล์ให้ตรงกันด้วย**)
+> A separate copy of this section lives at **[docs/DAILY_WORKFLOW.md](DAILY_WORKFLOW.md)** for quick reference during daily work (same content — **if you edit one, update the other to match**)
 
-เปิดเครื่องมาทำงานวันใหม่ หรือกลับมาทำต่อหลังพักไป ให้รันชุดนี้ก่อนเขียนโค้ด
+When you sit down to work on a new day, or come back after a break, run this set before writing code
 
 ```bash
 git switch dev && git pull
-git switch feat/auction-dev4   # <-- เปลี่ยนเป็น branch ของตัวเอง
+git switch feat/auction-dev4   # <-- change to your own branch
 git merge dev
 pnpm check
 pnpm dev
 ```
 
-**✅ เสร็จเมื่อ:** `pnpm check` ผ่านหมด และ `pnpm dev` รันได้ทั้ง web และ api
+**✅ Done when:** `pnpm check` passes completely and `pnpm dev` runs both web and api
 
-### รันเพิ่มเฉพาะตอนเข้าเงื่อนไข
+### Extra commands, only when a condition applies
 
-3 คำสั่งนี้ไม่ต้องรันทุกวัน รันเมื่อเจอเงื่อนไขเท่านั้น (ปกติเจอหลัง `git merge dev`) — รันคำสั่งเช็คนี้ก่อนได้เลย
+These 3 commands aren't needed every day — run them only when the condition applies (usually after `git merge dev`). Run this check command first
 
 ```bash
-# เช็คว่า merge เมื่อกี้มีอะไรเข้ามาบ้าง (มีชื่อไฟล์ขึ้น = ต้องรันคำสั่งด้านล่างที่ตรงกับไฟล์นั้น)
+# See what the merge just brought in (a filename showing up = run the matching command below)
 git diff --name-only HEAD@{1} HEAD -- pnpm-lock.yaml apps/api/prisma/migrations
 ```
 
 ```bash
-# เห็น pnpm-lock.yaml ขึ้นมา = มีคนเพิ่ม/อัปเดต package
+# pnpm-lock.yaml shows up = someone added/updated a package
 pnpm install
 
-# เห็นไฟล์ใน apps/api/prisma/migrations/ ขึ้นมา = มี migration ใหม่จากคนอื่น
+# files under apps/api/prisma/migrations/ show up = a new migration from someone else
 pnpm --dir apps/api exec prisma migrate deploy
 
-# ต่อ database ไม่ได้ / เพิ่งรีสตาร์ทเครื่องแล้ว Docker Desktop ยังไม่ขึ้น
+# can't connect to the database / just restarted and Docker Desktop isn't up yet
 docker compose -f infra/docker/compose.dev.yml up -d
 ```
 
-**ทำไมต้อง merge `dev` เข้ามาทุกครั้ง:** branch ของแต่ละคนแตกไว้ตั้งแต่วัน Kickoff — ถ้าคนอื่น push งานเข้า `dev` ไปแล้วหลังจากนั้น (เช่น Dev 2 ทำ auth เสร็จ) แต่ไม่ merge เข้ามา จะยังทำงานอยู่กับโค้ดเก่า เชื่อมต่อของจริงที่คนอื่นทำไว้ไม่ได้เลย
+**Why merge `dev` in every time:** everyone's branch was cut on Kickoff day — if others have pushed work into `dev` since then (e.g. Dev 2 finished auth) and you don't merge it in, you are still working on old code and can't connect to the real things others built
 
-**ทำไมต้องรัน `pnpm check` หลัง merge:** `git merge` สำเร็จแค่บอกว่าไม่มี conflict ระดับบรรทัด ไม่ได้การันตีว่าโค้ดยังทำงานถูก (เช่นมีคน rename ฟังก์ชันที่อีกไฟล์หนึ่งยังเรียกชื่อเดิมอยู่ merge ผ่านสนิทแต่พังตอนรัน) และ merge แบบ local นี้ CI ไม่รันให้ (CI รันเฉพาะตอนเปิด PR) — `pnpm check` รวม typecheck ของ apps/api + apps/web, `pnpm test`, และ `pnpm lint` ไว้คำสั่งเดียว ให้รู้ทันทีว่ามีอะไรพังก่อนจะเขียนโค้ดทับต่อ
+**Why run `pnpm check` after merging:** a successful `git merge` only means there were no line-level conflicts; it doesn't guarantee the code still works (e.g. someone renamed a function that another file still calls by the old name — the merge goes through cleanly but breaks at runtime), and CI doesn't run for a local merge like this (CI only runs when a PR is opened) — `pnpm check` bundles the typecheck of apps/api + apps/web, `pnpm test` and `pnpm lint` into one command, so you know right away if anything is broken before building on top of it
 
 ---
 
 ## Commit Message Convention
 
-รูปแบบ:
+Format:
 
 ```
-<type>(<requirement-id>): <คำอธิบายสั้นๆ ภาษาอังกฤษ>
+<type>(<requirement-id>): <short English description>
 ```
 
 **`<type>`:**
 
-| type       | ใช้ตอนไหน                                                    |
+| type       | When to use                                                   |
 | ---------- | ------------------------------------------------------------ |
-| `feat`     | ทำ requirement ใหม่ (ผูกกับ AUTH-xxx, PROD-xxx, AUC-xxx ฯลฯ) |
-| `fix`      | แก้บั๊ก                                                      |
-| `refactor` | จัดโครงสร้างโค้ดใหม่ ไม่เพิ่ม feature ไม่แก้บั๊ก             |
-| `test`     | เพิ่ม/แก้ test                                               |
-| `docs`     | แก้เอกสาร (SRS, README ฯลฯ) ไม่แตะโค้ด                       |
-| `chore`    | งาน setup/tooling/dependency ที่ไม่ใช่ feature โดยตรง        |
-| `ci`       | แก้ workflow ของ CI/CD                                       |
+| `feat`     | Implementing a new requirement (tied to AUTH-xxx, PROD-xxx, AUC-xxx, etc.) |
+| `fix`      | Fixing a bug                                                  |
+| `refactor` | Restructuring code without adding features or fixing bugs     |
+| `test`     | Adding/changing tests                                         |
+| `docs`     | Changing documentation (SRS, README, etc.) without touching code |
+| `chore`    | Setup/tooling/dependency work that is not a feature itself    |
+| `ci`       | Changing CI/CD workflows                                      |
 
-**`<requirement-id>` (scope):** ใส่เมื่อ commit นั้นตรงกับ requirement ใน SRS โดยตรง ถ้าเป็นงาน infra ทั่วไปที่ไม่ผูกกับ requirement ไหน ข้ามได้เลย
+**`<requirement-id>` (scope):** include it when the commit maps directly to an SRS requirement; skip it for general infra work that isn't tied to any requirement
 
-**ตัวอย่างจริงตาม requirement ของ BidNest:**
+**Real examples from BidNest's requirements:**
 
 ```bash
 feat(AUTH-001): add local registration endpoint
@@ -453,6 +453,6 @@ chore: scaffold monorepo structure
 ci: add lint and test workflow
 ```
 
-**ทำไมใส่ requirement ID ให้เป็นประโยชน์จริง ไม่ใช่แค่ format สวยๆ:** พิมพ์ `git log --grep="AUTH-001"` จะเห็นทุก commit ที่เกี่ยวกับ requirement นั้นทันที — เวลา review หรือ debug ย้อนหลังว่า "AUTH-001 เริ่มทำตอนไหน แก้กี่รอบ" ไม่ต้องไล่อ่านทีละ commit เอง เป็นการเชื่อม git log กับ SRS เข้าด้วยกันโดยตรง
+**Why the requirement ID is genuinely useful, not just a pretty format:** `git log --grep="AUTH-001"` instantly shows every commit related to that requirement — when reviewing or debugging "when did AUTH-001 start, and how many times was it changed", you don't have to read through commits one by one. It links the git log directly to the SRS
 
-**เรื่องภาษา:** commit message เป็นภาษาอังกฤษเสมอ เหมือน PR title/description — ต่างจากตอนคุยกับ Claude Code ที่เป็นภาษาไทยตาม CLAUDE.md เพราะ commit message ติดอยู่ใน git history ถาวร คนนอกทีมที่เปิด repo ดูก็ควรอ่านเข้าใจได้
+**On language:** commit messages are always in English, like PR titles/descriptions — unlike conversations with Claude Code, which are in Thai per CLAUDE.md, because commit messages stay in the git history permanently and people outside the team who open the repo should be able to read them

@@ -1,7 +1,7 @@
 import { Throttle } from '@nestjs/throttler';
 
 /**
- * Section 6 — "จำกัดความถี่ (rate-limit) การ login, การตรวจสอบ/ขอส่ง OTP ใหม่".
+ * Section 6 — "rate-limit login, OTP verification and OTP resend requests".
  *
  * The global throttler is a blanket cap; these two tighten the handful of
  * endpoints actually worth brute forcing. Limits are read at request time

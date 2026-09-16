@@ -1,197 +1,197 @@
 # Dev 2 — Backend Core & Security Checklist
 
-> **อ้างอิง:** SRS v7 (`docs/requirements/BidNest-Auction and Marketplace-v7.pdf`) และ Team Role Distribution v2
-> **Requirement ที่รับผิดชอบ:** `AUTH-001..008`, `USR-001`, `ADM-003`, `§6 (Security & Quality)`
-> **Branch:** `feat/auth-dev2` → PR เข้า `dev` เท่านั้น
-> **ขอบเขตงาน:** NestJS setup, Prisma schema หลัก + migration ให้ทั้งทีม, ระบบยืนยันตัวตนทั้งหมด, หมวดหมู่ร่วม, ความปลอดภัยโดยรวม
+> **References:** SRS v7 (`docs/requirements/BidNest-Auction and Marketplace-v7.pdf`) and Team Role Distribution v2
+> **Requirements owned:** `AUTH-001..008`, `USR-001`, `ADM-003`, `§6 (Security & Quality)`
+> **Branch:** `feat/auth-dev2` → PRs into `dev` only
+> **Scope of work:** NestJS setup, the main Prisma schema + migrations for the whole team, the entire authentication system, shared categories, overall security
 
-## สถานะ (24 ส.ค. 2569)
+## Status (Aug 24, 2026)
 
-Requirement ทั้งหมดที่ Dev 2 รับผิดชอบ — `AUTH-001..008`, `USR-001`, `ADM-003` — **ทำเสร็จและ merge เข้า `dev` แล้ว** ยืนยันด้วย unit 703 เคส และ e2e 417 เคส
+All the requirements Dev 2 owns — `AUTH-001..008`, `USR-001`, `ADM-003` — **are done and merged into `dev`**, confirmed by 703 unit cases and 417 e2e cases
 
-**ทุกข้อในลิสต์นี้ติ๊กครบแล้ว** ข้อสุดท้าย — privacy interceptor (§6) — ทำเสร็จเป็น `SensitiveFieldsInterceptor` เป็น global interceptor ที่ดูทุก response ก่อนออกจากเซิร์ฟเวอร์
+**Every item in this list is ticked.** The last one — the privacy interceptor (§6) — was finished as `SensitiveFieldsInterceptor`, a global interceptor that inspects every response before it leaves the server
 
-แบ่งเป็น 2 ระดับ เพราะเป็นคนละสัญญากัน:
+It has 2 levels, because they are different contracts:
 
-| ระดับ | field | opt-out |
+| Level | fields | opt-out |
 |---|---|---|
-| **NEVER** | `passwordHash`, `refreshTokenHash`, `codeHash`, `tokenHash`, `resetTokenHash` | ไม่มี — ไม่มีใครมีสิทธิ์อ่าน digest คืน แม้แต่เจ้าของบัญชีหรือ admin |
-| **OWNER_ONLY** | `reservePrice` (AUC-003), `negotiationFloor` (PROD-006) | route ที่ผู้เรียกเป็นเจ้าของจริง แปะ `@ReturnsOwnerFields()` |
+| **NEVER** | `passwordHash`, `refreshTokenHash`, `codeHash`, `tokenHash`, `resetTokenHash` | None — nobody may read a digest back, not even the account owner or an admin |
+| **OWNER_ONLY** | `reservePrice` (AUC-003), `negotiationFloor` (PROD-006) | Routes where the caller really is the owner get `@ReturnsOwnerFields()` |
 
-เจอแล้วทำอะไร: **ตอนรันเทสจะ throw** (ถ้าแค่ log ไว้ ของที่รั่วก็ยังขึ้น production อยู่ดี) ส่วน dev/production จะ **ตัด field ทิ้ง + log ชื่อ route** ให้ request จริงเสียคุณภาพแทนที่จะเสียความลับ
+What happens when one is found: **in tests it throws** (if it only logged, the leak would still reach production), while in dev/production it **strips the field + logs the route name**, so real requests lose quality rather than lose secrets
 
-**ไม่ได้มาแทน mapper** — mapper ของ Dev 3/4 ยังเป็นด่านหลัก และ `auction.mapper` ถึงขั้น build ไม่ผ่านถ้า `reservePrice` โผล่ในชนิดสาธารณะ ตัวนี้เป็น **ตาข่ายรับ route ที่ยังไม่มีใครเขียน** — endpoint ใหม่ที่คืน row ตรงจาก Prisma โดยไม่ผ่าน mapper
+**It doesn't replace the mappers** — the mappers of Dev 3/4 are still the main line of defense, and `auction.mapper` even fails to build if `reservePrice` appears in a public type. This is **a safety net for routes nobody has written yet** — new endpoints that return rows straight from Prisma without a mapper
 
-**ข้อจำกัดที่ต้องรู้:** route ที่ตัดสินความเป็นเจ้าของ*รายแถว* (เช่น `GET /auctions/:id` ที่คืน reserve ให้เฉพาะผู้ขาย) ต้องแปะ `@ReturnsOwnerFields()` ซึ่งแปลว่าตาข่ายไม่คุ้ม route นั้น — ตรงนั้นยังพึ่ง mapper กับเทสเหมือนเดิม
+**Limitation to know:** routes that decide ownership *per row* (e.g. `GET /auctions/:id`, which returns the reserve only to the seller) have to use `@ReturnsOwnerFields()`, which means the net doesn't cover that route — there it still relies on mappers and tests as before
 
-### ที่ไม่ใช่งานโค้ดแต่ยังค้าง
+### Still pending, but not code work
 
-- Gmail App Password ใน `apps/api/.env` (`MAIL_PASSWORD` ยังว่าง → ล็อกอินยังใช้ไม่ได้)
-- LINE `LINE_CHANNEL_SECRET` + Callback URL ที่ developers.line.biz (ปุ่ม LINE ซ่อนอยู่จนกว่าจะครบ)
-- เพิ่ม Test users ใน Google Cloud Console ถ้าจะให้คนอื่นล็อกอินด้วย Google ได้
+- Gmail App Password in `apps/api/.env` (`MAIL_PASSWORD` is still empty → login doesn't work yet)
+- LINE `LINE_CHANNEL_SECRET` + Callback URL at developers.line.biz (the LINE button stays hidden until they're set)
+- Add Test users in Google Cloud Console if other people need to log in with Google
 
-### ที่ต้องแจ้งเจ้าของโค้ด
+### To raise with the code owners
 
-| ใคร | เรื่อง |
+| Who | Issue |
 |---|---|
-| Dev 5 | `AI_NEGOTIATOR_JWT_SECRET` ยังมี `.default('dev-negotiator-secret-change-me')` — deploy แบบนี้แปลว่าใครก็ปลอม token ได้ |
-| Dev 5 | `DevTokenSwitcher` อยู่ใน `/admin` layout แต่ `proxy.ts` กัน `/admin` ไว้ → ยังไม่ล็อกอินก็เข้าไม่ถึงปุ่มสลับ user ควรย้ายไป layout ราก |
-| Dev 1 | ปุ่ม hamburger บนมือถือยังกดไม่ติด (`onMenuToggle` ไม่มีใครส่งเข้ามา) เมนู 6 หมวดหมู่จึงเข้าไม่ถึงบนจอเล็ก |
-| Dev 4/5 | `TODO(Dev …)` ค้าง 4 จุดใน `admin/*.controller.ts` ทั้งที่ `@Roles('ADMIN')` ใส่ครบแล้ว |
+| Dev 5 | `AI_NEGOTIATOR_JWT_SECRET` still has `.default('dev-negotiator-secret-change-me')` — deploying like this means anyone can forge tokens |
+| Dev 5 | `DevTokenSwitcher` is in the `/admin` layout, but `proxy.ts` guards `/admin` → the user-switch button can't be reached before logging in; it should move to the root layout |
+| Dev 1 | The hamburger button on mobile still doesn't respond (nobody passes `onMenuToggle` in), so the 6-category menu is unreachable on small screens |
+| Dev 4/5 | 4 leftover `TODO(Dev …)` in `admin/*.controller.ts`, even though `@Roles('ADMIN')` is already fully in place |
 
 ---
 
 ## 0. Infrastructure & Setup
 
-Step 1–4 และ 6 ของ Kickoff Guide เป็นความรับผิดชอบของ Dev 2 (ดู `docs/KICKOFF_GUIDE.md`)
+Steps 1–4 and 6 of the Kickoff Guide are Dev 2's responsibility (see `docs/KICKOFF_GUIDE.md`)
 
 - [x] Git repo + branch strategy (`main` / `dev` / `feat/*`)
 - [x] Monorepo scaffold — `apps/web`, `apps/api`, `packages/contracts`, `packages/config` (pnpm workspace)
 - [x] Docker Compose — PostgreSQL (port `5433`) + Maildev (port `1080`)
-- [x] Prisma schema เริ่มต้น + migration แรก (`20260815173946_init_migration`)
-- [x] CI พื้นฐาน — lint + test บน PR (`.github/workflows/`)
-- [x] `PrismaModule` + `PrismaService` (injectable, global) ใน `apps/api/src/prisma/`
-- [x] `ConfigModule` + env validation (ต่อยอดจาก `apps/api/src/config/env.vaildation.ts`)
-- [x] Global `ValidationPipe` (class-validator, `whitelist: true`) ใน `main.ts`
-- [x] Global exception filter — error response ไม่หลุด implementation detail (§6)
-- [x] Swagger setup (`@nestjs/swagger`) — SRS กำหนดว่า REST API ต้องมีเอกสารผ่าน Swagger
+- [x] Initial Prisma schema + first migration (`20260815173946_init_migration`)
+- [x] Basic CI — lint + test on PRs (`.github/workflows/`)
+- [x] `PrismaModule` + `PrismaService` (injectable, global) in `apps/api/src/prisma/`
+- [x] `ConfigModule` + env validation (building on `apps/api/src/config/env.vaildation.ts`)
+- [x] Global `ValidationPipe` (class-validator, `whitelist: true`) in `main.ts`
+- [x] Global exception filter — error responses don't leak implementation details (§6)
+- [x] Swagger setup (`@nestjs/swagger`) — the SRS requires the REST API to be documented with Swagger
 
 ---
 
-## 1. AUTH-001 — สมัครสมาชิกแบบ Local
+## 1. AUTH-001 — Local registration
 
 - [x] `POST /auth/register`
-- [x] Required: ชื่อจริง, display name, อีเมล (ไม่ซ้ำ), รหัสผ่าน — นามสกุลเป็น optional
-- [x] hash รหัสผ่านอย่างปลอดภัย (bcrypt / argon2) ก่อนบันทึกลง `users.password_hash`
-- [x] สร้าง `user_profiles` พร้อมกันใน transaction เดียว
-- [x] DTO + class-validator (email format, password strength, ความยาว field ตาม schema)
+- [x] Required: first name, display name, email (unique), password — last name is optional
+- [x] Hash the password securely (bcrypt / argon2) before saving to `users.password_hash`
+- [x] Create `user_profiles` together in the same transaction
+- [x] DTO + class-validator (email format, password strength, field lengths per the schema)
 
 ---
 
-## 2. AUTH-002 — เข้าสู่ระบบแบบ Local (2 ขั้นตอน)
+## 2. AUTH-002 — Local login (2 steps)
 
-- [x] `POST /auth/login` — ตรวจ email/password
-- [x] บัญชีที่ `status != ACTIVE` (SUSPENDED / DEACTIVATED) ถูกปฏิเสธตั้งแต่ขั้นตอนแรก
-- [x] ผ่านแล้ว → สร้าง OTP + ส่งอีเมล → คืนสถานะ **"รอการยืนยัน"** โดย **ยังไม่ออก token**
-- [x] คำขอครั้งที่สอง (ข้อมูล login เดิม + OTP ที่ถูกต้องและยังไม่หมดอายุ) → ออก access token + refresh session
+- [x] `POST /auth/login` — checks email/password
+- [x] Accounts with `status != ACTIVE` (SUSPENDED / DEACTIVATED) are rejected at the first step
+- [x] If it passes → create an OTP + send the email → return a **"pending verification"** status, **without issuing a token yet**
+- [x] Second request (same login details + a correct, unexpired OTP) → issue an access token + refresh session
 
-> ⚠️ **หมายเหตุสำคัญ:** NextAuth Credentials provider เรียก `authorize()` แค่ครั้งเดียว
-> ฝั่ง client (Dev 1) จะรวบรวม password + OTP เป็น 2 ขั้นบนหน้าจอ แล้วส่งมาพร้อมกันใน `signIn()` ครั้งเดียว
-> → ต้องออกแบบ endpoint ให้รองรับทั้งแบบแยก 2 call และแบบส่งพร้อมกัน (**ต้องคุยกับ Dev 1 ก่อนเริ่ม**)
+> ⚠️ **Important note:** the NextAuth Credentials provider calls `authorize()` only once
+> The client side (Dev 1) collects password + OTP in 2 steps on screen, then sends them together in a single `signIn()`
+> → the endpoint has to be designed to support both 2 separate calls and a combined call (**talk to Dev 1 before starting**)
 
 ---
 
-## 3. AUTH-007 — 2FA ด้วย OTP ทางอีเมล (บังคับทุกบัญชี ทุกช่องทาง)
+## 3. AUTH-007 — 2FA with an emailed OTP (mandatory for every account, every login path)
 
-- [x] `POST /auth/2fa/verify` — ตรวจ OTP → ออก access token + refresh session
-- [x] `POST /auth/2fa/resend` — ขอรหัสใหม่
-- [x] รหัส 6 หลัก ใช้ครั้งเดียว, **hash ก่อนบันทึก** ลง `two_factor_codes.code_hash`
-- [x] หมดอายุตามเวลาที่กำหนด (เช่น 10 นาที) — ยกเลิกทันทีเมื่อใช้สำเร็จหรือหมดเวลา
-- [x] rate-limit การขอส่งรหัสใหม่ (เช่น 1 ครั้งต่อ 60 วินาที)
-- [x] บังคับใช้กับ **ทุกวิธี login** — local (AUTH-002), Google (AUTH-003), Line (AUTH-006)
-- [x] backup/recovery code **ไม่อยู่ในขอบเขต V1**
+- [x] `POST /auth/2fa/verify` — verify the OTP → issue an access token + refresh session
+- [x] `POST /auth/2fa/resend` — request a new code
+- [x] 6-digit code, single use, **hashed before saving** to `two_factor_codes.code_hash`
+- [x] Expires after a set time (e.g. 10 minutes) — invalidated as soon as it is used successfully or expires
+- [x] Rate-limit resend requests (e.g. 1 per 60 seconds)
+- [x] Enforced for **every login method** — local (AUTH-002), Google (AUTH-003), Line (AUTH-006)
+- [x] Backup/recovery codes are **out of scope for V1**
 
 ---
 
 ## 4. AUTH-003 / AUTH-006 — Google & Line OAuth
 
-- [x] `POST /auth/google/callback` — ผูก 1 Google account ต่อ 1 บัญชีแพลตฟอร์มเท่านั้น
-- [x] `POST /auth/line/callback` — Line ต้องการแค่ Line user ID, **อีเมลเป็น optional** (Line อาจไม่ส่งมา)
-- [x] ระบุตัวตนด้วยคู่ `provider + provider_account_id` เป็นหลัก (`auth_accounts` มี `@@unique` แล้ว)
-- [x] ❌ **ห้ามผูกบัญชีจากการจับคู่อีเมลที่ยังไม่ได้ยืนยันเพียงอย่างเดียวเด็ดขาด**
-- [x] OAuth ต้องผ่าน OTP step เดียวกับ AUTH-007 ก่อนออก session เสมอ (ไม่ให้ provider ไหนข้ามได้)
+- [x] `POST /auth/google/callback` — 1 Google account links to only 1 platform account
+- [x] `POST /auth/line/callback` — Line only needs the Line user ID; **email is optional** (Line may not send it)
+- [x] Identify primarily by the `provider + provider_account_id` pair (`auth_accounts` already has `@@unique`)
+- [x] ❌ **Never link accounts based solely on matching an unverified email**
+- [x] OAuth must always go through the same OTP step as AUTH-007 before issuing a session (no provider may skip it)
 
 ---
 
 ## 5. AUTH-004 — Refresh Session
 
-- [x] `POST /auth/refresh` — hash refresh token ที่รับมา แล้วเทียบกับ `user_sessions.refresh_token_hash`
-- [x] ตรวจ `expires_at > now()` และ `revoked_at IS NULL`
-- [x] `POST /auth/logout` — set `revoked_at` (เพิกถอน session)
-- [x] เก็บเฉพาะ ID, user, hash, วันหมดอายุ, สถานะเพิกถอน, เวลาสร้าง — **ไม่เก็บ field อื่น**
-- [x] `user_sessions` เป็น source of truth เพียงแหล่งเดียว — ฝั่ง NextAuth ถือแค่สำเนาใน cookie
-- [x] ตกลงกับ Dev 1 ว่าจะ rotate refresh token หรือไม่ (มีผลกับ NextAuth session callback)
+- [x] `POST /auth/refresh` — hash the incoming refresh token and compare it with `user_sessions.refresh_token_hash`
+- [x] Check `expires_at > now()` and `revoked_at IS NULL`
+- [x] `POST /auth/logout` — set `revoked_at` (revoke the session)
+- [x] Store only the ID, user, hash, expiry, revocation status and creation time — **no other fields**
+- [x] `user_sessions` is the single source of truth — the NextAuth side only holds a copy in a cookie
+- [x] Agree with Dev 1 on whether to rotate refresh tokens (affects the NextAuth session callback)
 
 ---
 
-## 6. AUTH-005 — กู้คืนรหัสผ่าน
+## 6. AUTH-005 — Password recovery
 
-- [x] `POST /auth/forgot-password` — ส่งลิงก์รีเซ็ตแบบ single-use ไปยังอีเมลที่ลงทะเบียนไว้
-- [x] ✅ response **ต้องเหมือนกันเสมอ** ไม่ว่าอีเมลจะมีในระบบหรือไม่ (กัน user enumeration)
-- [x] `POST /auth/reset-password` — ตรวจ token hash, ยังไม่ใช้, ยังไม่หมดอายุ (เช่น 30 นาที)
-- [x] หลังตั้งรหัสใหม่สำเร็จ → **เพิกถอน refresh session เดิมของบัญชีนี้ทั้งหมดทันที** (บังคับ login ใหม่ทุกอุปกรณ์)
-- [x] ❌ reset token **ห้ามปรากฏใน API response หรือ production log เด็ดขาด**
-- [x] ใช้ `password_reset_tokens` (รูปแบบเดียวกับ `two_factor_codes`)
-
----
-
-## 7. AUTH-008 — Protected Routes (ฝั่ง NestJS Guard)
-
-- [x] `JwtAuthGuard` — ตรวจ access token **ทุก request ที่เข้ามา** (ไม่พึ่ง middleware ฝั่ง Next.js)
-- [x] `RolesGuard` + `@Roles('ADMIN')` decorator สำหรับ USER/ADMIN
-- [x] `@Public()` decorator สำหรับ endpoint สาธารณะ (catalog, auction list ฯลฯ)
-- [x] ส่ง contract ของ guard/decorator ให้ Dev 3, 4, 5 ใช้ต่อ (**เป็น blocker ของทีม — ทำให้เสร็จเร็ว**)
+- [x] `POST /auth/forgot-password` — send a single-use reset link to the registered email
+- [x] ✅ The response **must always be identical**, whether or not the email exists (prevents user enumeration)
+- [x] `POST /auth/reset-password` — check the token hash, not yet used, not expired (e.g. 30 minutes)
+- [x] After successfully setting a new password → **immediately revoke all of this account's existing refresh sessions** (forces a new login on every device)
+- [x] ❌ Reset tokens **must never appear in API responses or production logs**
+- [x] Uses `password_reset_tokens` (same pattern as `two_factor_codes`)
 
 ---
 
-## 8. USR-001 — โปรไฟล์ผู้ใช้
+## 7. AUTH-008 — Protected Routes (NestJS Guard side)
 
-- [x] `GET /users/me` — ข้อมูลโปรไฟล์ของตัวเอง
-- [x] `PATCH /users/me` — ชื่อ/นามสกุล, display name, avatar, bio, เบอร์โทร, ที่อยู่, ที่อยู่จัดส่งเริ่มต้น
-- [x] ที่อยู่จัดส่งเริ่มต้นใช้ prefill ตอน checkout ฝั่ง e-commerce (Dev 3 เรียกใช้)
-- [x] หน้าสาธารณะแสดงเป็น **display name หรือชื่อแบบปิดบัง** เท่านั้น — ห้ามหลุดชื่อจริง/อีเมล
-
----
-
-## 9. ADM-003 — จัดการหมวดหมู่ร่วม (Admin)
-
-หมวดหมู่ชุดเดียวใช้ร่วมกันทั้ง Auction และ E-commerce
-
-- [x] `GET /categories` — สาธารณะ (Guest ดูได้), filter เฉพาะ `is_active = true` สำหรับฝั่งผู้ใช้
-- [x] `POST /categories` — สร้าง (ADMIN only)
-- [x] `PATCH /categories/:id` — แก้ไข (ADMIN only)
-- [x] `PATCH /categories/:id/activate` / `deactivate` — เปิด/ปิดใช้งาน
-- [x] ❌ หมวดหมู่ที่ถูกใช้งานอยู่แล้ว **ปิดใช้งานเท่านั้น ห้ามลบทิ้งถาวร**
-- [x] บันทึก `admin_actions` ทุกครั้ง (`CREATE_CATEGORY` / `UPDATE_CATEGORY` / `ACTIVATE_CATEGORY` / `DEACTIVATE_CATEGORY`)
-- [x] seed หมวดหมู่ตั้งต้นให้ทีมใช้ dev (`prisma/seed.ts`)
+- [x] `JwtAuthGuard` — checks the access token on **every incoming request** (doesn't rely on Next.js middleware)
+- [x] `RolesGuard` + `@Roles('ADMIN')` decorator for USER/ADMIN
+- [x] `@Public()` decorator for public endpoints (catalog, auction list, etc.)
+- [x] Hand the guard/decorator contract to Dev 3, 4, 5 (**it blocks the team — finish it fast**)
 
 ---
 
-## 10. §6 — Security & Quality (ความรับผิดชอบภาพรวม)
+## 8. USR-001 — User profile
+
+- [x] `GET /users/me` — my own profile data
+- [x] `PATCH /users/me` — first/last name, display name, avatar, bio, phone, address, default shipping address
+- [x] The default shipping address is used to prefill e-commerce checkout (called by Dev 3)
+- [x] Public pages show only the **display name or a masked name** — real names/emails must never leak
+
+---
+
+## 9. ADM-003 — Shared category management (Admin)
+
+One category set shared by both Auction and E-commerce
+
+- [x] `GET /categories` — public (Guests can view), filtered to `is_active = true` for the user side
+- [x] `POST /categories` — create (ADMIN only)
+- [x] `PATCH /categories/:id` — edit (ADMIN only)
+- [x] `PATCH /categories/:id/activate` / `deactivate` — activate/deactivate
+- [x] ❌ Categories already in use are **only deactivated, never permanently deleted**
+- [x] Record `admin_actions` every time (`CREATE_CATEGORY` / `UPDATE_CATEGORY` / `ACTIVATE_CATEGORY` / `DEACTIVATE_CATEGORY`)
+- [x] Seed starter categories for the team to use in dev (`prisma/seed.ts`)
+
+---
+
+## 10. §6 — Security & Quality (overall responsibility)
 
 ### Hashing & Secret
-- [x] hash: รหัสผ่าน, refresh token, รหัส OTP, reset token — **ก่อนบันทึกลง DB ทุกตัว**
-- [x] ❌ ห้าม log รหัส OTP หรือ reset token แบบข้อความล้วนเด็ดขาด
-- [x] ❌ ห้าม commit `.env` หรือ hardcode secret/API key
+- [x] hash: passwords, refresh tokens, OTP codes, reset tokens — **every one of them before saving to the DB**
+- [x] ❌ Never log OTP codes or reset tokens in plain text
+- [x] ❌ Never commit `.env` or hardcode secrets/API keys
 
 ### Validation & Authorization
-- [x] ตรวจสอบ input จากภายนอกทุกจุด (class-validator + DTO)
-- [x] บังคับตรวจสิทธิ์ที่ฝั่ง server เสมอ ไม่ใช่แค่ที่ UI
-- [x] ทุก request ที่เรียก API ต้องผ่านการตรวจ token ซ้ำโดย NestJS (AUTH-008)
+- [x] Validate every external input (class-validator + DTO)
+- [x] Always enforce permission checks on the server, not just in the UI
+- [x] Every request to the API must have its token re-checked by NestJS (AUTH-008)
 
 ### Rate Limiting (`@nestjs/throttler`)
 - [x] login
-- [x] ตรวจสอบ / ขอส่ง OTP ใหม่
-- [x] ส่ง guideline + shared config ให้ Dev 4 (การส่งบิด) และ Dev 5 (AI request)
+- [x] OTP verification / resend
+- [x] Hand guidelines + shared config to Dev 4 (bid submission) and Dev 5 (AI requests)
 
-### Data Privacy — ห้ามหลุดเด็ดขาด
+### Data Privacy — must never leak
 - [x] `auctions.reserve_price` (AUC-003)
 - [x] `products.negotiation_floor` (PROD-006)
-- [x] ข้อมูลส่วนตัวผู้ประมูล / ตะกร้า / คำสั่งซื้อของผู้ใช้คนอื่น
-- [x] เขียนเป็น interceptor หรือ serialization rule กลางให้ทั้งทีมใช้ (`SensitiveFieldsInterceptor`)
+- [x] Other users' bidder personal data / carts / orders
+- [x] Written as a central interceptor or serialization rule for the whole team (`SensitiveFieldsInterceptor`)
 
 ### Email Delivery
-- [x] `MailService` เป็น interface เดียว — dev ใช้ Maildev, production ใช้ SMTP relay จริง
-- [x] ❌ Maildev **ห้ามเข้าถึงได้จาก production network เด็ดขาด** (dashboard เปิดเผย OTP ทุกตัวโดยไม่ต้องยืนยันตัวตน)
+- [x] `MailService` is a single interface — dev uses Maildev, production uses a real SMTP relay
+- [x] ❌ Maildev **must never be reachable from the production network** (its dashboard exposes every OTP without authentication)
 
 ### Testing & Docs
 - [x] Unit test: auth service, guard, hashing
 - [x] E2E test: flow register → login → OTP → refresh → logout
-- [x] Swagger ครบทุก endpoint ของ `/auth`, `/users`, `/categories`
+- [x] Swagger covers every endpoint of `/auth`, `/users`, `/categories`
 
 ---
 
-## Endpoint สรุป (ตาม SRS §5.2)
+## Endpoint summary (per SRS §5.2)
 
 | Method | Endpoint | Requirement |
 |---|---|---|
@@ -210,29 +210,29 @@ Step 1–4 และ 6 ของ Kickoff Guide เป็นความรับ
 
 ---
 
-## จุดที่ต้องประสานกับทีม
+## Coordination points with the team
 
-| กับใคร | เรื่อง |
+| With | Topic |
 |---|---|
-| **Dev 1** | รูปแบบ payload ที่ NextAuth credentials provider ส่งมา (password + OTP ใน call เดียว), JWT payload shape, การ rotate refresh token |
-| **Dev 3 / Dev 4** | `JwtAuthGuard` / `RolesGuard` / `@Public()` contract, shared DTO ใน `packages/contracts`, rate-limit config |
-| **Dev 5** | `@Roles('ADMIN')` สำหรับ ADM-002 / ADM-004, pattern การบันทึก `admin_actions` |
-| **ทุกคน** | การแก้ `schema.prisma` ต้องแจ้ง Dev 2 ก่อนเสมอ — Dev 2 เป็นเจ้าของ migration |
+| **Dev 1** | The payload shape the NextAuth credentials provider sends (password + OTP in one call), JWT payload shape, refresh token rotation |
+| **Dev 3 / Dev 4** | The `JwtAuthGuard` / `RolesGuard` / `@Public()` contract, shared DTOs in `packages/contracts`, rate-limit config |
+| **Dev 5** | `@Roles('ADMIN')` for ADM-002 / ADM-004, the pattern for recording `admin_actions` |
+| **Everyone** | Changes to `schema.prisma` must always be raised with Dev 2 first — Dev 2 owns the migrations |
 
 ---
 
-## ลำดับความสำคัญ (14 วัน)
+## Priorities (14 days)
 
-**สัปดาห์ที่ 1 — ปลดล็อกทีม (ทำก่อน)**
+**Week 1 — unblock the team (do first)**
 1. `PrismaService` + `ConfigModule` + `ValidationPipe` + Swagger
-2. AUTH-001, AUTH-002 (local login พื้นฐาน + JWT)
-3. AUTH-008 guards → **ส่งให้ทีมทันทีที่เสร็จ** (Dev 3/4/5 รอ mock auth อยู่)
+2. AUTH-001, AUTH-002 (basic local login + JWT)
+3. AUTH-008 guards → **hand to the team as soon as done** (Dev 3/4/5 are waiting on mock auth)
 
-**สัปดาห์ที่ 1 ปลาย**
+**End of week 1**
 4. AUTH-007 (OTP + MailService), AUTH-004 (refresh / logout)
-5. ADM-003 categories + seed → Dev 3/4 ต้องใช้อ้างอิงหมวดหมู่
+5. ADM-003 categories + seed → Dev 3/4 need them to reference categories
 
-**สัปดาห์ที่ 2**
+**Week 2**
 6. AUTH-003, AUTH-006 (OAuth), AUTH-005 (reset password)
 7. USR-001 profile
 8. §6 hardening — rate-limit, privacy interceptor, test coverage
