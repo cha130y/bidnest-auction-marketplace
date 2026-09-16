@@ -57,7 +57,7 @@ export class SupportChatController {
   }
 
   /**
-   * "คุยกับแอดมิน" — requires a real session, which requires being signed in
+   * "Talk to admin" — requires a real session, which requires being signed in
    * (no `@Public()`/`@OptionalCurrentUser()` here), which is what makes
    * "guest can't talk to admin" true without any separate check.
    */

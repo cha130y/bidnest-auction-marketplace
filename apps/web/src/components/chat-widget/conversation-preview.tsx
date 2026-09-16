@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
 const PREVIEW_LIMIT = 5;
 
 /**
- * CHAT-004 — the widget's "แชท" tab. A preview only, on purpose: a full
+ * CHAT-004 — the widget's "Chat" tab. A preview only, on purpose: a full
  * thread (composer, history, live updates) belongs on its own page where it
- * has room, not squeezed into a 320px popover. Every row, and the "ดูทั้งหมด"
+ * has room, not squeezed into a 320px popover. Every row, and the "View all"
  * link, lead to /chat — this never opens a thread inline.
  */
 export function ConversationPreview() {

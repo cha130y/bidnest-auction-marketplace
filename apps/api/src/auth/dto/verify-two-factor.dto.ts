@@ -10,7 +10,7 @@ import {
 import { LoginDto } from './login.dto';
 
 /**
- * AUTH-002 step two — "ต้องส่งคำขอครั้งที่สองพร้อมข้อมูล login เดิม บวกกับ OTP".
+ * AUTH-002 step two — "a second request must be sent with the same login details plus the OTP".
  *
  * Carrying the credentials again (rather than handing out an intermediate
  * "pending" token) means there is no half-authenticated bearer to steal, and it

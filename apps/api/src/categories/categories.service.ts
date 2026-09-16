@@ -25,7 +25,7 @@ function isUniqueViolation(error: unknown): boolean {
  *
  * `\p{M}` matters more than it looks. Thai vowels and tone marks are combining
  * marks, not letters, so a letters-and-digits-only pattern quietly eats them
- * and turns "เครื่องใช้ไฟฟ้า" into "เคร-องใช-ไฟฟ-า".
+ * and turns "เครื่องใช้ไฟฟ้า" ("electrical appliances") into "เคร-องใช-ไฟฟ-า".
  */
 export function slugify(name: string): string {
   return name
@@ -188,7 +188,7 @@ export class CategoriesService {
   }
 
   /**
-   * ADM-003 — "หมวดหมู่ที่ถูกใช้งานอยู่แล้วจะถูกปิดใช้งาน ไม่ใช่ลบทิ้งถาวร", which is
+   * ADM-003 — "a category already in use is deactivated, not permanently deleted", which is
    * why there is no delete anywhere in this service.
    */
   async setCategoryActivation(

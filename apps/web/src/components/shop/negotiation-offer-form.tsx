@@ -25,7 +25,7 @@ import { useOfferMinutesLeft } from '@/lib/use-offer-countdown';
  * than an instruction to retype the number — the rule that makes that an
  * acceptance lives in NegotiatorService — and an accepted price leads to
  * checkout, which redeems it (CART-004). The SRS is explicit that the two are
- * separate steps: "การต่อรองราคาเองไม่ได้ทำให้การซื้อสำเร็จ", so nothing here
+ * separate steps: "negotiating a price does not by itself complete a purchase", so nothing here
  * buys anything on its own.
  *
  * Leaving this card is no longer losing the offer: `PayableOffersBanner` reads

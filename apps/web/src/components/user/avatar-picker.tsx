@@ -41,7 +41,7 @@ export function AvatarPicker({
 }: {
   value: string
   /**
-   * Saves the picture, and is awaited: "กำลังอัปโหลด…" then covers the whole
+   * Saves the picture, and is awaited: "Uploading…" then covers the whole
    * thing, and anything that goes wrong — the upload or the save after it —
    * lands on the one error line below instead of half of it failing silently.
    */

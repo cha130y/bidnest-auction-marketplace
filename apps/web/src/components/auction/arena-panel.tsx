@@ -132,7 +132,7 @@ export function ArenaPanel({
    * that happened once, when the page was requested. Nothing in here can reach
    * them: they are above this component in the tree and in the other branch of
    * it. So an extension landing while somebody watches leaves the banner a few
-   * inches to the right saying "ครั้งที่ 3" over a list that still says two,
+   * inches to the right saying "Round 3" over a list that still says two,
    * until they reload the page — which is the only way that list has ever been
    * updated.
    *

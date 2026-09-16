@@ -6,7 +6,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { authRegistry } from './helpers/auth';
 
-// ID จริงจาก apps/api/prisma/seed.ts — ต้อง seed DB ก่อนรัน (pnpm --dir apps/api exec prisma db seed)
+// Real IDs from apps/api/prisma/seed.ts — seed the DB before running (pnpm --dir apps/api exec prisma db seed)
 const ADMIN_USER_ID = '00000000-0000-4000-8000-000000000001'; // ADMIN_ID
 const REGULAR_USER_ID = '00000000-0000-4000-8000-000000000004'; // BUYER_ID
 
@@ -34,14 +34,14 @@ describe('Admin users routes (e2e)', () => {
     await app.close();
   });
 
-  it('non-admin โดน 403', () => {
+  it('rejects a non-admin with 403', () => {
     return request(server)
       .get('/admin/users')
       .set('Authorization', authOf(REGULAR_USER_ID))
       .expect(403);
   });
 
-  it('admin เข้าได้', () => {
+  it('lets an admin in', () => {
     return request(server)
       .get('/admin/users')
       .set('Authorization', authOf(ADMIN_USER_ID))

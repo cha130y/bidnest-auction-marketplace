@@ -41,7 +41,7 @@ export default async function OAuthVerifyPage({
 
   const pending = await readPending()
   if (!pending) {
-    // The second place that answers with "เซสชันหมดอายุ กรุณาลองใหม่", and from
+    // The second place that answers with "Session expired, please try again", and from
     // the login page the two are indistinguishable. Reaching here means the
     // callback did its work and set the cookie, and the browser that landed
     // here did not send it back — a different failure from Line never

@@ -29,7 +29,7 @@ const STATUS_BADGE: Record<
 
 /**
  * The one date that matters for the state the auction is in. A card showing
- * "ปิด 14:00" on an auction that finished yesterday would be worse than
+ * "Closes 14:00" on an auction that finished yesterday would be worse than
  * showing nothing.
  */
 function timingLabel(auction: Auction): string {

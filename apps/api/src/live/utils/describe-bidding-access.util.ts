@@ -18,7 +18,7 @@ type ArenaAuction = { biddingOpen: boolean; seller: { id: string } };
 type Viewer = { id: string; role: UserRole };
 
 /**
- * LIV-002 — "ปุ่มควบคุมการประมูล", answered from the server.
+ * LIV-002 — "auction control buttons", answered from the server.
  *
  * This is a report, never a gate: the endpoint checks all of it again inside
  * the transaction that accepts the bid (BID-002), because anything read here

@@ -83,7 +83,7 @@ export function AddToCartButton({
         {isSuccess ? <Check /> : <ShoppingCart />}
         {isSuccess ? "เพิ่มแล้ว" : label}
       </Button>
-      {/* The press used to end here: the label changed to "เพิ่มแล้ว" and the
+      {/* The press used to end here: the label changed to "Added" and the
           only way on was to find the cart icon in the header. */}
       {cartLink && isSuccess && (
         <Link

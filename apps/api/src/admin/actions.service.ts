@@ -5,12 +5,13 @@ import { ListAdminActionsDto } from './dtos/list-admin-actions.dto';
 /**
  * ADM-004 — Audit log viewer (owner: Dev 5)
  *
- * อ่านอย่างเดียว — ห้ามมีเมธอดที่แก้ไขหรือลบ `admin_actions` เพราะจะทำให้
- * audit trail เชื่อถือไม่ได้ (SRS §6 บังคับให้บันทึก log การกระทำของ Admin
- * ที่เกี่ยวข้องกับความปลอดภัย)
+ * Read-only — there must be no method that edits or deletes `admin_actions`,
+ * because that would make the audit trail untrustworthy (SRS §6 requires
+ * logging security-relevant Admin actions).
  *
- * `admin_actions` มี index `[adminUserId, createdAt]` และ `[actionType, createdAt]`
- * อยู่แล้ว — cursor-based pagination ด้านล่างใช้ index เหล่านี้ผ่าน orderBy createdAt
+ * `admin_actions` already has indexes `[adminUserId, createdAt]` and
+ * `[actionType, createdAt]` — the cursor-based pagination below uses them
+ * through orderBy createdAt
  */
 @Injectable()
 export class AdminActionsService {

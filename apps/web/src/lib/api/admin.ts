@@ -204,7 +204,7 @@ export function fetchAdminOverview(): Promise<AdminOverview> {
   return apiFetch<AdminOverview>("/admin/overview")
 }
 
-// ── AI-001 escalation — the admin side of the chat widget's "คุยกับแอดมิน" ──
+// ── AI-001 escalation — the admin side of the chat widget's "Talk to admin" ──
 
 export type SupportSessionStatus = "AI_ONLY" | "ESCALATED" | "RESOLVED"
 

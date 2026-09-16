@@ -141,7 +141,7 @@ describe("AuctionCard", () => {
   })
 
   /**
-   * A card showing "ปิด 14:00" on an auction that finished yesterday would be
+   * A card showing "Closes 14:00" on an auction that finished yesterday would be
    * worse than showing nothing, so each status gets the one date that belongs
    * to it — and says so in words when that date is missing.
    */

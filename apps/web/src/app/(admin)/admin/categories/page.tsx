@@ -127,7 +127,7 @@ export default function AdminCategoriesPage() {
   // Radix) — Base UI looks the label up from `items` on the root instead.
   // Without it, picking a parent shows the raw category id (a UUID) in the
   // trigger instead of its name. `''` is a real selectable value here (the
-  // explicit "เป็นหมวดหลัก" item below), so it needs an entry too.
+  // explicit "Top-level category" item below), so it needs an entry too.
   const parentOptions: Record<string, string> = {
     '': 'เป็นหมวดหลัก',
     ...Object.fromEntries(roots.filter((r) => r.isActive).map((r) => [r.id, r.name])),

@@ -1,33 +1,36 @@
-# CODEOWNERS — ใครต้อง approve เมื่อไฟล์เหล่านี้ถูกแก้
+# CODEOWNERS — who must approve when these files change
 #
-# ไฟล์ในลิสต์นี้เป็น "กติกาและข้อตกลงร่วมของทีม" ที่ทุกคนยึดเป็นหลักเดียวกัน
-# ยังเสนอแก้ได้ปกติผ่าน PR แต่ต้องได้ approve จากเจ้าของไฟล์ก่อน merge
-# เพื่อไม่ให้กติกากลางเปลี่ยนไปโดยที่ทีมไม่ได้ตกลงกัน
+# The files listed here are the team's shared rules and agreements, the common
+# baseline everyone works from. Changes can still be proposed through a PR as
+# usual, but need the file owner's approval before merge, so the shared rules
+# never change without the team agreeing.
 #
-# ⚠️ ต้องเปิด branch protection ข้อ "Require review from Code Owners"
-#    ที่ทั้ง main และ dev ด้วย ไฟล์นี้เพียงลำพังไม่ได้บังคับอะไร
+# ⚠️ Branch protection "Require review from Code Owners" must also be turned on
+#    for both main and dev — this file alone enforces nothing.
 #
-# ถ้าต้องการเพิ่มคำสั่ง/แนวทางส่วนตัวสำหรับ Claude Code ให้สร้างไว้ที่
-# .claude/commands/<ชื่อ>.md ซึ่ง .gitignore กันไว้แล้ว ไม่ขึ้น git
-# และไม่กระทบ CLAUDE.md ของทีม — ดูหัวข้อ "แนวทางส่วนตัว" ใน CLAUDE.md
+# To add your own commands/guidelines for Claude Code, put them in
+# .claude/commands/<name>.md, which .gitignore already excludes — it never
+# reaches git and doesn't affect the team's CLAUDE.md. See the personal
+# guidelines section in CLAUDE.md.
 
-# กติกาการทำงานร่วมของทีม
+# The team's shared working rules
 /CLAUDE.md              @cha130y
 
-# เอกสารข้อกำหนดและสถาปัตยกรรม
+# Requirements and architecture documents
 /docs/requirements/     @cha130y
 /docs/architecture/     @cha130y
 /docs/team-role/        @cha130y
 
-# Schema กลางที่ทุกโมดูลใช้ร่วมกัน — ห้ามแก้โดยไม่ตกลงกันก่อน
+# The shared schema every module uses — don't change it without agreeing first
 /apps/api/prisma/       @cha130y
 
-# CI และ config ของ workspace
+# CI and workspace config
 /.github/               @cha130y
 /package.json           @cha130y
 /pnpm-workspace.yaml    @cha130y
 
-# Dependency ของ API — การเพิ่ม/ถอด package เปลี่ยน tech stack ของทั้งทีม
-# (CLAUDE.md "อย่าเปลี่ยน tech stack โดยไม่ถาม") และทุกคนต้อง pnpm install ใหม่
-# เดิมไฟล์นี้ไม่มีใครดูแล ทั้งที่ /package.json ที่ root มี
+# API dependencies — adding/removing a package changes the whole team's tech
+# stack (CLAUDE.md: "don't change the tech stack without asking") and everyone
+# has to pnpm install again. This file used to have no owner, even though the
+# root /package.json did.
 /apps/api/package.json  @cha130y

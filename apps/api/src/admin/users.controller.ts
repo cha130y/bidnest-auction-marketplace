@@ -19,10 +19,10 @@ import { AdminUsersService } from './users.service';
 /**
  * ADM-002 — User management (owner: Dev 5)
  *
- * ผู้ใช้ที่ถูกระงับต้อง login ไม่ได้, สร้างประมูล/ลงขายสินค้าไม่ได้, ประมูลไม่ได้,
- * เพิ่มลงตะกร้าไม่ได้ และ checkout ไม่ได้ — การบังคับใช้กระจายอยู่ในโมดูลของ
- * Dev 2 (AUTH), Dev 3 (PROD/CART) และ Dev 4 (AUC/BID) โดยเช็คจาก
- * `users.status = ACTIVE` ไม่ใช่เช็คที่ controller นี้
+ * A suspended user must not be able to log in, create auctions or list
+ * products, bid, add to cart, or check out. Enforcement is spread across the
+ * modules of Dev 2 (AUTH), Dev 3 (PROD/CART) and Dev 4 (AUC/BID), each checking
+ * `users.status = ACTIVE` — it is not checked in this controller.
  */
 @Roles('ADMIN')
 @Controller('admin/users')

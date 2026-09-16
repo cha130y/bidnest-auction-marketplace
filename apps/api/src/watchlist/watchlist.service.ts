@@ -194,7 +194,7 @@ export class WatchlistService {
   }
 
   /**
-   * WAT-001 — "ประมูลสาธารณะ". Checked against the shared status list, so the
+   * WAT-001 — "public auctions". Checked against the shared status list, so the
    * watchlist cannot become a way to confirm a private draft exists: an auction
    * nobody may see answers exactly as an id that was never an auction.
    *

@@ -140,7 +140,7 @@ export function AuctionCompleteScreen({
         {/* CART-004 — the winner is the one person on this screen with
             something left to do, so paying is the primary action for them and
             browsing is demoted. `youWon` is already what decides whether this
-            screen says "คุณคือผู้ชนะ", so the button and the headline cannot
+            screen says "You are the winner", so the button and the headline cannot
             disagree. The checkout re-checks with the API regardless: this
             chooses what to offer, not who is allowed. */}
         <div className="mt-8 flex flex-wrap justify-center gap-3">

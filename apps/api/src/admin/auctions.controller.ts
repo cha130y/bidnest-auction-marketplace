@@ -16,12 +16,13 @@ import { ListAdminAuctionsDto } from './dtos/list-admin-auctions.dto';
 /**
  * ADM-001 — Auction oversight (owner: Dev 4)
  *
- * ต่างจาก AUC-006 ที่ผู้ขายยกเลิกได้เฉพาะสถานะ DRAFT/SCHEDULED —
- * admin ยกเลิกประมูลที่ ACTIVE ได้ด้วย (การยกเลิกฉุกเฉิน)
+ * Unlike AUC-006, where a seller can only cancel while DRAFT/SCHEDULED, an
+ * admin can also cancel an ACTIVE auction (an emergency cancellation).
  *
- * `@Roles('ADMIN')` ทำงานผ่าน RolesGuard ที่ลงทะเบียนเป็น APP_GUARD ใน
- * AppModule ตัวตนผู้เรียกมาจาก AccessTokenGuard (AUTH-008) — controller นี้
- * อ่าน identity ผ่าน `@CurrentUser()` อย่างเดียว เหมือน ADM-005 ของ Dev 3
+ * `@Roles('ADMIN')` works through the RolesGuard registered as APP_GUARD in
+ * AppModule. The caller's identity comes from AccessTokenGuard (AUTH-008) —
+ * this controller reads identity only through `@CurrentUser()`, the same as
+ * Dev 3's ADM-005.
  */
 @Roles('ADMIN')
 @Controller('admin/auctions')
@@ -35,7 +36,7 @@ export class AdminAuctionsController {
   }
 
   /**
-   * body: { reason: string } — บังคับกรอกเหตุผลตาม ADM-001
+   * body: { reason: string } — a reason is mandatory per ADM-001
    *
    * PATCH rather than DELETE: the auction is not removed. It stays readable as
    * CANCELLED, carrying the reason, which is what makes the moderation

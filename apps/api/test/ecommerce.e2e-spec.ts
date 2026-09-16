@@ -775,7 +775,7 @@ describe('E-commerce (e2e)', () => {
       expect(cart.items[0].issue).toBe('INSUFFICIENT_STOCK');
       const refusal = await checkout(buyerId).expect(400);
 
-      // `available` is what lets the screen say "เหลืออยู่ 1 ชิ้น" instead of
+      // `available` is what lets the screen say "1 left" (in Thai) instead of
       // echoing the API's English sentence into a Thai page.
       expect(refusal.body).toMatchObject({
         code: 'ITEMS_UNAVAILABLE',

@@ -15,13 +15,13 @@ import { ListAdminUsersDto } from './dtos/list-admin-users.dto';
 /**
  * ADM-002 — User management (owner: Dev 5)
  *
- * `changeUserStatus` ต้องเขียน `admin_actions` ใน `$transaction` เดียวกับการ
- * อัปเดต `users.status` (ADM-004) โดยใช้ AdminActionType SUSPEND_USER /
- * REACTIVATE_USER และเซ็ต `targetUserId` — ดู ADR-0001
+ * `changeUserStatus` must write `admin_actions` in the same `$transaction` as
+ * the `users.status` update (ADM-004), using AdminActionType SUSPEND_USER /
+ * REACTIVATE_USER and setting `targetUserId` — see ADR-0001.
  *
- * ข้อควรระวัง: ตอน suspend ควรเพิกถอน `user_sessions` ที่ยังไม่หมดอายุของ
- * ผู้ใช้คนนั้นด้วย ไม่งั้น access token ที่ออกไปแล้วยังใช้ได้จนหมดอายุ
- * (ประสานกับ Dev 2 — AUTH-004)
+ * Caution: suspending should also revoke that user's unexpired
+ * `user_sessions`, otherwise access tokens already issued keep working until
+ * they expire (coordinated with Dev 2 — AUTH-004).
  */
 @Injectable()
 export class AdminUsersService {
@@ -33,7 +33,7 @@ export class AdminUsersService {
   ) {}
 
   /**
-   * สมาชิก/พนักงาน แยกกันด้วย role ที่มีอยู่แล้ว — ไม่มี role ใหม่
+   * Members and staff are told apart by the existing roles — no new role
    *
    * Takes the DTO itself rather than a private copy of its shape, so the
    * bounds written there cannot drift from what this method assumes. Every
@@ -53,7 +53,7 @@ export class AdminUsersService {
         role: true,
         status: true,
         createdAt: true
-        // ห้าม select passwordHash เด็ดขาด
+        // Never select passwordHash
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -95,13 +95,13 @@ export class AdminUsersService {
         }
       });
 
-      // เขียน audit log ในทรานแซคชันเดียวกับการเปลี่ยนสถานะ (ตาม ADR-0001)
+      // Write the audit log in the same transaction as the status change (per ADR-0001)
       await tx.adminAction.create({
         data: { adminUserId, actionType, targetUserId, note }
       });
 
       if (targetStatus === 'SUSPENDED') {
-        // เพิกถอน session ที่ยังไม่หมดอายุ กัน access token เดิมใช้ต่อได้จนหมดอายุ
+        // Revoke unexpired sessions so existing access tokens can't keep working until they expire
         await tx.userSession.updateMany({
           where: {
             userId: targetUserId,

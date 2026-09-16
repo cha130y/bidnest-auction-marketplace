@@ -18,7 +18,7 @@ const DEBOUNCE_MS = 250
 /**
  * PROD-003 — the catalogue search field, with a preview of what it will find.
  *
- * The field on its own already worked: type, press "ใช้ตัวกรอง", get a filtered
+ * The field on its own already worked: type, press "Apply filters", get a filtered
  * page. What it did not do was answer while you were still typing, which reads
  * as nothing happening at all.
  *

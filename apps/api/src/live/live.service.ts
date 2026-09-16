@@ -322,7 +322,7 @@ export class LiveService implements OnModuleInit {
 type ParticipantRow = { status: ParticipantStatus; joinedAt: Date } | null;
 
 /**
- * LIV-001 — "สถานะการเข้าร่วม" for the person looking. A row that says LEFT
+ * LIV-001 — "participation status" for the person looking. A row that says LEFT
  * reads the same as no row at all: they are not here now, which is the only
  * thing the lobby asks. `joinedAt` comes back only while they are, so a screen
  * cannot show "joined 20 minutes ago" to somebody who has since left.

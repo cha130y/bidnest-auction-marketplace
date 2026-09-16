@@ -24,7 +24,7 @@ function buildChips(search: AuctionSearch, categories: CategoryTree[]): Chip[] {
   }
 
   // Roots and children flattened once, so a chip can name the category it
-  // removes rather than saying "หมวดหมู่" four times over
+  // removes rather than saying "Category" four times over
   const byId = new Map(
     categories
       .flatMap((root) => [root, ...root.children])
@@ -68,7 +68,7 @@ function buildChips(search: AuctionSearch, categories: CategoryTree[]): Chip[] {
  * about the catalogue: the panel can only show what is *checked*, and a
  * collapsed category group hides exactly that. It matters more on this list,
  * because filters survive a change of section — somebody who lands on
- * "ปิดเร็วๆ นี้" and finds three results is owed a visible reason why.
+ * "Closing soon" and finds three results is owed a visible reason why.
  *
  * A near-twin of that component, which is not ideal. The two differ only in
  * which `…Href` they call and what "clear everything" means, so an `hrefFor`
@@ -101,7 +101,7 @@ export function ActiveAuctionFilters({
 
       {chips.length > 1 && (
         // Keeps the section, drops the conditions — the same thing the
-        // sidebar's "ล้างตัวกรอง" does, since this list has a section in its
+        // sidebar's "Clear filters" does, since this list has a section in its
         // URL that the catalogue has no equivalent of.
         <Link
           href={auctionHref(search, NO_AUCTION_FILTERS)}

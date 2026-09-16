@@ -59,7 +59,7 @@ describe('describeAuctionResult (LIV-004)', () => {
       });
     });
 
-    // "ราคาสุดท้าย" for an auction that did not sell is what the bidding got to
+    // "Final price" for an auction that did not sell is what the bidding got to
     it('still reports how far the bidding got', () => {
       expect(describeAuctionResult(settled('UNSOLD'), null)?.finalPrice).toBe(
         '5000'

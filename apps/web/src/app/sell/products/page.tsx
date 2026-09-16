@@ -28,7 +28,7 @@ export default function OwnedProductsPage() {
           {/* CHAT-004 — the shop's after-sale auto-reply is configured at
               /sell/settings, which until now was linked only from /sell: the
               page for starting an auction. A seller who came through the
-              account menu's "ขายสินค้า" landed here and had no way to reach a
+              account menu's "Sell products" landed here and had no way to reach a
               setting that is entirely about selling goods. */}
           <Button
             variant="ghost"

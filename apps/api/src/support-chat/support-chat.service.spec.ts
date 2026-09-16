@@ -176,7 +176,7 @@ describe('SupportChatService', () => {
       expect(result.escalated).toBe(true);
     });
 
-    it('does not treat every mention of the word "แอดมิน" as a request to escalate', async () => {
+    it('does not treat every mention of the word "แอดมิน" (admin) as a request to escalate', async () => {
       geminiClient.generateReply.mockResolvedValue(FALLBACK);
 
       const result = await service.sendMessage(
@@ -218,7 +218,7 @@ describe('SupportChatService', () => {
     );
 
     // Same requirement, but for realistic sentences that mention an admin or
-    // "คุย" in passing while asking about something else entirely — these are
+    // "คุย" (talk) in passing while asking about something else entirely — these are
     // the shapes that broke the very first (presence-anywhere) version of the
     // keyword check.
     describe.each([

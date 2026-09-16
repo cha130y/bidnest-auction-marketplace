@@ -18,10 +18,10 @@ export class AuthUserResponse {
   @ApiProperty({ enum: UserStatus, example: UserStatus.ACTIVE })
   status: UserStatus;
 
-  @ApiProperty({ example: 'สมชาย' })
+  @ApiProperty({ example: 'Somchai' })
   firstName: string;
 
-  @ApiPropertyOptional({ example: 'ใจดี', nullable: true })
+  @ApiPropertyOptional({ example: 'Jaidee', nullable: true })
   lastName: string | null;
 
   @ApiProperty({ example: 'somchai' })

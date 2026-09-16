@@ -25,7 +25,7 @@ const PAGE_SIZE = 10
 
 /**
  * The groups a seller actually thinks in, which are not the five states the
- * sequence is written in. "กำลังส่ง" is two of them, and "รอจัดส่ง" is the one
+ * sequence is written in. "In delivery" is two of them, and "Awaiting shipment" is the one
  * that means work — everything under it is waiting on this seller to press
  * something.
  *
@@ -89,7 +89,7 @@ export function SellingOrderList() {
     // Hold the rows already on screen while the *next page* is fetched, rather
     // than dropping to the skeleton and back for every press of the pager —
     // but only within one group. `keepPreviousData` answers for any change of
-    // key, so switching to "รอจัดส่ง" used to show every order sitting under
+    // key, so switching to "Awaiting shipment" used to show every order sitting under
     // that tab until the real answer arrived: not stale, wrong.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === group ? previous : undefined,
@@ -106,7 +106,7 @@ export function SellingOrderList() {
           aria-pressed={entry.key === group}
           onClick={() => {
             setGroup(entry.key)
-            // Page four of "ทั้งหมด" is rarely page four of "รอจัดส่ง", and is
+            // Page four of "All" is rarely page four of "Awaiting shipment", and is
             // often past its end — which would answer with nothing at all.
             setPage(1)
           }}

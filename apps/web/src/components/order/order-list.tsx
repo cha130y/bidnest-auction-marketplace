@@ -44,7 +44,7 @@ export function OrderList() {
   })
 
   // `isPending`, not `isLoading`: the latter is false on the render where the
-  // query has only just been enabled, which let "ยังไม่มีคำสั่งซื้อ" flash at
+  // query has only just been enabled, which let "No orders yet" flash at
   // somebody whose orders were still on their way.
   if (!ready || (isAuthenticated && isPending)) {
     return (
