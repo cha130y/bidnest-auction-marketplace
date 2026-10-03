@@ -13,6 +13,8 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
+    // TS 6 (bundled with VS Code) no longer loads every @types package by default
+    "types": ["node", "jest", "multer"],
     // "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
